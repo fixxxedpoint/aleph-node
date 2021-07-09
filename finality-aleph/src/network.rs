@@ -2,7 +2,6 @@ use aleph_bft::{Index, KeyBox as _, NodeIndex, SignatureSet};
 use codec::{Codec, Decode, Encode};
 use futures::{channel::mpsc, stream::Stream, FutureExt, StreamExt};
 use lru::LruCache;
-use parking_lot::Mutex;
 use sc_network::{multiaddr, Event, ExHashT, NetworkService, PeerId as ScPeerId, ReputationChange};
 use sp_runtime::traits::Block as BlockT;
 use std::{
@@ -14,6 +13,7 @@ use std::{
     pin::Pin,
     sync::Arc,
 };
+use tokio::sync::Mutex;
 
 use log::{debug, trace, warn};
 
@@ -108,6 +108,7 @@ impl<B: BlockT, H: ExHashT> Network<B> for Arc<NetworkService<B, H>> {
     }
 
     fn send_message(&self, peer_id: PeerId, protocol: Cow<'static, str>, message: Vec<u8>) {
+        debug!(target: "afa-network", "sending a message to peer: {:?}", peer_id);
         NetworkService::write_notification(self, peer_id.into(), protocol, message)
     }
 
@@ -364,7 +365,7 @@ impl<D: Clone + Codec> SessionManager<D> {
             auth_data: auth_data.clone(),
             auth_signature: signature.clone(),
         };
-        self.sessions.lock().insert(session_id, session_data);
+        self.sessions.lock().await.insert(session_id, session_data);
         if let Err(e) = self
             .commands_for_session
             .unbounded_send(SessionCommand::Meta(
@@ -393,7 +394,7 @@ pub(crate) struct ConsensusNetwork<D: Clone + Encode + Decode, B: BlockT, N: Net
     commands_for_session: mpsc::UnboundedSender<SessionCommand<D>>,
     commands_from_user: mpsc::UnboundedReceiver<SessionCommand<D>>,
 
-    peers: Arc<Mutex<Peers>>,
+    peers: Peers,
     _phantom: PhantomData<B>,
 }
 
@@ -412,7 +413,7 @@ where
             sessions: Arc::new(Mutex::new(HashMap::new())),
             commands_for_session,
             commands_from_user,
-            peers: Arc::new(Mutex::new(Peers::new())),
+            peers: Peers::new(),
             _phantom: PhantomData,
         }
     }
@@ -425,8 +426,8 @@ where
         }
     }
 
-    fn next_message_index(&self, session_id: SessionId) -> MessageIndex {
-        let mut sessions = self.sessions.lock();
+    async fn next_message_index(&self, session_id: SessionId) -> MessageIndex {
+        let mut sessions = self.sessions.lock().await;
         let mut index = sessions
             .get_mut(&session_id)
             .expect("Session has stared.")
@@ -441,19 +442,19 @@ where
             .send_message(*peer_id, self.protocol.clone(), message.encode());
     }
 
-    fn send_message_rand(
+    async fn send_message_rand(
         &self,
         session_id: SessionId,
         message: InternalMessage<D>,
         amount: usize,
         offset: usize,
     ) {
-        for peer_id in self.peers.lock().get_rand(session_id, amount, offset) {
+        for peer_id in self.peers.get_rand(session_id, amount, offset) {
             self.send_message(peer_id, message.clone());
         }
     }
 
-    fn forward_to_peers(&self, message: DataMessage<D>) {
+    async fn forward_to_peers(&self, message: DataMessage<D>) {
         let DataMessage {
             session_id,
             index,
@@ -465,12 +466,14 @@ where
         match recipient {
             Recipient::All => {
                 self.send_message_rand(session_id, message, GOSSIP_FORWARD, index as usize)
+                    .await
             }
             Recipient::Target(node_id) => {
-                if let Some(peer_id) = self.peers.lock().get(session_id, node_id) {
+                if let Some(peer_id) = self.peers.get(session_id, node_id) {
                     self.send_message(peer_id, message);
                 } else {
-                    self.send_message_rand(session_id, message, SEND_FORWARD, index as usize);
+                    self.send_message_rand(session_id, message, SEND_FORWARD, index as usize)
+                        .await;
                 }
             }
         }
@@ -497,20 +500,20 @@ where
             .expect("Sending commands to session should work.");
     }
 
-    fn on_incoming_meta(&self, message: MetaMessage, peer_id: PeerId) {
+    async fn on_incoming_meta(&mut self, message: MetaMessage, peer_id: PeerId) {
         use MetaMessage::*;
         match message {
             Authentication(auth_data, signature) => {
                 // Avoids peers claiming other peers represent their node, which could lead to a
                 // DDoS.
                 if peer_id == auth_data.peer_id {
-                    self.on_incoming_authentication(auth_data, signature);
+                    self.on_incoming_authentication(auth_data, signature).await;
                 } else {
                     trace!(target: "afa", "Peer {:?} attempting to authenticate as peer {:?}.", peer_id, auth_data.peer_id);
                 }
             }
             AuthenticationRequest(session_id) => {
-                if let Some(session_data) = self.sessions.lock().get(&session_id) {
+                if let Some(session_data) = self.sessions.lock().await.get(&session_id) {
                     self.authenticate_to(session_data, peer_id);
                 } else {
                     trace!(target: "afa", "Received authentication request for unknown session: {:?}.", session_id);
@@ -519,9 +522,9 @@ where
         }
     }
 
-    fn on_incoming_data(&self, message: DataMessage<D>) {
+    async fn on_incoming_data(&self, message: DataMessage<D>) {
         let session_id = message.session_id;
-        let mut sessions = self.sessions.lock();
+        let mut sessions = self.sessions.lock().await;
         if let Some(session_data) = sessions.get_mut(&session_id) {
             if session_data.status == SessionStatus::InProgress {
                 if session_data.messages.contains(&message) {
@@ -536,36 +539,34 @@ where
                     }
                     Recipient::All => {
                         self.send_to_user(session_id, message.data.clone(), session_data);
-                        self.forward_to_peers(message);
+                        self.forward_to_peers(message).await;
                     }
                     _ => {
-                        self.forward_to_peers(message);
+                        self.forward_to_peers(message).await;
                     }
                 }
             }
         }
     }
 
-    fn on_incoming_authentication(&self, auth_data: AuthData, signature: Signature) {
+    async fn on_incoming_authentication(&mut self, auth_data: AuthData, signature: Signature) {
         let enc_auth_data = auth_data.encode();
         let AuthData {
             session_id,
             peer_id,
             node_id,
         } = auth_data;
-        if let Some(session_data) = self.sessions.lock().get(&session_id) {
+        if let Some(session_data) = self.sessions.lock().await.get(&session_id) {
             if session_data
                 .keychain
                 .verify(&enc_auth_data, &signature, node_id)
             {
-                self.peers
-                    .lock()
-                    .authenticate(&peer_id, session_id, node_id);
+                self.peers.authenticate(&peer_id, session_id, node_id);
             }
         }
     }
 
-    fn on_incoming_message(&self, peer_id: PeerId, raw_message: Vec<u8>) {
+    async fn on_incoming_message(&mut self, peer_id: PeerId, raw_message: Vec<u8>) {
         use InternalMessage::*;
         match InternalMessage::<D>::decode(&mut &raw_message[..]) {
             Ok(Data(message)) => {
@@ -573,8 +574,8 @@ where
                 // Accept data only from authenticated peers. Rush is robust enough that this is
                 // not strictly necessary, but it doesn't hurt.
                 // TODO we may relax this condition if we want to allow nonvalidators to help in gossip
-                if self.peers.lock().is_authenticated(&peer_id, &session_id) {
-                    self.on_incoming_data(message);
+                if self.peers.is_authenticated(&peer_id, &session_id) {
+                    self.on_incoming_data(message).await;
                 } else {
                     trace!(target: "afa", "Received unauthenticated message from {:?} for session {:?}, requesting authentication.", peer_id, session_id);
                     self.commands_for_session
@@ -586,7 +587,7 @@ where
                 }
             }
             Ok(Meta(message)) => {
-                self.on_incoming_meta(message, peer_id);
+                self.on_incoming_meta(message, peer_id).await;
             }
             Err(e) => {
                 debug!(target: "afa", "Error decoding message: {}", e);
@@ -594,14 +595,14 @@ where
         }
     }
 
-    fn on_command(&self, sc: SessionCommand<D>) {
+    async fn on_command(&self, sc: SessionCommand<D>) {
         use SessionCommand::*;
         match sc {
             Meta(message, recipient) => {
                 let message = InternalMessage::Meta(message);
                 match recipient {
                     Recipient::All => {
-                        for (peer_id, _) in self.peers.lock().all_peers.iter() {
+                        for (peer_id, _) in self.peers.all_peers.iter() {
                             self.send_message(peer_id, message.clone());
                         }
                     }
@@ -609,7 +610,7 @@ where
                 }
             }
             Data(session_id, data, recipient) => {
-                let index = self.next_message_index(session_id);
+                let index = self.next_message_index(session_id).await;
                 let data_message = DataMessage {
                     session_id,
                     index,
@@ -618,27 +619,27 @@ where
                 };
                 let message = InternalMessage::Data(data_message);
                 if let Recipient::Target(node_id) = recipient {
-                    if let Some(peer) = self.peers.lock().get(session_id, node_id) {
+                    if let Some(peer) = self.peers.get(session_id, node_id) {
                         self.send_message(peer, message);
                         return;
                     }
                 }
-                for peer_id in self.peers.lock().peers_authenticated_for(session_id) {
+                for peer_id in self.peers.peers_authenticated_for(session_id) {
                     self.send_message(peer_id, message.clone());
                 }
             }
         }
     }
 
-    fn on_peer_connected(&self, peer_id: PeerId) {
-        self.peers.lock().insert(peer_id);
-        for (_, session_data) in self.sessions.lock().iter() {
+    async fn on_peer_connected(&mut self, peer_id: PeerId) {
+        self.peers.insert(peer_id);
+        for (_, session_data) in self.sessions.lock().await.iter() {
             self.authenticate_to(session_data, peer_id);
         }
     }
 
-    fn on_peer_disconnected(&self, peer_id: &PeerId) {
-        self.peers.lock().remove(peer_id);
+    async fn on_peer_disconnected(&mut self, peer_id: &PeerId) {
+        self.peers.remove(peer_id);
     }
 
     pub async fn run(mut self) {
@@ -667,18 +668,18 @@ where
                                     if protocol != self.protocol {
                                         continue;
                                     }
-                                    self.on_peer_connected(remote.into());
+                                    self.on_peer_connected(remote.into()).await;
                                 }
                                 Event::NotificationStreamClosed { remote, protocol } => {
                                     if protocol != self.protocol {
                                         continue;
                                     }
-                                    self.on_peer_disconnected(&remote.into());
+                                    self.on_peer_disconnected(&remote.into()).await;
                                 }
                                 Event::NotificationsReceived { remote, messages } => {
                                     for (protocol, data) in messages.into_iter() {
                                         if protocol == self.protocol {
-                                            self.on_incoming_message(remote.into(), data.to_vec());
+                                            self.on_incoming_message(remote.into(), data.to_vec()).await;
                                         }
                                     }
                                 }
@@ -694,7 +695,7 @@ where
                 },
                 maybe_cmd = self.commands_from_user.next() => {
                     if let Some(cmd) = maybe_cmd {
-                        self.on_command(cmd);
+                        self.on_command(cmd).await;
                     } else {
                         break;
                     }
@@ -703,6 +704,7 @@ where
 
             self.sessions
                 .lock()
+                .await
                 .retain(|_, data| data.status == SessionStatus::InProgress);
         }
     }

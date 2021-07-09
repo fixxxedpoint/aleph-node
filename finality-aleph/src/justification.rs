@@ -3,11 +3,12 @@ use aleph_bft::{MultiKeychain, NodeIndex, SignatureSet};
 use aleph_primitives::{AuthorityId, Session};
 use codec::{Decode, Encode};
 use futures::channel::mpsc;
-use parking_lot::Mutex;
+// use parking_lot::Mutex;
 use sp_api::{BlockT, NumberFor};
 use sp_blockchain::Error;
 use std::{collections::HashMap, sync::Arc};
 use tokio::stream::StreamExt;
+use tokio::sync::Mutex;
 
 #[derive(Clone, Encode, Decode, Debug)]
 pub struct AlephJustification {
@@ -77,7 +78,7 @@ where
 
     pub(crate) async fn run(mut self) {
         while let Some(notification) = self.justification_rx.next().await {
-            let keybox = match self.session_keybox(notification.number) {
+            let keybox = match self.session_keybox(notification.number).await {
                 Some(keybox) => keybox,
                 None => {
                     self.network
@@ -91,12 +92,13 @@ where
                 notification.hash,
                 &crate::MultiKeychain::new(keybox),
             ) {
-                Ok(_) => self
-                    .finalization_proposals_tx
-                    .unbounded_send(notification)
-                    .expect("Notification should succeed"),
-                Err(err) => {
-                    log::error!(target: "afa", "{:?}", err);
+                Ok(_) => {
+                    log::info!(target: "afa", "Received correct justification for block {:?}", notification.number);
+                    self.finalization_proposals_tx
+                        .unbounded_send(notification)
+                        .expect("Notification should succeed");
+                }
+                Err(_) => {
                     self.network
                         .request_justification(&notification.hash, notification.number);
                 }
@@ -106,9 +108,9 @@ where
         log::error!(target: "afa", "Notification channel closed unexpectedly");
     }
 
-    fn session_keybox(&self, n: NumberFor<Block>) -> Option<KeyBox> {
+    async fn session_keybox(&self, n: NumberFor<Block>) -> Option<KeyBox> {
         let session = n.into() / self.session_period;
-        let authorities = match self.sessions.lock().get(&session) {
+        let authorities = match self.sessions.lock().await.get(&session) {
             Some(session) => session.authorities.to_vec(),
             None => return None,
         };

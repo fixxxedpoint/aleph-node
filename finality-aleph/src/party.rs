@@ -13,13 +13,13 @@ use crate::{
 use aleph_primitives::{AlephSessionApi, Session, ALEPH_ENGINE_ID};
 use futures::{channel::mpsc, StreamExt};
 use log::{debug, error, warn};
-use parking_lot::Mutex;
 use sc_client_api::backend::Backend;
 use sc_service::SpawnTaskHandle;
 use sp_api::{BlockId, NumberFor};
 use sp_consensus::SelectChain;
 use sp_runtime::traits::{Block, Header};
 use std::{collections::HashMap, marker::PhantomData, sync::Arc};
+use tokio::sync::Mutex;
 
 pub struct AlephParams<B: Block, N, C, SC> {
     pub config: crate::AlephConfig<B, N, C, SC>,
@@ -283,6 +283,7 @@ where
             Some(prev_id) => {
                 self.sessions
                     .lock()
+                    .await
                     .get(&prev_id)
                     .expect("The current session should be known already")
                     .stop_h
@@ -294,7 +295,10 @@ where
             .current_session(&BlockId::Number(prev_block_number))
         {
             Ok(session) => {
-                self.sessions.lock().insert(session_id, session.clone());
+                self.sessions
+                    .lock()
+                    .await
+                    .insert(session_id, session.clone());
                 session
             }
             _ => {
