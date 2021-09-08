@@ -1,6 +1,6 @@
 [package]
 name = "aleph-runtime"
-version = "0.3.0"
+version = "0.4.0"
 authors = ["Cardinal Cryptography"]
 edition = "2018"
 license = "Apache 2.0"
@@ -17,34 +17,33 @@ serde = { version = "1.0.101", optional = true, features = ["derive"] }
 primitives = { path = "../../primitives", default-features = false }
 pallet-aleph = { path = "../../pallet", default-features = false}
 
-frame-executive = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-frame-system = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-frame-system-rpc-runtime-api = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
+frame-executive = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+frame-system = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+frame-system-rpc-runtime-api = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
 
-pallet-aura = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-balances = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-randomness-collective-flip = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-session = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-scheduler = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-sudo = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-timestamp = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-transaction-payment = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-pallet-vesting = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
+pallet-aura = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-balances = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-session = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-scheduler = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-sudo = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-timestamp = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-transaction-payment = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-vesting = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
 
-sp-api = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-block-builder = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-consensus-aura = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-core = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-inherents = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-offchain = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-session = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-std = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-transaction-pool = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
-sp-version = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
+sp-api = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-block-builder = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-consensus-aura = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-core = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-inherents = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-offchain = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-session = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-std = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-transaction-pool = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-version = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
 
-pallet-transaction-payment-rpc-runtime-api = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5"}
+pallet-transaction-payment-rpc-runtime-api = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
 
 
 [build-dependencies]
@@ -59,12 +58,10 @@ std = [
         "pallet-aleph/std",
         "pallet-aura/std",
         "pallet-balances/std",
-        "pallet-randomness-collective-flip/std",
         "pallet-session/std",
         "pallet-sudo/std",
         "pallet-timestamp/std",
         "pallet-transaction-payment/std",
-        "pallet-vesting/std",
         "serde",
         "sp-api/std",
         "sp-block-builder/std",
@@ -81,4 +78,6 @@ std = [
         "pallet-transaction-payment-rpc-runtime-api/std",
         "frame-system-rpc-runtime-api/std",
         "primitives/std",
+        "pallet-vesting/std",
+        "pallet-scheduler/std",
 ]

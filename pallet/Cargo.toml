@@ -1,26 +1,27 @@
 [package]
 name = "pallet-aleph"
-version = "0.1.0"
+version = "0.4.0"
 authors = ["Cardinal Cryptography"]
 edition = "2018"
 
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 codec = { package = "parity-scale-codec", version = "2.0.0", default-features = false, features = ["derive"] }
-frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
-frame-system = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
-sp-std = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
+frame-support = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+frame-system = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-std = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
 serde = "1.0"
-primitives = { path = "../primitives", default-features = false}
-pallet-session = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
+primitives = { package = "primitives", path = "../primitives", default-features = false}
+pallet-session = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+pallet-balances = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
 
 [dev-dependencies]
-
-pallet-balances = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
-pallet-timestamp = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
-sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
-sp-core = { default-features = false, git = "https://github.com/paritytech/substrate.git", rev = "8bbad73f5" }
+pallet-timestamp = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-runtime = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
+sp-core = { default-features = false, git = "https://github.com/paritytech/substrate.git", tag = "v3.0.0"}
 
 [features]
 default = ["std"]
@@ -30,5 +31,6 @@ std = [
     "frame-system/std",
     "sp-std/std",
     "primitives/std",
-    "pallet-session/std"
+    "pallet-session/std",
+    "pallet-balances/std"
 ]
