@@ -125,8 +125,8 @@ jobs:
       - name: Display bootnode logs
         run: docker logs damian --follow &
 
-      # - name: Setup upterm session
-      #   uses: lhotari/action-upterm@v1
+      - name: Setup upterm session
+        uses: lhotari/action-upterm@v1
 
       # NOTE: this step waits until chain starts finalizing blocks
       - name: Wait for consensus
