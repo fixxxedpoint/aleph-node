@@ -50,7 +50,7 @@ pub struct AlephParams<B: Block, N, C, SC> {
 pub async fn run_consensus_party<B, N, C, BE, SC>(aleph_params: AlephParams<B, N, C, SC>)
 where
     B: Block,
-    N: network::Network<B> + 'static,
+    N: network::Network<B> + network::RequestBlocks<B> +'static,
     C: crate::ClientForAleph<B, BE> + Send + Sync + 'static,
     C::Api: aleph_primitives::AlephSessionApi<B>,
     BE: Backend<B> + 'static,
@@ -86,11 +86,13 @@ where
         justifications_cadence: Duration::from_millis(cadence),
     };
 
+    let block_requester = network.clone();
+
     let handler = JustificationHandler::new(
         session_authorities.clone(),
         keystore.clone(),
         chain_cadence,
-        network.clone(),
+        block_requester.clone(),
         client.clone(),
         metrics.clone(),
     );
@@ -108,11 +110,13 @@ where
 
     debug!(target: "afa", "Consensus network has started.");
 
+
     let party = ConsensusParty {
         session_manager,
         client,
         keystore,
         select_chain,
+        block_requester,
         metrics,
         authority_justification_tx,
         session_authorities,
@@ -145,7 +149,7 @@ fn run_justification_handler<B, N, C, BE>(
     import_justification_rx: mpsc::UnboundedReceiver<JustificationNotification<B>>,
 ) -> mpsc::UnboundedSender<JustificationNotification<B>>
 where
-    N: network::Network<B> + 'static,
+    N: network::Network<B> + network::RequestBlocks<B> + 'static,
     C: crate::ClientForAleph<B, BE> + Send + Sync + 'static,
     BE: Backend<B> + 'static,
     B: Block,
@@ -162,13 +166,14 @@ where
     authority_justification_tx
 }
 
-struct ConsensusParty<B, C, BE, SC>
+struct ConsensusParty<B, C, BE, SC, RB>
 where
     B: Block,
     C: crate::ClientForAleph<B, BE> + Send + Sync + 'static,
     C::Api: aleph_primitives::AlephSessionApi<B>,
     BE: Backend<B> + 'static,
     SC: SelectChain<B> + 'static,
+    RB: network::RequestBlocks<B> +'static,
     NumberFor<B>: From<u32>,
 {
     session_manager: SessionManager<NetworkData<B>>,
@@ -177,6 +182,7 @@ where
     spawn_handle: crate::SpawnHandle,
     client: Arc<C>,
     select_chain: SC,
+    block_requester: RB,
     keystore: SyncCryptoStorePtr,
     phantom: PhantomData<BE>,
     metrics: Option<Metrics<B::Header>>,
@@ -257,13 +263,14 @@ async fn run_aggregator<B, C, BE>(
     let _ = exit_rx.await;
 }
 
-impl<B, C, BE, SC> ConsensusParty<B, C, BE, SC>
+impl<B, C, BE, SC, RB> ConsensusParty<B, C, BE, SC, RB>
 where
     B: Block,
     C: crate::ClientForAleph<B, BE> + Send + Sync + 'static,
     C::Api: aleph_primitives::AlephSessionApi<B>,
     BE: Backend<B> + 'static,
     SC: SelectChain<B> + 'static,
+    RB: network::RequestBlocks<B> +'static,
     NumberFor<B>: From<u32>,
 {
     async fn run_session_as_authority(
@@ -280,8 +287,9 @@ where
         let (ordered_batch_tx, ordered_batch_rx) = mpsc::unbounded();
         let (aleph_network_tx, data_store_rx) = mpsc::unbounded();
         let (data_store_tx, aleph_network_rx) = mpsc::unbounded();
-        let mut data_store = DataStore::<B, C, BE, AlephNetworkData<B>>::new(
+        let mut data_store = DataStore::<B, C, BE,RB, AlephNetworkData<B>>::new(
             self.client.clone(),
+            self.block_requester.clone(),
             data_store_tx,
             data_store_rx,
         );

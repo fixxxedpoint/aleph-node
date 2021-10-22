@@ -1,10 +1,16 @@
 use crate::data_io::{AlephData, AlephDataFor, AlephNetworkMessage, DataStore};
 use futures::{
     channel::{
-        mpsc::{self, UnboundedReceiver, UnboundedSender},
+        mpsc::{self, UnboundedReceiver, UnboundedSender, unbounded},
         oneshot,
     },
     StreamExt,
+};
+use sp_api::NumberFor;
+use crate::{
+    network::{
+        RequestBlocks
+    }
 };
 use sc_block_builder::BlockBuilderProvider;
 use sp_api::BlockId;
@@ -16,6 +22,39 @@ use substrate_test_runtime_client::{
     Backend, ClientBlockImportExt, DefaultTestClientBuilderExt, TestClient, TestClientBuilder,
     TestClientBuilderExt,
 };
+use sp_runtime::traits::Block as BlockT;
+
+#[derive(Clone)]
+struct TestBlockRequester<B: BlockT> {
+    blocks: mpsc::UnboundedSender<AlephDataFor<B>>,
+    justifications: mpsc::UnboundedSender<AlephDataFor<B>>,
+}
+
+impl<B: BlockT> TestBlockRequester<B> {
+    fn new() -> (Self, mpsc::UnboundedReceiver<AlephDataFor<B>>, mpsc::UnboundedReceiver<AlephDataFor<B>>) {
+        let (tx_blocks, rx_blocks) = unbounded();
+        let (tx_justifications, rx_justifications) = unbounded();
+        (TestBlockRequester {
+            blocks: tx_blocks,
+            justifications: tx_justifications,
+        },
+        rx_blocks,
+        rx_justifications
+        )
+    }
+}
+
+impl<B: BlockT> RequestBlocks<B> for TestBlockRequester<B> {
+    fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+        self.justifications
+            .unbounded_send(AlephData {hash: *hash, number });
+    }
+
+    fn request_block(&self, hash: B::Hash, number: NumberFor<B>) {
+        self.blocks
+            .unbounded_send(AlephData {hash, number });
+    }
+}
 
 #[derive(Debug)]
 struct TestNetworkData {
@@ -37,8 +76,8 @@ fn prepare_data_store() -> (
 ) {
     let client = Arc::new(TestClientBuilder::new().build());
 
-    let (aleph_network_tx, data_store_rx) = mpsc::unbounded();
-    let (data_store_tx, aleph_network_rx) = mpsc::unbounded();
+    let (aleph_network_tx, data_store_rx) = unbounded();
+    let (data_store_tx, aleph_network_rx) = unbounded();
     let mut data_store = DataStore::<Block, TestClient, Backend, TestNetworkData>::new(
         client.clone(),
         data_store_tx,

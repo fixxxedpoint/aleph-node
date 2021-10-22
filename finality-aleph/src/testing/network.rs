@@ -124,13 +124,13 @@ impl<B: BlockT> Network<B> for TestNetwork<B> {
         self.peer_id
     }
 
-    fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
-        self.request_justification
-            .0
-            .lock()
-            .unbounded_send((*hash, number))
-            .unwrap();
-    }
+    // fn request_justification(&self, hash: &B::Hash, number: NumberFor<B>) {
+    //     self.request_justification
+    //         .0
+    //         .lock()
+    //         .unbounded_send((*hash, number))
+    //         .unwrap();
+    // }
 }
 
 impl<B: BlockT> TestNetwork<B> {
