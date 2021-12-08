@@ -94,9 +94,11 @@ pub fn get_peer_id(address: &Multiaddr) -> Option<PeerId> {
 
 /// Returns the peer id contained in the set of multiaddresses if it's unique and present in every
 /// address, None otherwise.
-pub fn get_common_peer_id(addresses: &[Multiaddr]) -> Option<PeerId> {
+pub fn get_common_peer_id<'a>(
+    addresses: impl IntoIterator<Item = &'a Multiaddr>,
+) -> Option<PeerId> {
     addresses
-        .iter()
+        .into_iter()
         .fold(UniquePeerId::Unknown, |result, address| {
             result.accumulate_strict(get_peer_id(address))
         })

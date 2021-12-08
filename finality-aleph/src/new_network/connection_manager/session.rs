@@ -8,17 +8,21 @@ use crate::{
 };
 use aleph_bft::NodeCount;
 use codec::Encode;
-use std::collections::HashMap;
+use std::{collections::HashMap, mem::take};
 
 /// A struct for handling authentications for a given session and maintaining
 /// mappings between PeerIds and NodeIndexes within that session.
 pub struct Handler {
     peers_by_node: HashMap<NodeIndex, PeerId>,
     authentications: HashMap<PeerId, (Authentication, Option<Authentication>)>,
-    own_authentication: Option<Authentication>,
     own_peer_id: PeerId,
-    authority_index_and_pen: Option<(NodeIndex, AuthorityPen)>,
     authority_verifier: AuthorityVerifier,
+}
+
+pub struct ValidatorHandler {
+    handler: Handler,
+    own_authentication: Authentication,
+    authority_index_and_pen: (NodeIndex, AuthorityPen),
 }
 
 /// Returned when a set of addresses is not usable for creating authentications.
@@ -30,125 +34,64 @@ pub enum AddressError {
     MultiplePeerIds,
 }
 
-async fn construct_authentication(
-    authority_index_and_pen: &Option<(NodeIndex, AuthorityPen)>,
-    session_id: Option<SessionId>,
-    addresses: Vec<Multiaddr>,
-) -> Result<(Option<Authentication>, PeerId), AddressError> {
-    let addresses: Vec<_> = addresses.into_iter().filter(is_p2p).collect();
+fn retrieve_peer_id<'a>(
+    addresses: impl Iterator<Item = &'a Multiaddr>,
+) -> Result<PeerId, AddressError> {
+    let addresses: Vec<_> = addresses.filter(|addr| is_p2p(*addr)).collect();
     if addresses.is_empty() {
         return Err(AddressError::NoP2pAddresses);
     }
-    let peer_id = match get_common_peer_id(&addresses) {
-        Some(peer_id) => peer_id,
-        None => return Err(AddressError::MultiplePeerIds),
-    };
-    if let (Some((node_index, authority_pen)), Some(unwrapped_session_id)) =
-        (authority_index_and_pen, session_id)
-    {
-        let auth_data = AuthData {
-            addresses,
-            node_id: *node_index,
-            session_id: unwrapped_session_id,
-        };
-        let signature = authority_pen.sign(&auth_data.encode()).await;
-        return Ok((Some((auth_data, signature)), peer_id));
+    match get_common_peer_id(addresses) {
+        Some(peer_id) => Ok(peer_id),
+        None => Err(AddressError::MultiplePeerIds),
     }
-    Ok((None, peer_id))
+}
+
+async fn construct_authentication(
+    authority_index_and_pen: &(NodeIndex, AuthorityPen),
+    session_id: SessionId,
+    addresses: Vec<Multiaddr>,
+) -> Authentication {
+    let (node_index, authority_pen) = authority_index_and_pen;
+    let auth_data = AuthData {
+        addresses,
+        node_id: *node_index,
+        session_id,
+    };
+    let signature = authority_pen.sign(&auth_data.encode()).await;
+    (auth_data, signature)
 }
 
 impl Handler {
-    /// Returns an error if the set of addresses contains no external libp2p addresses, or contains
-    /// at least two such addresses with differing PeerIds.
-    pub async fn new(
-        authority_index_and_pen: Option<(NodeIndex, AuthorityPen)>,
+    pub fn new(
         authority_verifier: AuthorityVerifier,
-        session_id: SessionId,
-        addresses: Vec<Multiaddr>,
-    ) -> Result<Handler, AddressError> {
-        let (own_authentication, own_peer_id) =
-            construct_authentication(&authority_index_and_pen, Some(session_id), addresses).await?;
+        addresses: &Vec<Multiaddr>,
+    ) -> Result<Self, AddressError> {
+        let own_peer_id = retrieve_peer_id(addresses.iter())?;
         Ok(Handler {
             peers_by_node: HashMap::new(),
             authentications: HashMap::new(),
-            own_authentication,
-            authority_index_and_pen,
             authority_verifier,
             own_peer_id,
         })
-    }
-
-    fn index(&self) -> Option<NodeIndex> {
-        match self.authority_index_and_pen {
-            Some((index, _)) => Some(index),
-            _ => None,
-        }
     }
 
     pub fn node_count(&self) -> NodeCount {
         self.authority_verifier.node_count()
     }
 
-    fn session_id(&self) -> Option<SessionId> {
-        self.own_authentication.as_ref().map(|own_authentication| own_authentication.0.session_id)
-    }
-
-    /// Returns the authentication for the node and session this handler is responsible for.
-    pub fn authentication(&self) -> Option<Authentication> {
-        self.own_authentication.clone()
-    }
-
     /// Returns a vector of indices of nodes for which the handler has no authentication.
-    pub fn missing_nodes(&self) -> Vec<NodeIndex> {
+    pub fn missing_nodes<'a>(&'a self) -> impl IntoIterator<Item = NodeIndex> + 'a {
         let node_count = self.node_count().0;
-        if self.peers_by_node.len() + 1 == node_count {
-            return Vec::new();
-        }
-        match self.index() {
-            Some(index) => (0..node_count)
-                .map(NodeIndex)
-                .filter(|node_id| *node_id != index && !self.peers_by_node.contains_key(node_id))
-                .collect(),
-            _ => (0..node_count)
-                .map(NodeIndex)
-                .filter(|node_id| !self.peers_by_node.contains_key(node_id))
-                .collect(),
-        }
-    }
-
-    /// Verifies the authentication, uses it to update mappings, and returns whether we should
-    /// remain connected to the multiaddresses.
-    pub fn handle_authentication(&mut self, authentication: Authentication) -> bool {
-        let (auth_data, signature) = authentication.clone();
-
-        if let Some(session_id) = self.session_id() {
-            if auth_data.session_id != session_id {
-                return false;
-            }
-        }
-        
-        // The auth is completely useless if it doesn't have a consistent PeerId.
-        let peer_id = match get_common_peer_id(&auth_data.addresses) {
-            Some(peer_id) => peer_id,
-            None => return false,
+        let take_predicate = if self.peers_by_node.len() + 1 == node_count {
+            0
+        } else {
+            node_count
         };
-        if peer_id == self.own_peer_id {
-            return false;
-        }
-        if !self
-            .authority_verifier
-            .verify(&auth_data.encode(), &signature, auth_data.node_id)
-        {
-            // This might be an authentication for a key that has been changed, but we are not yet
-            // aware of the change.
-            if let Some(auth_pair) = self.authentications.get_mut(&peer_id) {
-                auth_pair.1 = Some(authentication);
-            }
-            return false;
-        }
-        self.peers_by_node.insert(auth_data.node_id, peer_id);
-        self.authentications.insert(peer_id, (authentication, None));
-        true
+        (0..node_count)
+            .take(take_predicate)
+            .map(NodeIndex)
+            .filter(move |node_id| !self.peers_by_node.contains_key(node_id))
     }
 
     /// Returns the PeerId of the node with the given NodeIndex, if known.
@@ -163,6 +106,100 @@ impl Handler {
             .map(|((auth_data, _), _)| auth_data.node_id)
     }
 
+    pub async fn update(
+        &mut self,
+        authority_verifier: AuthorityVerifier,
+        addresses: &Vec<Multiaddr>,
+    ) -> Result<Vec<Multiaddr>, AddressError> {
+        let own_peer_id = retrieve_peer_id(addresses.iter())?;
+        self.authentications = HashMap::new();
+        self.peers_by_node = HashMap::new();
+        self.authority_verifier = authority_verifier;
+        self.own_peer_id = own_peer_id;
+        Ok(self
+            .authentications
+            .values()
+            .flat_map(|((auth_data, _), _)| auth_data.addresses.iter().cloned())
+            .collect())
+    }
+}
+
+// impl AsRef<Handler> for ValidatorHandler {
+//     fn as_ref(&self) -> &Handler {
+//         &self.handler
+//     }
+// }
+
+impl ValidatorHandler {
+    /// Returns an error if the set of addresses contains no external libp2p addresses, or contains
+    /// at least two such addresses with differing PeerIds.
+    pub async fn new(
+        authority_index_and_pen: (NodeIndex, AuthorityPen),
+        authority_verifier: AuthorityVerifier,
+        session_id: SessionId,
+        addresses: Vec<Multiaddr>,
+    ) -> Result<Self, AddressError> {
+        let handler = Handler::new(authority_verifier, &addresses)?;
+        let own_authentication =
+            construct_authentication(&authority_index_and_pen, session_id, addresses).await;
+        Ok(ValidatorHandler {
+            handler,
+            own_authentication,
+            authority_index_and_pen,
+        })
+    }
+
+    fn index(&self) -> NodeIndex {
+        self.authority_index_and_pen.0
+    }
+
+    fn session_id(&self) -> SessionId {
+        self.own_authentication.0.session_id
+    }
+
+    /// Returns the authentication for the node and session this handler is responsible for.
+    pub fn authentication(&self) -> Authentication {
+        self.own_authentication.clone()
+    }
+
+    /// Verifies the authentication, uses it to update mappings, and returns whether we should
+    /// remain connected to the multiaddresses.
+    pub fn handle_authentication(&mut self, authentication: Authentication) -> bool {
+        let (auth_data, signature) = authentication.clone();
+
+        if auth_data.session_id != self.session_id() {
+            return false;
+        }
+
+        // The auth is completely useless if it doesn't have a consistent PeerId.
+        let peer_id = match get_common_peer_id(&auth_data.addresses) {
+            Some(peer_id) => peer_id,
+            None => return false,
+        };
+        if peer_id == self.handler.own_peer_id {
+            return false;
+        }
+        if !self.handler.authority_verifier.verify(
+            &auth_data.encode(),
+            &signature,
+            auth_data.node_id,
+        ) {
+            // This might be an authentication for a key that has been changed, but we are not yet
+            // aware of the change.
+            if let Some(auth_pair) = self.handler.authentications.get_mut(&peer_id) {
+                auth_pair.1 = Some(authentication);
+            }
+            return false;
+        }
+        self.handler
+            .peers_by_node
+            .insert(auth_data.node_id, peer_id);
+        self.handler
+            .authentications
+            .insert(peer_id, (authentication, None));
+        true
+    }
+
     /// Updates the handler with the given keychain and set of own addresses.
     /// Returns an error if the set of addresses is not valid.
     /// All authentications will be rechecked, invalid ones purged and cached ones that turn out to
@@ -171,37 +208,36 @@ impl Handler {
     /// If successful returns a set of addresses that we should be connected to.
     pub async fn update(
         &mut self,
-        authority_index_and_pen: Option<(NodeIndex, AuthorityPen)>,
+        authority_index_and_pen: (NodeIndex, AuthorityPen),
         authority_verifier: AuthorityVerifier,
         addresses: Vec<Multiaddr>,
     ) -> Result<Vec<Multiaddr>, AddressError> {
-        let (own_authentication, own_peer_id) =
-            construct_authentication(&authority_index_and_pen, self.session_id(), addresses)
-                .await?;
-        let authentications = self.authentications.clone();
-        self.authentications = HashMap::new();
-        self.peers_by_node = HashMap::new();
+        let authentications = take(&mut self.handler.authentications);
+        let result = self.handler.update(authority_verifier, &addresses).await?;
+        self.own_authentication =
+            construct_authentication(&authority_index_and_pen, self.session_id(), addresses).await;
         self.authority_index_and_pen = authority_index_and_pen;
-        self.authority_verifier = authority_verifier;
-        self.own_authentication = own_authentication;
-        self.own_peer_id = own_peer_id;
+
         for (_, (auth, maybe_auth)) in authentications {
             print!(
                 "normal authentication: {:?}",
-                self.handle_authentication(auth)
+                self.handle_authentication(auth.clone())
             );
             if let Some(auth) = maybe_auth {
                 print!(
                     "alternative authentication: {:?}",
-                    self.handle_authentication(auth)
+                    self.handle_authentication(auth.clone())
                 );
             }
         }
-        Ok(self
-            .authentications
-            .values()
-            .flat_map(|((auth_data, _), _)| auth_data.addresses.iter().cloned())
-            .collect())
+        Ok(result)
+    }
+
+    pub fn missing_nodes<'a>(&'a self) -> impl Iterator<Item = NodeIndex> + 'a {
+        self.handler
+            .missing_nodes()
+            .into_iter()
+            .filter(move |node_ix| *node_ix != self.index())
     }
 }
 
