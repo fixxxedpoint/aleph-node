@@ -35,9 +35,9 @@ pub enum AddressError {
 }
 
 fn retrieve_peer_id<'a>(
-    addresses: impl Iterator<Item = &'a Multiaddr>,
+    addresses: impl IntoIterator<Item = &'a Multiaddr>,
 ) -> Result<PeerId, AddressError> {
-    let addresses: Vec<_> = addresses.filter(|addr| is_p2p(*addr)).collect();
+    let addresses: Vec<_> = addresses.into_iter().filter(|addr| is_p2p(*addr)).collect();
     if addresses.is_empty() {
         return Err(AddressError::NoP2pAddresses);
     }
@@ -63,11 +63,11 @@ async fn construct_authentication(
 }
 
 impl Handler {
-    pub fn new(
+    fn new<'a>(
         authority_verifier: AuthorityVerifier,
-        addresses: &Vec<Multiaddr>,
+        addresses: impl IntoIterator<Item = &'a Multiaddr>,
     ) -> Result<Self, AddressError> {
-        let own_peer_id = retrieve_peer_id(addresses.iter())?;
+        let own_peer_id = retrieve_peer_id(addresses.into_iter())?;
         Ok(Handler {
             peers_by_node: HashMap::new(),
             authentications: HashMap::new(),
@@ -81,15 +81,15 @@ impl Handler {
     }
 
     /// Returns a vector of indices of nodes for which the handler has no authentication.
-    pub fn missing_nodes<'a>(&'a self) -> impl IntoIterator<Item = NodeIndex> + 'a {
+    pub fn missing_nodes<'a>(&'a self) -> impl Iterator<Item = NodeIndex> + 'a {
         let node_count = self.node_count().0;
-        let take_predicate = if self.peers_by_node.len() + 1 == node_count {
+        let node_count = if self.peers_by_node.len() + 1 == node_count {
             0
         } else {
             node_count
         };
+
         (0..node_count)
-            .take(take_predicate)
             .map(NodeIndex)
             .filter(move |node_id| !self.peers_by_node.contains_key(node_id))
     }
@@ -106,29 +106,95 @@ impl Handler {
             .map(|((auth_data, _), _)| auth_data.node_id)
     }
 
-    pub async fn update(
+    async fn update(
         &mut self,
         authority_verifier: AuthorityVerifier,
         addresses: &Vec<Multiaddr>,
     ) -> Result<Vec<Multiaddr>, AddressError> {
         let own_peer_id = retrieve_peer_id(addresses.iter())?;
-        self.authentications = HashMap::new();
+        let authentications = take(&mut self.authentications);
         self.peers_by_node = HashMap::new();
         self.authority_verifier = authority_verifier;
         self.own_peer_id = own_peer_id;
+
+        for (_, (auth, maybe_auth)) in authentications {
+            print!(
+                "normal authentication: {:?}",
+                self.handle_authentication(auth)
+            );
+            if let Some(auth) = maybe_auth {
+                print!(
+                    "alternative authentication: {:?}",
+                    self.handle_authentication(auth)
+                );
+            }
+        }
         Ok(self
             .authentications
             .values()
             .flat_map(|((auth_data, _), _)| auth_data.addresses.iter().cloned())
             .collect())
     }
+
+    /// Verifies the authentication, uses it to update mappings, and returns whether we should
+    /// remain connected to the multiaddresses.
+    fn handle_authentication(&mut self, authentication: Authentication) -> bool {
+        let (auth_data, signature) = authentication.clone();
+
+        // The auth is completely useless if it doesn't have a consistent PeerId.
+        let peer_id = match get_common_peer_id(&auth_data.addresses) {
+            Some(peer_id) => peer_id,
+            None => return false,
+        };
+        if peer_id == self.own_peer_id {
+            return false;
+        }
+        if !self
+            .authority_verifier
+            .verify(&auth_data.encode(), &signature, auth_data.node_id)
+        {
+            // This might be an authentication for a key that has been changed, but we are not yet
+            // aware of the change.
+            if let Some(auth_pair) = self.authentications.get_mut(&peer_id) {
+                auth_pair.1 = Some(authentication);
+            }
+            return false;
+        }
+        self.peers_by_node.insert(auth_data.node_id, peer_id);
+        self.authentications.insert(peer_id, (authentication, None));
+        true
+    }
 }
 
-// impl AsRef<Handler> for ValidatorHandler {
-//     fn as_ref(&self) -> &Handler {
-//         &self.handler
-//     }
-// }
+pub struct NonValidatorHandler(Handler);
+
+impl NonValidatorHandler {
+    pub fn new<'a>(
+        authority_verifier: AuthorityVerifier,
+        addresses: impl IntoIterator<Item = &'a Multiaddr>,
+    ) -> Result<Self, AddressError> {
+        let handler = Handler::new(authority_verifier, addresses)?;
+        Ok(NonValidatorHandler(handler))
+    }
+
+    pub async fn update(
+        &mut self,
+        authority_verifier: AuthorityVerifier,
+        addresses: &Vec<Multiaddr>,
+    ) -> Result<Vec<Multiaddr>, AddressError> {
+        self.0.update(authority_verifier, addresses).await
+    }
+
+    pub fn handle_authentication(&mut self, authentication: Authentication) -> bool {
+        self.0.handle_authentication(authentication)
+    }
+}
+
+impl AsRef<Handler> for ValidatorHandler {
+    fn as_ref(&self) -> &Handler {
+        &self.handler
+    }
+}
 
 impl ValidatorHandler {
     /// Returns an error if the set of addresses contains no external libp2p addresses, or contains
@@ -162,44 +228,6 @@ impl ValidatorHandler {
         self.own_authentication.clone()
     }
 
-    /// Verifies the authentication, uses it to update mappings, and returns whether we should
-    /// remain connected to the multiaddresses.
-    pub fn handle_authentication(&mut self, authentication: Authentication) -> bool {
-        let (auth_data, signature) = authentication.clone();
-
-        if auth_data.session_id != self.session_id() {
-            return false;
-        }
-
-        // The auth is completely useless if it doesn't have a consistent PeerId.
-        let peer_id = match get_common_peer_id(&auth_data.addresses) {
-            Some(peer_id) => peer_id,
-            None => return false,
-        };
-        if peer_id == self.handler.own_peer_id {
-            return false;
-        }
-        if !self.handler.authority_verifier.verify(
-            &auth_data.encode(),
-            &signature,
-            auth_data.node_id,
-        ) {
-            // This might be an authentication for a key that has been changed, but we are not yet
-            // aware of the change.
-            if let Some(auth_pair) = self.handler.authentications.get_mut(&peer_id) {
-                auth_pair.1 = Some(authentication);
-            }
-            return false;
-        }
-        self.handler
-            .peers_by_node
-            .insert(auth_data.node_id, peer_id);
-        self.handler
-            .authentications
-            .insert(peer_id, (authentication, None));
-        true
-    }
-
     /// Updates the handler with the given keychain and set of own addresses.
     /// Returns an error if the set of addresses is not valid.
     /// All authentications will be rechecked, invalid ones purged and cached ones that turn out to
@@ -212,31 +240,27 @@ impl ValidatorHandler {
         authority_verifier: AuthorityVerifier,
         addresses: Vec<Multiaddr>,
     ) -> Result<Vec<Multiaddr>, AddressError> {
-        let authentications = take(&mut self.handler.authentications);
         let result = self.handler.update(authority_verifier, &addresses).await?;
+
         self.own_authentication =
             construct_authentication(&authority_index_and_pen, self.session_id(), addresses).await;
         self.authority_index_and_pen = authority_index_and_pen;
 
-        for (_, (auth, maybe_auth)) in authentications {
-            print!(
-                "normal authentication: {:?}",
-                self.handle_authentication(auth.clone())
-            );
-            if let Some(auth) = maybe_auth {
-                print!(
-                    "alternative authentication: {:?}",
-                    self.handle_authentication(auth.clone())
-                );
-            }
-        }
         Ok(result)
+    }
+
+    /// Verifies the authentication, uses it to update mappings, and returns whether we should
+    /// remain connected to the multiaddresses.
+    pub fn handle_authentication(&mut self, authentication: Authentication) -> bool {
+        if authentication.0.session_id != self.session_id() {
+            return false;
+        }
+        self.handler.handle_authentication(authentication)
     }
 
     pub fn missing_nodes<'a>(&'a self) -> impl Iterator<Item = NodeIndex> + 'a {
         self.handler
             .missing_nodes()
-            .into_iter()
             .filter(move |node_ix| *node_ix != self.index())
     }
 }
