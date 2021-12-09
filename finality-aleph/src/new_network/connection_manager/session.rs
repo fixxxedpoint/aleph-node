@@ -19,12 +19,6 @@ pub struct Handler {
     authority_verifier: AuthorityVerifier,
 }
 
-pub struct ValidatorHandler {
-    handler: Handler,
-    own_authentication: Authentication,
-    authority_index_and_pen: (NodeIndex, AuthorityPen),
-}
-
 /// Returned when a set of addresses is not usable for creating authentications.
 /// Either because none of the addresses are externally reachable libp2p addresses,
 /// or the addresses contain multiple libp2p PeerIds.
@@ -168,6 +162,12 @@ impl Handler {
 
 pub struct NonValidatorHandler(Handler);
 
+impl AsRef<Handler> for NonValidatorHandler {
+    fn as_ref(&self) -> &Handler {
+        &self.0
+    }
+}
+
 impl NonValidatorHandler {
     pub fn new<'a>(
         authority_verifier: AuthorityVerifier,
@@ -188,6 +188,12 @@ impl NonValidatorHandler {
     pub fn handle_authentication(&mut self, authentication: Authentication) -> bool {
         self.0.handle_authentication(authentication)
     }
+}
+
+pub struct ValidatorHandler {
+    handler: Handler,
+    own_authentication: Authentication,
+    authority_index_and_pen: (NodeIndex, AuthorityPen),
 }
 
 impl AsRef<Handler> for ValidatorHandler {
