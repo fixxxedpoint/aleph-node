@@ -1,4 +1,5 @@
 mod config;
+mod wsRpcClient;
 
 use clap::Parser;
 use codec::{Compact, Encode};
