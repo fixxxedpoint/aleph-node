@@ -6,10 +6,11 @@ members = [
     "finality-aleph",
     "pallet",
     "primitives",
+    "flooder",
 ]
 
 exclude = [
-  "flooder",
+  # "flooder",
   "e2e-tests",
   "common",
   "local-tests/send-runtime"

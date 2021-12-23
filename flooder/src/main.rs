@@ -9,6 +9,8 @@ use log::{debug, info};
 use rayon::prelude::*;
 use sp_core::{sr25519, Pair};
 use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
+use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::{
     iter::{once, repeat, IntoIterator},
     sync::{Arc, Mutex},
@@ -36,13 +38,15 @@ fn main() -> Result<(), anyhow::Error> {
         panic!("Needs --phrase or --seed")
     }
 
-    let account = || match &config.phrase {
+    let phrase = config.phrase.clone();
+    let seed = config.seed.clone();
+    let account = || match &phrase {
         Some(phrase) => {
             sr25519::Pair::from_phrase(&config::read_phrase(phrase.clone()), None)
                 .unwrap()
                 .0
         }
-        None => match &config.seed {
+        None => match &seed {
             Some(seed) => sr25519::Pair::from_string(seed, None).unwrap(),
             None => panic!("Needs --phrase or --seed"),
         },
@@ -407,3 +411,5 @@ fn get_funds(connection: &Api<sr25519::Pair, WsRpcClient>, account: &AccountId) 
         None => 0,
     }
 }
+
+fn store_flooding_transactions(txs: impl IntoIterator<Item = TransferTransaction>) {}
