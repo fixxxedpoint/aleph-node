@@ -1,3 +1,5 @@
+mod rpcClient;
+
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender as ThreadOut;
 use std::thread;
@@ -7,24 +9,24 @@ use serde_json::Value;
 use sp_core::H256 as Hash;
 use ws::{connect, CloseCode, Handler, Result as WsResult, Sender as WsSender};
 
-use crate::rpc::ws_client::on_extrinsic_msg_submit_only;
-use crate::std::rpc::json_req;
-use crate::std::rpc::ws_client::Subscriber;
-use crate::std::rpc::ws_client::{
+use substrate_api_client::rpc::ws_client::on_extrinsic_msg_submit_only;
+use substrate_api_client::std::rpc::json_req;
+use substrate_api_client::std::rpc::ws_client::Subscriber;
+use substrate_api_client::std::rpc::ws_client::{
     on_extrinsic_msg_until_broadcast, on_extrinsic_msg_until_finalized,
     on_extrinsic_msg_until_in_block, on_extrinsic_msg_until_ready, on_get_request_msg,
     on_subscription_msg, OnMessageFn, RpcClient,
 };
-use crate::std::ApiClientError;
-use crate::std::ApiResult;
-use crate::std::FromHexString;
-use crate::std::RpcClient as RpcClientTrait;
-use crate::std::XtStatus;
+use substrate_api_client::std::ApiClientError;
+use substrate_api_client::std::ApiResult;
+use substrate_api_client::std::FromHexString;
+use substrate_api_client::std::RpcClient as RpcClientTrait;
+use substrate_api_client::std::XtStatus;
 
 #[derive(Debug, Clone)]
 pub struct WsRpcClient {
     url: String,
-    next_handler: ThreadOut<OnMessageFn>,
+    next_handler: ThreadOut<RpcClient>,
     join: thread::JoinHandle<()>,
     out: WsSender,
 }
@@ -33,6 +35,9 @@ impl WsRpcClient {
     pub fn new(url: &str) -> WsRpcClient {
         WsRpcClient {
             url: url.to_string(),
+            next_handler: todo!(),
+            join: todo!(),
+            out: todo!(),
         }
     }
 }
@@ -150,8 +155,25 @@ impl WsRpcClient {
         self.start_rpc_client_thread(json_req, result_in, on_subscription_msg)
     }
 
-    fn start_rpc_client_thread(&self, receiver: Receiver<OnMessageFn>) -> WsResult<()> {
-        let (rx, tx) = sync_channel();
+    fn start_rpc_client_thread(
+        &self,
+        jsonreq: String,
+        result_in: ThreadOut<String>,
+        on_message_fn: OnMessageFn,
+    ) -> WsResult<()> {
+        todo!();
+        // send the request using the `out` channel
+        // create RpcClient like in the original code, but without its `on_open` method (it was responsible for sending request, which we already did)
+        // set that RpcClient to WsHandler on the other thread so it can use it to handle responses
+
+        // or slightly better idea (?)
+        // use https://docs.rs/ws/0.9.1/src/ws/communication.rs.html#86
+        // use similar approach like above, but do not copy the RpcClient from that library, just provide it a fake Sender
+        // when it finishes (ThreadOut) just switch it with NoOp Handler until a new request arrives
+    }
+
+    fn start_rpc_client_thread(&self) {
+        let (rx, tx) = std::sync::mpsc::sync_channel(0);
         let url = self.url.clone();
         let join = thread::Builder::new()
             .name("client".to_owned())
@@ -174,8 +196,7 @@ impl WsRpcClient {
 }
 
 struct WsHandler {
-    next_handler: SyncReceiver<OnMessageFn>,
-    out: ThreadOut<String>,
+    next_handler: std::sync::mpsc::Receiver<RpcClient>,
 }
 
 impl Handler for WsHandler {
@@ -184,27 +205,6 @@ impl Handler for WsHandler {
             .next_handler
             .recv()
             .expect("to receive a handler for incoming message");
-        (handler)(msg, self.out.clone(), self.result.clone())
+        handler.on_message(msg)
     }
 }
-
-// fn start_rpc_client_thread(
-//     &self,
-//     jsonreq: String,
-//     result_in: ThreadOut<String>,
-//     on_message_fn: OnMessageFn,
-// ) -> WsResult<()> {
-//     let url = self.url.clone();
-//     let _client =
-//         thread::Builder::new()
-//         .name("client".to_owned())
-//         .spawn(move || -> WsResult<()> {
-//             connect(url, |out| RpcClient {
-//                 out,
-//                 request: jsonreq.clone(),
-//                 result: result_in.clone(),
-//                 on_message_fn,
-//             })
-//         })?;
-//     Ok(())
-// }
