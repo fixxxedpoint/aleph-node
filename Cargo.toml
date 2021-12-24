@@ -7,11 +7,11 @@ members = [
     "pallet",
     "primitives",
     "flooder",
+    "common"
 ]
 
 exclude = [
   # "flooder",
   "e2e-tests",
-  "common",
-  "local-tests/send-runtime"
+  # "common"
 ]

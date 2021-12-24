@@ -1,9 +1,10 @@
+mod ws_rpc_client;
+
 use log::warn;
 use sp_core::sr25519;
-use std::thread::sleep;
-use std::time::Duration;
-use substrate_api_client::rpc::WsRpcClient;
+use std::{thread::sleep, time::Duration};
 use substrate_api_client::Api;
+pub use ws_rpc_client::WsRpcClient;
 
 pub fn create_connection(url: String) -> Api<sr25519::Pair, WsRpcClient> {
     let client = WsRpcClient::new(&format!("ws://{}", url));

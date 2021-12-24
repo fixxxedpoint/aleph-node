@@ -1,9 +1,8 @@
 mod config;
-mod wsRpcClient;
 
 use clap::Parser;
 use codec::{Compact, Encode};
-use common::create_connection;
+use common::{create_connection, WsRpcClient};
 use config::Config;
 use hdrhistogram::Histogram as HdrHistogram;
 use log::{debug, info};
@@ -18,8 +17,8 @@ use std::{
     time::Instant,
 };
 use substrate_api_client::{
-    compose_call, compose_extrinsic_offline, rpc::WsRpcClient, AccountId, Api, GenericAddress,
-    UncheckedExtrinsicV4, XtStatus,
+    compose_call, compose_extrinsic_offline, AccountId, Api, GenericAddress, UncheckedExtrinsicV4,
+    XtStatus,
 };
 
 type TransferTransaction =
