@@ -34,7 +34,7 @@ pub struct WsRpcClient {
 impl WsRpcClient {
     pub fn new(url: &str) -> WsRpcClient {
         let (sender, join_handle, rpc_client) = start_rpc_client_thread(url.to_string())
-            .expect("unable to initialized WebSocket's thread");
+            .unwrap_or_else(|err| panic!("failed to spawn WebSocket's thread: {}", err));
         WsRpcClient {
             next_handler: rpc_client,
             join_handle: Some(join_handle),
@@ -203,7 +203,7 @@ impl WsRpcClient {
         };
         // force lock to be released before we send a message on ws::Sender, otherwise we might get a deadlock
         {
-            let next_handler = self
+            let mut next_handler = self
                 .next_handler
                 .lock()
                 .expect("unable to acquire a lock on RpcClient");
@@ -230,7 +230,7 @@ fn start_rpc_client_thread(
         JoinHandle<WsResult<()>>,
         Arc<Mutex<Option<RpcClient>>>,
     ),
-    (),
+    String,
 > {
     let (tx, rx) = std::sync::mpsc::sync_channel(0);
     let join = thread::Builder::new()
@@ -245,8 +245,8 @@ fn start_rpc_client_thread(
                 }
             })
         })
-        .map_err(|_| ())?;
-    let (out, rpc_client) = rx.recv().map_err(|_| ())?;
+        .map_err(|_| "unable to spawn WebSocket's thread")?;
+    let (out, rpc_client) = rx.recv().map_err(|_| "WebSocket's unexpectedly died")?;
     Ok((out, join, rpc_client))
 }
 
