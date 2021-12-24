@@ -16,7 +16,7 @@ use substrate_api_client::{
             on_extrinsic_msg_submit_only, on_extrinsic_msg_until_broadcast,
             on_extrinsic_msg_until_finalized, on_extrinsic_msg_until_in_block,
             on_extrinsic_msg_until_ready, on_get_request_msg, on_subscription_msg, OnMessageFn,
-            RpcClient, Subscriber,
+            RpcClient,
         },
     },
     ApiClientError, ApiResult, FromHexString, RpcClient as RpcClientTrait, XtStatus,
@@ -24,6 +24,7 @@ use substrate_api_client::{
 use ws::{connect, CloseCode, Handler, Message, Result as WsResult, Sender as WsSender};
 
 pub struct WsRpcClient {
+    mux: Mutex<()>,
     next_handler: Arc<Mutex<Option<RpcClient>>>,
     join_handle: Option<thread::JoinHandle<WsResult<()>>>,
     out: WsSender,
@@ -37,6 +38,7 @@ impl WsRpcClient {
             next_handler: rpc_client,
             join_handle: Some(join_handle),
             out: sender,
+            mux: Mutex::new(()),
         }
     }
 }
@@ -49,6 +51,8 @@ impl Drop for WsRpcClient {
 
 impl RpcClientTrait for WsRpcClient {
     fn get_request(&self, jsonreq: Value) -> ApiResult<String> {
+        let _mux = self.mux.lock();
+
         let (result_in, result_out) = channel();
         self.get(jsonreq.to_string(), result_in)?;
 
@@ -68,6 +72,8 @@ impl RpcClientTrait for WsRpcClient {
         xthex_prefixed: String,
         exit_on: XtStatus,
     ) -> ApiResult<Option<sp_core::H256>> {
+        let _mux = self.mux.lock();
+
         // Todo: Make all variants return a H256: #175.
 
         let jsonreq = match exit_on {
@@ -119,16 +125,6 @@ impl RpcClientTrait for WsRpcClient {
     }
 }
 
-impl Subscriber for WsRpcClient {
-    fn start_subscriber(
-        &self,
-        json_req: String,
-        result_in: ThreadOut<String>,
-    ) -> Result<(), ws::Error> {
-        self.start_subscriber(json_req, result_in)
-    }
-}
-
 impl WsRpcClient {
     pub fn get(&self, json_req: String, result_in: ThreadOut<String>) -> WsResult<()> {
         self.start_rpc_client_thread(json_req, result_in, on_get_request_msg)
@@ -168,10 +164,6 @@ impl WsRpcClient {
         result_in: ThreadOut<String>,
     ) -> WsResult<()> {
         self.start_rpc_client_thread(json_req, result_in, on_extrinsic_msg_until_finalized)
-    }
-
-    pub fn start_subscriber(&self, json_req: String, result_in: ThreadOut<String>) -> WsResult<()> {
-        self.start_rpc_client_thread(json_req, result_in, on_subscription_msg)
     }
 
     fn start_rpc_client_thread(
