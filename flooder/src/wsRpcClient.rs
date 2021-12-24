@@ -1,29 +1,27 @@
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Sender as ThreadOut;
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::thread;
-use std::thread::JoinHandle;
-
 use log::info;
 use serde_json::Value;
 use sp_core::H256 as Hash;
-use ws::Message;
-use ws::{connect, CloseCode, Handler, Result as WsResult, Sender as WsSender};
-
-use substrate_api_client::rpc::ws_client::on_extrinsic_msg_submit_only;
-use substrate_api_client::std::rpc::json_req;
-use substrate_api_client::std::rpc::ws_client::Subscriber;
-use substrate_api_client::std::rpc::ws_client::{
-    on_extrinsic_msg_until_broadcast, on_extrinsic_msg_until_finalized,
-    on_extrinsic_msg_until_in_block, on_extrinsic_msg_until_ready, on_get_request_msg,
-    on_subscription_msg, OnMessageFn, RpcClient,
+use std::{
+    sync::{
+        mpsc::{channel, Sender as ThreadOut},
+        Arc, Mutex,
+    },
+    thread,
+    thread::JoinHandle,
 };
-use substrate_api_client::std::ApiClientError;
-use substrate_api_client::std::ApiResult;
-use substrate_api_client::std::FromHexString;
-use substrate_api_client::std::RpcClient as RpcClientTrait;
-use substrate_api_client::std::XtStatus;
+use substrate_api_client::{
+    rpc::{
+        json_req,
+        ws_client::{
+            on_extrinsic_msg_submit_only, on_extrinsic_msg_until_broadcast,
+            on_extrinsic_msg_until_finalized, on_extrinsic_msg_until_in_block,
+            on_extrinsic_msg_until_ready, on_get_request_msg, on_subscription_msg, OnMessageFn,
+            RpcClient, Subscriber,
+        },
+    },
+    ApiClientError, ApiResult, FromHexString, RpcClient as RpcClientTrait, XtStatus,
+};
+use ws::{connect, CloseCode, Handler, Message, Result as WsResult, Sender as WsSender};
 
 pub struct WsRpcClient {
     next_handler: Arc<Mutex<Option<RpcClient>>>,
@@ -55,6 +53,13 @@ impl RpcClientTrait for WsRpcClient {
         self.get(jsonreq.to_string(), result_in)?;
 
         let str = result_out.recv()?;
+
+        // reset the RpcClient handler used by the WebSocket's thread
+        *self
+            .next_handler
+            .lock()
+            .expect("unable to acquire a lock on RpcClient") = None;
+
         Ok(str)
     }
 
@@ -175,22 +180,7 @@ impl WsRpcClient {
         result_in: ThreadOut<String>,
         on_message_fn: OnMessageFn,
     ) -> WsResult<()> {
-        // todo!();
-        // send the request using the `out` channel
-        // create RpcClient like in the original code, but without its `on_open` method (it was responsible for sending request, which we already did)
-        // set that RpcClient to WsHandler on the other thread so it can use it to handle responses
-
-        // or slightly better idea (?)
-        // use https://docs.rs/ws/0.9.1/src/ws/communication.rs.html#86
-        // use similar approach like above, but do not copy the RpcClient from that library, just provide it a fake Sender
-        // when it finishes (ThreadOut) just switch it with NoOp Handler until a new request arrives
-
-        // let (tx, rx) = sync_channel(2);
-        // token: Token,
-        // channel: mio::channel::SyncSender<Command>,
-        // connection_id: u32,
-
-        // 1 used by on_open of RpcClient + 1 extra buffer
+        // 1 used by `on_open` of RpcClient + 1 for `close`
         const MAGIC_SEND_CONST: usize = 2;
         let (ws_tx, _ws_rx) = mio::channel::sync_channel(MAGIC_SEND_CONST);
         let ws_sender = ws::Sender::new(0.into(), ws_tx, 0);
