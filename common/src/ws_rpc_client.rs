@@ -15,8 +15,7 @@ use substrate_api_client::{
         ws_client::{
             on_extrinsic_msg_submit_only, on_extrinsic_msg_until_broadcast,
             on_extrinsic_msg_until_finalized, on_extrinsic_msg_until_in_block,
-            on_extrinsic_msg_until_ready, on_get_request_msg, on_subscription_msg, OnMessageFn,
-            RpcClient,
+            on_extrinsic_msg_until_ready, on_get_request_msg, OnMessageFn, RpcClient,
         },
     },
     ApiClientError, ApiResult, FromHexString, RpcClient as RpcClientTrait, XtStatus,
