@@ -412,5 +412,3 @@ fn get_funds(connection: &Api<sr25519::Pair, WsRpcClient>, account: &AccountId) 
         None => 0,
     }
 }
-
-fn store_flooding_transactions(txs: impl IntoIterator<Item = TransferTransaction>) {}
