@@ -7,10 +7,11 @@ members = [
     "pallet",
     "primitives",
     "flooder",
+    "common"
 ]
 
 exclude = [
   # "flooder",
   "e2e-tests",
-  "common"
+  # "common"
 ]
