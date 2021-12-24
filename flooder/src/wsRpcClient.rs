@@ -1,12 +1,14 @@
-mod rpcClient;
-
 use std::sync::mpsc::channel;
 use std::sync::mpsc::Sender as ThreadOut;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
+use std::thread::JoinHandle;
 
 use log::info;
 use serde_json::Value;
 use sp_core::H256 as Hash;
+use ws::Message;
 use ws::{connect, CloseCode, Handler, Result as WsResult, Sender as WsSender};
 
 use substrate_api_client::rpc::ws_client::on_extrinsic_msg_submit_only;
@@ -23,22 +25,27 @@ use substrate_api_client::std::FromHexString;
 use substrate_api_client::std::RpcClient as RpcClientTrait;
 use substrate_api_client::std::XtStatus;
 
-#[derive(Debug, Clone)]
 pub struct WsRpcClient {
-    url: String,
-    next_handler: ThreadOut<RpcClient>,
-    join: thread::JoinHandle<()>,
+    next_handler: Arc<Mutex<Option<RpcClient>>>,
+    join_handle: Option<thread::JoinHandle<WsResult<()>>>,
     out: WsSender,
 }
 
 impl WsRpcClient {
     pub fn new(url: &str) -> WsRpcClient {
+        let (sender, join_handle, rpc_client) = start_rpc_client_thread(url.to_string())
+            .expect("unable to initialized WebSocket's thread");
         WsRpcClient {
-            url: url.to_string(),
-            next_handler: todo!(),
-            join: todo!(),
-            out: todo!(),
+            next_handler: rpc_client,
+            join_handle: Some(join_handle),
+            out: sender,
         }
+    }
+}
+
+impl Drop for WsRpcClient {
+    fn drop(&mut self) {
+        self.close();
     }
 }
 
@@ -64,7 +71,7 @@ impl RpcClientTrait for WsRpcClient {
         };
 
         let (result_in, result_out) = channel();
-        match exit_on {
+        let result = match exit_on {
             XtStatus::Finalized => {
                 self.send_extrinsic_and_wait_until_finalized(jsonreq, result_in)?;
                 let res = result_out.recv()?;
@@ -96,7 +103,14 @@ impl RpcClientTrait for WsRpcClient {
                 Ok(None)
             }
             _ => Err(ApiClientError::UnsupportedXtStatus(exit_on)),
-        }
+        };
+
+        // reset the RpcClient handler used by the WebSocket's thread
+        *self
+            .next_handler
+            .lock()
+            .expect("unable to acquire a lock on RpcClient") = None;
+        result
     }
 }
 
@@ -161,7 +175,7 @@ impl WsRpcClient {
         result_in: ThreadOut<String>,
         on_message_fn: OnMessageFn,
     ) -> WsResult<()> {
-        todo!();
+        // todo!();
         // send the request using the `out` channel
         // create RpcClient like in the original code, but without its `on_open` method (it was responsible for sending request, which we already did)
         // set that RpcClient to WsHandler on the other thread so it can use it to handle responses
@@ -170,41 +184,87 @@ impl WsRpcClient {
         // use https://docs.rs/ws/0.9.1/src/ws/communication.rs.html#86
         // use similar approach like above, but do not copy the RpcClient from that library, just provide it a fake Sender
         // when it finishes (ThreadOut) just switch it with NoOp Handler until a new request arrives
+
+        // let (tx, rx) = sync_channel(2);
+        // token: Token,
+        // channel: mio::channel::SyncSender<Command>,
+        // connection_id: u32,
+
+        // 1 used by on_open of RpcClient + 1 extra buffer
+        const MAGIC_SEND_CONST: usize = 2;
+        let (ws_tx, _ws_rx) = mio::channel::sync_channel(MAGIC_SEND_CONST);
+        let ws_sender = ws::Sender::new(0.into(), ws_tx, 0);
+
+        let rpc_client = RpcClient {
+            out: ws_sender,
+            request: jsonreq.clone(),
+            result: result_in,
+            on_message_fn,
+        };
+        // force lock to be released before we send a message on ws::Sender, otherwise we might get a deadlock
+        {
+            let next_handler = self
+                .next_handler
+                .lock()
+                .expect("unable to acquire a lock on RpcClient");
+            *next_handler = Some(rpc_client);
+        }
+        self.out.send(jsonreq)
     }
 
-    fn start_rpc_client_thread(&self) {
-        let (rx, tx) = std::sync::mpsc::sync_channel(0);
-        let url = self.url.clone();
-        let join = thread::Builder::new()
-            .name("client".to_owned())
-            .spawn(move || {
-                connect(url, |out| {
-                    tx.send(out).expect("main thread was already stopped");
-                    WsHandler {
-                        next_handler: receiver,
-                    }
-                })
-            });
-        let out = rx.recv();
-        Ok(())
-    }
-
-    pub fn close(&self) {
-        self.out.close(CloseCode::Normal);
-        self.join.join().expect("the ws thread panicked");
+    pub fn close(&mut self) {
+        self.out
+            .close(CloseCode::Normal)
+            .expect("unable to send close on the WebSocket");
+        self.join_handle
+            .take()
+            .map(|handle| handle.join().expect("unable to join WebSocket's thread"));
     }
 }
 
+fn start_rpc_client_thread(
+    url: String,
+) -> Result<
+    (
+        WsSender,
+        JoinHandle<WsResult<()>>,
+        Arc<Mutex<Option<RpcClient>>>,
+    ),
+    (),
+> {
+    let (tx, rx) = std::sync::mpsc::sync_channel(0);
+    let join = thread::Builder::new()
+        .name("client".to_owned())
+        .spawn(move || -> WsResult<()> {
+            connect(url, |out| -> WsHandler {
+                let rpc_client = Arc::new(Mutex::new(None));
+                tx.send((out, rpc_client.clone()))
+                    .expect("main thread was already stopped");
+                WsHandler {
+                    next_handler: rpc_client,
+                }
+            })
+        })
+        .map_err(|_| ())?;
+    let (out, rpc_client) = rx.recv().map_err(|_| ())?;
+    Ok((out, join, rpc_client))
+}
+
 struct WsHandler {
-    next_handler: std::sync::mpsc::Receiver<RpcClient>,
+    next_handler: Arc<Mutex<Option<RpcClient>>>,
 }
 
 impl Handler for WsHandler {
     fn on_message(&mut self, msg: Message) -> WsResult<()> {
-        let handler = self
+        if let Some(handler) = self
             .next_handler
-            .recv()
-            .expect("to receive a handler for incoming message");
-        handler.on_message(msg)
+            .lock()
+            .expect("main thread probably died")
+            .as_mut()
+        {
+            handler.on_message(msg)
+        } else {
+            Ok(())
+        }
     }
 }

@@ -25,5 +25,7 @@ futures = { version = "0.3", features = ["alloc"] }
 hdrhistogram = "7.3.0"
 log = "0.4"
 rayon = "1.5.1"
-serde_json = { version = "1.0", optional = true }
-ws = { version = "0.9.1", optional = true, features = ["ssl"] }
+serde_json = { version = "1.0" }
+ws = { version = "0.9.1", features = ["ssl"] }
+mio = { version = "0.6.14" }
+# mio-extras = { version = "2.0" }
