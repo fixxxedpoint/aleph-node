@@ -5,7 +5,7 @@ use codec::{Compact, Encode};
 use common::{create_connection, WsRpcClient};
 use config::Config;
 use hdrhistogram::Histogram as HdrHistogram;
-use log::{debug, info};
+use log::{debug, info, trace};
 use rayon::prelude::*;
 use sp_core::{sr25519, Pair};
 use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
@@ -369,6 +369,7 @@ fn initialize_account(
 }
 
 fn derive_user_account(seed: u64) -> sr25519::Pair {
+    trace!("deriving an account from seed={}", seed);
     let seed = seed.to_string();
     sr25519::Pair::from_string(&("//".to_string() + &seed), None).unwrap()
 }

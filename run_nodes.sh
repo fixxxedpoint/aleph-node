@@ -9,16 +9,18 @@ function usage(){
 
 N_VALIDATORS=4
 N_NON_VALIDATORS=0
-BUILD_ALEPH_NODE='true'
+BUILD_ALEPH_NODE='false'
 BASE_PATH='/tmp'
+ALEPH_BIN='./target/release/aleph-node'
 
-while getopts "v:n:b:p:" flag
+while getopts "v:n:b:p:a:" flag
 do
   case "${flag}" in
     v) N_VALIDATORS=${OPTARG};;
     n) N_NON_VALIDATORS=${OPTARG};;
     b) BUILD_ALEPH_NODE=${OPTARG};;
     p) BASE_PATH=${OPTARG};;
+    a) ALEPH_BIN=${OPTARG};;
     *)
       usage
       exit
@@ -57,25 +59,25 @@ validator_ids_string="${validator_ids_string//${IFS:0:1}/,}"
 
 
 echo "Bootstrapping chain for nodes 0..$((N_VALIDATORS - 1))"
-./target/release/aleph-node bootstrap-chain --millisecs-per-block 2000 --session-period 40 --base-path "$BASE_PATH" --account-ids "$validator_ids_string" --chain-type local > "$BASE_PATH/chainspec.json"
+$ALEPH_BIN bootstrap-chain --millisecs-per-block 2000 --session-period 40 --base-path "$BASE_PATH" --account-ids "$validator_ids_string" > "$BASE_PATH/chainspec.json"
 
 for i in $(seq "$N_VALIDATORS" "$(( N_VALIDATORS + N_NON_VALIDATORS - 1 ))"); do
   echo "Bootstrapping node $i"
   account_id=${account_ids[$i]}
-  ./target/release/aleph-node bootstrap-node --base-path "$BASE_PATH" --account-id "$account_id" --chain-type local
+  $ALEPH_BIN bootstrap-node --base-path "$BASE_PATH" --account-id "$account_id"
 done
 
 bootnodes=""
 for i in 0 1; do
-    pk=$(./target/release/aleph-node key inspect-node-key --file $BASE_PATH/${account_ids[$i]}/p2p_secret)
+    pk=$($ALEPH_BIN key inspect-node-key --file $BASE_PATH/${account_ids[$i]}/p2p_secret)
     bootnodes+="/dns4/localhost/tcp/$((30334+i))/p2p/$pk "
 done
 
 for i in $(seq 0 "$(( N_VALIDATORS + N_NON_VALIDATORS - 1 ))"); do
   auth=node-$i
   account_id=${account_ids[$i]}
-  ./target/release/aleph-node purge-chain --base-path $BASE_PATH/$account_id --chain $BASE_PATH/chainspec.json -y
-  ./target/release/aleph-node \
+  $ALEPH_BIN purge-chain --base-path $BASE_PATH/$account_id --chain $BASE_PATH/chainspec.json -y
+  $ALEPH_BIN \
     --validator \
     --chain $BASE_PATH/chainspec.json \
     --base-path $BASE_PATH/$account_id \
