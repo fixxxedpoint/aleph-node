@@ -195,7 +195,7 @@ impl WsRpcClient {
 
     pub fn close(&mut self) {
         self.out
-            .close(CloseCode::Normal)
+            .shutdown()
             .expect("unable to send close on the WebSocket");
         self.join_handle
             .take()

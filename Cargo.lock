@@ -15,6 +15,7 @@ dependencies = [
 [[package]]
 name = "ac-node-api"
 version = "0.1.0"
+source = "git+https://github.com/fixxxedpoint/substrate-api-client.git?rev=ee2468bd17c4dd3afca26b63cec972dca4a4469d#ee2468bd17c4dd3afca26b63cec972dca4a4469d"
 dependencies = [
  "ac-primitives",
  "frame-metadata 14.2.0",
@@ -33,6 +34,7 @@ dependencies = [
 [[package]]
 name = "ac-primitives"
 version = "0.1.0"
+source = "git+https://github.com/fixxxedpoint/substrate-api-client.git?rev=ee2468bd17c4dd3afca26b63cec972dca4a4469d#ee2468bd17c4dd3afca26b63cec972dca4a4469d"
 dependencies = [
  "parity-scale-codec",
  "sp-core",
@@ -8046,6 +8048,7 @@ dependencies = [
 [[package]]
 name = "substrate-api-client"
 version = "0.6.0"
+source = "git+https://github.com/fixxxedpoint/substrate-api-client.git?rev=ee2468bd17c4dd3afca26b63cec972dca4a4469d#ee2468bd17c4dd3afca26b63cec972dca4a4469d"
 dependencies = [
  "ac-node-api",
  "ac-primitives",
