@@ -9,7 +9,6 @@ use log::{debug, info};
 use rayon::prelude::*;
 use sp_core::{sr25519, Pair};
 use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
-use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::{
     iter::{once, repeat, IntoIterator},

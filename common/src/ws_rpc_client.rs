@@ -214,20 +214,20 @@ fn start_rpc_client_thread(
     String,
 > {
     let (tx, rx) = std::sync::mpsc::sync_channel(0);
+    let rpc_client = Arc::new(Mutex::new(None));
+    let connect_rpc_client = Arc::clone(&rpc_client);
     let join = thread::Builder::new()
         .name("client".to_owned())
-        .spawn(move || -> WsResult<()> {
-            connect(url, |out| -> WsHandler {
-                let rpc_client = Arc::new(Mutex::new(None));
-                tx.send((out, rpc_client.clone()))
-                    .expect("main thread was already stopped");
+        .spawn(|| -> WsResult<()> {
+            connect(url, move |out| {
+                tx.send(out).expect("main thread was already stopped");
                 WsHandler {
-                    next_handler: rpc_client,
+                    next_handler: connect_rpc_client.clone(),
                 }
             })
         })
         .map_err(|_| "unable to spawn WebSocket's thread")?;
-    let (out, rpc_client) = rx.recv().map_err(|_| "WebSocket's unexpectedly died")?;
+    let out = rx.recv().map_err(|_| "WebSocket's unexpectedly died")?;
     Ok((out, join, rpc_client))
 }
 
