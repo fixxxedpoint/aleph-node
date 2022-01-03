@@ -20,7 +20,7 @@ use substrate_api_client::{
     },
     ApiClientError, ApiResult, FromHexString, RpcClient as RpcClientTrait, XtStatus,
 };
-use ws::{connect, CloseCode, Handler, Message, Result as WsResult, Sender as WsSender};
+use ws::{connect, Handler, Message, Result as WsResult, Sender as WsSender};
 
 pub struct WsRpcClient {
     mux: Mutex<()>,
@@ -125,47 +125,47 @@ impl RpcClientTrait for WsRpcClient {
 }
 
 impl WsRpcClient {
-    pub fn get(&self, json_req: String, result_in: ThreadOut<String>) -> WsResult<()> {
-        self.start_rpc_client_thread(json_req, result_in, on_get_request_msg)
+    fn get(&self, json_req: String, result_in: ThreadOut<String>) -> WsResult<()> {
+        self.send_rpc_request(json_req, result_in, on_get_request_msg)
     }
 
-    pub fn send_extrinsic(&self, json_req: String, result_in: ThreadOut<String>) -> WsResult<()> {
-        self.start_rpc_client_thread(json_req, result_in, on_extrinsic_msg_submit_only)
+    fn send_extrinsic(&self, json_req: String, result_in: ThreadOut<String>) -> WsResult<()> {
+        self.send_rpc_request(json_req, result_in, on_extrinsic_msg_submit_only)
     }
 
-    pub fn send_extrinsic_until_ready(
+    fn send_extrinsic_until_ready(
         &self,
         json_req: String,
         result_in: ThreadOut<String>,
     ) -> WsResult<()> {
-        self.start_rpc_client_thread(json_req, result_in, on_extrinsic_msg_until_ready)
+        self.send_rpc_request(json_req, result_in, on_extrinsic_msg_until_ready)
     }
 
-    pub fn send_extrinsic_and_wait_until_broadcast(
+    fn send_extrinsic_and_wait_until_broadcast(
         &self,
         json_req: String,
         result_in: ThreadOut<String>,
     ) -> WsResult<()> {
-        self.start_rpc_client_thread(json_req, result_in, on_extrinsic_msg_until_broadcast)
+        self.send_rpc_request(json_req, result_in, on_extrinsic_msg_until_broadcast)
     }
 
-    pub fn send_extrinsic_and_wait_until_in_block(
+    fn send_extrinsic_and_wait_until_in_block(
         &self,
         json_req: String,
         result_in: ThreadOut<String>,
     ) -> WsResult<()> {
-        self.start_rpc_client_thread(json_req, result_in, on_extrinsic_msg_until_in_block)
+        self.send_rpc_request(json_req, result_in, on_extrinsic_msg_until_in_block)
     }
 
-    pub fn send_extrinsic_and_wait_until_finalized(
+    fn send_extrinsic_and_wait_until_finalized(
         &self,
         json_req: String,
         result_in: ThreadOut<String>,
     ) -> WsResult<()> {
-        self.start_rpc_client_thread(json_req, result_in, on_extrinsic_msg_until_finalized)
+        self.send_rpc_request(json_req, result_in, on_extrinsic_msg_until_finalized)
     }
 
-    fn start_rpc_client_thread(
+    fn send_rpc_request(
         &self,
         jsonreq: String,
         result_in: ThreadOut<String>,
