@@ -452,8 +452,12 @@ fn create_connection_pool(
     threads: usize,
 ) -> Vec<Api<sr25519::Pair, WsRpcClient>> {
     let pool_size = max(threads, nodes.len());
-    let pool = nodes.iter().map(create_connection);
-    pool.into_iter().cycle().take(pool_size).collect()
+    nodes
+        .iter()
+        .cycle()
+        .take(pool_size)
+        .map(create_connection)
+        .collect()
 }
 
 fn get_nonce(connection: &Api<sr25519::Pair, WsRpcClient>, account: &AccountId) -> u32 {
