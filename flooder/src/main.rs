@@ -11,6 +11,7 @@ use rayon::prelude::*;
 use sp_core::{sr25519, Pair};
 use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
 use std::convert::TryInto;
+use std::path::Path;
 use std::{
     io::{Read, Write},
     iter::{once, repeat},
@@ -56,12 +57,18 @@ fn main() -> Result<(), anyhow::Error> {
         true => XtStatus::SubmitOnly,
         false => XtStatus::Ready,
     };
+    let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
+    if let Some(threads) = config.threads {
+        let threads = threads.try_into().expect("threads within usize range");
+        thread_pool_builder = thread_pool_builder.num_threads(threads);
+    }
+    let thread_pool = thread_pool_builder.build().expect("thread pool created");
 
     info!(
         "Preparing transactions: {}ms",
         time_stats.elapsed().as_millis()
     );
-    let txs = preparing_txs(&config, connection);
+    let txs = prepare_txs(&config, connection, &thread_pool);
     info!(
         "Transactions prepared: {}ms",
         time_stats.elapsed().as_millis()
@@ -74,13 +81,15 @@ fn main() -> Result<(), anyhow::Error> {
     info!("flooding: {}ms", time_stats.elapsed().as_millis());
     let tick = Instant::now();
 
-    flood(
-        &pool,
-        txs.into_par_iter(),
-        tx_status,
-        &histogram,
-        rate_limiting,
-    );
+    thread_pool.install(|| {
+        flood(
+            &pool,
+            txs.into_par_iter(),
+            tx_status,
+            &histogram,
+            rate_limiting,
+        );
+    });
 
     let tock = tick.elapsed().as_millis();
     let histogram = histogram.lock().unwrap();
@@ -161,119 +170,124 @@ fn estimate_tx_fee(connection: &Api<sr25519::Pair, WsRpcClient>, tx: &TransferTr
     fee.tip + inclusion_fee.base_fee + inclusion_fee.len_fee + inclusion_fee.adjusted_weight_fee
 }
 
-fn preparing_txs(
+fn load_transactions(file_path: impl AsRef<Path>) -> Vec<TransferTransaction> {
+    let zipfile = std::fs::File::open(file_path).expect("Missing file with txs");
+    let mut archive = zip::ZipArchive::new(zipfile).expect("Zipfile is not properly created");
+    assert!(archive.len() == 1, "There should be one file with txs");
+
+    let mut file = archive.by_index(0).unwrap();
+    let mut bytes = Vec::with_capacity(file.size() as usize);
+    file.read_to_end(&mut bytes).expect("buffer overflow");
+
+    Vec::<TransferTransaction>::decode(&mut &bytes[..]).expect("Error while decoding txs")
+}
+
+fn prepare_txs(
     config: &Config,
     connection: &Api<sr25519::Pair, WsRpcClient>,
+    thread_pool: &rayon::ThreadPool,
 ) -> Vec<TransferTransaction> {
-    let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
-    if let Some(threads) = config.threads {
-        let threads = threads.try_into().expect("threads within usize range");
-        thread_pool_builder = thread_pool_builder.num_threads(threads);
-    }
-    let thread_pool = thread_pool_builder.build().expect("thread pool created");
-
     match config.generate_txs {
         false => {
-            if config.tx_store_path.is_none() {
-                panic!("tx_store_path is not set");
-            }
-            let path = config.tx_store_path.as_ref().unwrap();
-            let zipfile = std::fs::File::open(path).expect("Missing file with txs");
-            let mut archive =
-                zip::ZipArchive::new(zipfile).expect("Zipfile is not properly created");
-            assert!(archive.len() == 1, "There should be one file with txs");
-
-            let mut file = archive.by_index(0).unwrap();
-            let mut bytes = Vec::with_capacity(file.size() as usize);
-            file.read_to_end(&mut bytes).expect("buffer overflow");
-
-            Vec::<TransferTransaction>::decode(&mut &bytes[..]).expect("Error while decoding txs")
+            let path = match &config.tx_store_path {
+                Some(path) => path,
+                None => panic!("tx_store_path is not set"),
+            };
+            load_transactions(path)
         }
-        true => {
-            let store_txs = config.store_txs;
-            if store_txs && config.tx_store_path.is_none() {
-                panic!("tx_store_path is not set");
-            }
-            let tx_store_path = config.tx_store_path.as_ref().unwrap();
-            let first_account_in_range = config.first_account_in_range;
-            let total_users = config.transactions;
-            let transfer_amount = 1u128;
-            let initialize_accounts_flag = !config.skip_initialization;
-            thread_pool.install(|| {
-                let accounts: Vec<_> = (first_account_in_range
-                    ..first_account_in_range + total_users)
-                    .into_par_iter()
-                    .map(derive_user_account)
-                    .collect();
-
-                if initialize_accounts_flag {
-                    let account = match &config.phrase {
-                        Some(phrase) => {
-                            sr25519::Pair::from_phrase(&config::read_phrase(phrase.clone()), None)
-                                .unwrap()
-                                .0
-                        }
-                        None => sr25519::Pair::from_string(
-                            config.seed.as_ref().expect("We checked it is not None."),
-                            None,
-                        )
-                        .unwrap(),
-                    };
-                    let source_account_id = AccountId::from(account.public());
-
-                    let source_account_nonce = get_nonce(&connection, &source_account_id);
-                    let total_amount = estimate_amount(
-                        &connection,
-                        &account,
-                        source_account_nonce,
-                        transfer_amount,
-                    );
-
-                    assert!(
-                        get_funds(&connection, &source_account_id)
-                            .ge(&(total_amount * total_users as u128)),
-                        "Account is too poor"
-                    );
-
-                    initialize_accounts(
-                        &connection,
-                        &account,
-                        source_account_nonce,
-                        &accounts,
-                        total_amount,
-                    );
-
-                    debug!("all accounts have received funds");
-                }
-                let nonces: Vec<_> = match config.download_nonces {
-                    false => repeat(0).take(accounts.len()).collect(),
-                    true => accounts
-                        .par_iter()
-                        .map(|account| get_nonce(&connection, &AccountId::from(account.public())))
-                        .collect(),
-                };
-                let receiver = accounts
-                    .first()
-                    .expect(
-                        "we should be some accounts available for this test, but the list is empty",
-                    )
-                    .clone();
-                let txs: Vec<_> = sign_transactions(
-                    &connection,
-                    receiver,
-                    accounts.into_par_iter().zip(nonces),
-                    transfer_amount,
-                )
-                .collect();
-
-                if store_txs {
-                    zip_and_store_txs(&txs, tx_store_path);
-                }
-
-                txs
-            })
-        }
+        true => generate_txs(config, thread_pool, connection),
     }
+}
+
+fn generate_txs(
+    config: &Config,
+    thread_pool: &rayon::ThreadPool,
+    connection: &Api<sr25519::Pair, WsRpcClient>,
+) -> Vec<UncheckedExtrinsicV4<([u8; 2], MultiAddress<AccountId, ()>, Compact<u128>)>> {
+    let tx_store_path = match (config.store_txs, &config.tx_store_path) {
+        (true, None) => panic!("tx_store_path is not set"),
+        (true, path) => path,
+        (false, _) => &None,
+    };
+    let first_account_in_range = config.first_account_in_range;
+    let total_users = config.transactions;
+    let transfer_amount = 1u128;
+    let initialize_accounts_flag = !config.skip_initialization;
+
+    thread_pool.install(|| {
+        let accounts = (first_account_in_range..first_account_in_range + total_users)
+            .into_par_iter()
+            .map(derive_user_account)
+            .collect();
+
+        if initialize_accounts_flag {
+            initialize_accounts(config, connection, transfer_amount, &accounts);
+        }
+
+        let nonces: Vec<_> = match config.download_nonces {
+            false => repeat(0).take(accounts.len()).collect(),
+            true => accounts
+                .par_iter()
+                .map(|account| get_nonce(&connection, &AccountId::from(account.public())))
+                .collect(),
+        };
+        let receiver = accounts
+            .first()
+            .expect("we should have some accounts available for this test, but the list is empty")
+            .clone();
+        let txs: Vec<_> = sign_transactions(
+            &connection,
+            receiver,
+            accounts.into_par_iter().zip(nonces),
+            transfer_amount,
+        )
+        .collect();
+
+        if let Some(tx_store_path) = tx_store_path {
+            zip_and_store_txs(&txs, tx_store_path);
+        }
+
+        txs
+    })
+}
+
+fn initialize_accounts(
+    config: &Config,
+    connection: &Api<sr25519::Pair, WsRpcClient>,
+    transfer_amount: u128,
+    accounts: &Vec<sr25519::Pair>,
+) {
+    let account = match &config.phrase {
+        Some(phrase) => {
+            sr25519::Pair::from_phrase(&config::read_phrase(phrase.clone()), None)
+                .unwrap()
+                .0
+        }
+        None => sr25519::Pair::from_string(
+            config.seed.as_ref().expect("We checked it is not None."),
+            None,
+        )
+        .unwrap(),
+    };
+    let source_account_id = AccountId::from(account.public());
+    let source_account_nonce = get_nonce(&connection, &source_account_id);
+    let total_amount =
+        estimate_amount(&connection, &account, source_account_nonce, transfer_amount);
+
+    assert!(
+        get_funds(&connection, &source_account_id)
+            .ge(&(total_amount * u128::from(config.transactions))),
+        "Account is too poor"
+    );
+
+    initialize_accounts_on_chain(
+        &connection,
+        &account,
+        source_account_nonce,
+        accounts,
+        total_amount,
+    );
+    debug!("all accounts have received funds");
 }
 
 fn sign_tx(
@@ -344,7 +358,7 @@ fn estimate_amount(
     existential_deposit + (transfer_amount + tx_fee)
 }
 
-fn initialize_accounts(
+fn initialize_accounts_on_chain(
     connection: &Api<sr25519::Pair, WsRpcClient>,
     source_account: &sr25519::Pair,
     mut source_account_nonce: u32,
@@ -424,7 +438,7 @@ fn send_tx<Call>(
 }
 
 fn create_connection_pool(nodes: &[String]) -> Vec<Api<sr25519::Pair, WsRpcClient>> {
-    nodes.iter().cloned().map(create_connection).collect()
+    nodes.iter().map(create_connection).collect()
 }
 
 fn get_nonce(connection: &Api<sr25519::Pair, WsRpcClient>, account: &AccountId) -> u32 {
@@ -441,7 +455,7 @@ fn get_funds(connection: &Api<sr25519::Pair, WsRpcClient>, account: &AccountId) 
     }
 }
 
-fn zip_and_store_txs(txs: &[TransferTransaction], path: &str) {
+fn zip_and_store_txs(txs: &[TransferTransaction], path: impl AsRef<Path>) {
     let file = std::fs::File::create(path).unwrap();
     let mut zip = zip::ZipWriter::new(file);
     let options =
@@ -481,11 +495,11 @@ mod tests {
         };
         let conn = create_connection(url);
 
-        let txs_gen = preparing_txs(&config, &conn);
+        let txs_gen = prepare_txs(&config, &conn);
 
         config.generate_txs = false;
 
-        let txs_read = preparing_txs(&config, &conn);
+        let txs_read = prepare_txs(&config, &conn);
 
         assert!(txs_gen == txs_read)
     }
