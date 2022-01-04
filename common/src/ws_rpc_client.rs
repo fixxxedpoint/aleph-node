@@ -22,10 +22,11 @@ use substrate_api_client::{
 };
 use ws::{connect, Handler, Message, Result as WsResult, Sender as WsSender};
 
+#[derive(Clone)]
 pub struct WsRpcClient {
-    mux: Mutex<()>,
+    mux: Arc<Mutex<()>>,
     next_handler: Arc<Mutex<Option<RpcClient>>>,
-    join_handle: Option<thread::JoinHandle<WsResult<()>>>,
+    join_handle: Arc<Mutex<Option<thread::JoinHandle<WsResult<()>>>>>,
     out: WsSender,
 }
 
@@ -35,9 +36,9 @@ impl WsRpcClient {
             .unwrap_or_else(|err| panic!("failed to spawn WebSocket's thread: {}", err));
         WsRpcClient {
             next_handler: rpc_client,
-            join_handle: Some(join_handle),
+            join_handle: Arc::new(Mutex::new(Some(join_handle))),
             out: sender,
-            mux: Mutex::new(()),
+            mux: Arc::new(Mutex::new(())),
         }
     }
 }
@@ -198,6 +199,8 @@ impl WsRpcClient {
             .shutdown()
             .expect("unable to send close on the WebSocket");
         self.join_handle
+            .lock()
+            .unwrap()
             .take()
             .map(|handle| handle.join().expect("unable to join WebSocket's thread"));
     }

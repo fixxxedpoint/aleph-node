@@ -6,15 +6,14 @@ use common::{create_connection, WsRpcClient};
 use config::Config;
 use hdrhistogram::Histogram as HdrHistogram;
 use log::{debug, info};
-use rayon::current_thread_index;
 use rayon::prelude::*;
 use sp_core::{sr25519, Pair};
 use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
-use std::convert::TryInto;
-use std::path::Path;
 use std::{
+    convert::TryInto,
     io::{Read, Write},
     iter::{once, repeat},
+    path::Path,
     sync::{Arc, Mutex},
     thread,
     time::{Duration, Instant},
@@ -52,7 +51,7 @@ fn main() -> Result<(), anyhow::Error> {
         panic!("Needs --phrase or --seed");
     }
     let pool = create_connection_pool(&config.nodes);
-    let connection = pool.get(0).unwrap();
+    let connection = pool.get(0).unwrap().clone();
     let tx_status = match config.submit_only {
         true => XtStatus::SubmitOnly,
         false => XtStatus::Ready,
@@ -64,11 +63,20 @@ fn main() -> Result<(), anyhow::Error> {
     }
     let thread_pool = thread_pool_builder.build().expect("thread pool created");
 
+    // each thread should have its own connection
+    let threads = thread_pool.current_num_threads();
+    let pool_size = if threads < pool.len() {
+        pool.len()
+    } else {
+        threads
+    };
+    let pool: Vec<_> = pool.into_iter().cycle().take(pool_size).collect();
+
     info!(
         "Preparing transactions: {}ms",
         time_stats.elapsed().as_millis()
     );
-    let txs = prepare_txs(&config, connection, &thread_pool);
+    let txs = thread_pool.install(|| prepare_txs(&config, &connection));
     info!(
         "Transactions prepared: {}ms",
         time_stats.elapsed().as_millis()
@@ -78,18 +86,31 @@ fn main() -> Result<(), anyhow::Error> {
         HdrHistogram::<u64>::new_with_bounds(1, u64::MAX, 3).unwrap(),
     ));
 
+    let (transactions_in_interval, interval_duration) = rate_limiting.map_or(
+        (txs.len(), Duration::from_secs(0)),
+        |(transactions_in_interval, secs)| {
+            (
+                transactions_in_interval
+                    .try_into()
+                    .expect("`transactions_in_interval` should be within usize range"),
+                Duration::from_secs(secs),
+            )
+        },
+    );
+    let pool = |tx_ix: usize| pool.get(tx_ix % pool.len()).unwrap();
+
     info!("flooding: {}ms", time_stats.elapsed().as_millis());
     let tick = Instant::now();
 
-    thread_pool.install(|| {
-        flood(
-            &pool,
-            txs.into_par_iter(),
-            tx_status,
-            &histogram,
-            rate_limiting,
-        );
-    });
+    flood(
+        pool,
+        txs.into_par_iter(),
+        tx_status,
+        &histogram,
+        transactions_in_interval,
+        interval_duration,
+        &thread_pool,
+    );
 
     let tock = tick.elapsed().as_millis();
     let histogram = histogram.lock().unwrap();
@@ -113,48 +134,47 @@ fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-fn flood(
-    pool: &[Api<sr25519::Pair, WsRpcClient>],
+fn flood<'a>(
+    pool: impl Fn(usize) -> &'a Api<sr25519::Pair, WsRpcClient> + Sync,
     txs: impl IndexedParallelIterator<Item = TransferTransaction>,
     status: XtStatus,
     histogram: &Arc<Mutex<HdrHistogram<u64>>>,
-    rate_limit: Option<(u64, u64)>,
+    transactions_in_interval: usize,
+    interval_duration: Duration,
+    thread_pool: &rayon::ThreadPool,
 ) {
-    let (transactions_in_interval, interval_duration) = rate_limit.map_or(
-        (txs.len(), Duration::from_secs(0)),
-        |(transactions_in_interval, secs)| {
-            (transactions_in_interval as usize, Duration::from_secs(secs))
-        },
-    );
+    thread_pool.install(|| {
+        txs.enumerate()
+            .chunks(transactions_in_interval)
+            .enumerate()
+            .for_each(|(interval_idx, interval)| {
+                let start = Instant::now();
+                info!("Starting {} interval", interval_idx);
 
-    txs.chunks(transactions_in_interval)
-        .enumerate()
-        .for_each(|(interval_idx, interval)| {
-            let start = Instant::now();
-            info!("Starting {} interval", interval_idx);
+                interval.into_par_iter().for_each(|(tx_ix, tx)| {
+                    send_tx(
+                        pool(tx_ix),
+                        &tx,
+                        status,
+                        Arc::clone(histogram),
+                    );
+                });
 
-            interval.into_par_iter().for_each(|tx| {
-                send_tx(
-                    pool.get(current_thread_index().unwrap()).unwrap(),
-                    &tx,
-                    status,
-                    Arc::clone(histogram),
-                );
+                let exec_time = start.elapsed();
+
+                if let Some(remaining_time) = interval_duration.checked_sub(exec_time) {
+                    debug!("Sleeping for {}ms", remaining_time.as_millis());
+                    thread::sleep(remaining_time);
+                } else {
+                    debug!(
+                        "Execution for interval {} was slower than desired the target {}ms, was {}ms",
+                        interval_idx,
+                        interval_duration.as_millis(),
+                        exec_time.as_millis()
+                    );
+                }
             });
-            let exec_time = start.elapsed();
-
-            if let Some(remaining_time) = interval_duration.checked_sub(exec_time) {
-                debug!("Sleeping for {}ms", remaining_time.as_millis());
-                thread::sleep(remaining_time);
-            } else {
-                debug!(
-                    "Execution for interval {} was slower than desired the target {}ms, was {}ms",
-                    interval_idx,
-                    interval_duration.as_millis(),
-                    exec_time.as_millis()
-                );
-            }
-        });
+    });
 }
 
 fn estimate_tx_fee(connection: &Api<sr25519::Pair, WsRpcClient>, tx: &TransferTransaction) -> u128 {
@@ -185,7 +205,6 @@ fn load_transactions(file_path: impl AsRef<Path>) -> Vec<TransferTransaction> {
 fn prepare_txs(
     config: &Config,
     connection: &Api<sr25519::Pair, WsRpcClient>,
-    thread_pool: &rayon::ThreadPool,
 ) -> Vec<TransferTransaction> {
     match config.generate_txs {
         false => {
@@ -195,13 +214,12 @@ fn prepare_txs(
             };
             load_transactions(path)
         }
-        true => generate_txs(config, thread_pool, connection),
+        true => generate_txs(config, connection),
     }
 }
 
 fn generate_txs(
     config: &Config,
-    thread_pool: &rayon::ThreadPool,
     connection: &Api<sr25519::Pair, WsRpcClient>,
 ) -> Vec<UncheckedExtrinsicV4<([u8; 2], MultiAddress<AccountId, ()>, Compact<u128>)>> {
     let tx_store_path = match (config.store_txs, &config.tx_store_path) {
@@ -214,41 +232,39 @@ fn generate_txs(
     let transfer_amount = 1u128;
     let initialize_accounts_flag = !config.skip_initialization;
 
-    thread_pool.install(|| {
-        let accounts = (first_account_in_range..first_account_in_range + total_users)
-            .into_par_iter()
-            .map(derive_user_account)
-            .collect();
-
-        if initialize_accounts_flag {
-            initialize_accounts(config, connection, transfer_amount, &accounts);
-        }
-
-        let nonces: Vec<_> = match config.download_nonces {
-            false => repeat(0).take(accounts.len()).collect(),
-            true => accounts
-                .par_iter()
-                .map(|account| get_nonce(&connection, &AccountId::from(account.public())))
-                .collect(),
-        };
-        let receiver = accounts
-            .first()
-            .expect("we should have some accounts available for this test, but the list is empty")
-            .clone();
-        let txs: Vec<_> = sign_transactions(
-            &connection,
-            receiver,
-            accounts.into_par_iter().zip(nonces),
-            transfer_amount,
-        )
+    let accounts = (first_account_in_range..first_account_in_range + total_users)
+        .into_par_iter()
+        .map(derive_user_account)
         .collect();
 
-        if let Some(tx_store_path) = tx_store_path {
-            zip_and_store_txs(&txs, tx_store_path);
-        }
+    if initialize_accounts_flag {
+        initialize_accounts(config, connection, transfer_amount, &accounts);
+    }
 
-        txs
-    })
+    let nonces: Vec<_> = match config.download_nonces {
+        false => repeat(0).take(accounts.len()).collect(),
+        true => accounts
+            .par_iter()
+            .map(|account| get_nonce(&connection, &AccountId::from(account.public())))
+            .collect(),
+    };
+    let receiver = accounts
+        .first()
+        .expect("we should have some accounts available for this test, but the list is empty")
+        .clone();
+    let txs: Vec<_> = sign_transactions(
+        &connection,
+        receiver,
+        accounts.into_par_iter().zip(nonces),
+        transfer_amount,
+    )
+    .collect();
+
+    if let Some(tx_store_path) = tx_store_path {
+        zip_and_store_txs(&txs, tx_store_path);
+    }
+
+    txs
 }
 
 fn initialize_accounts(
@@ -493,7 +509,7 @@ mod tests {
             interval_secs: None,
             transactions_in_interval: None,
         };
-        let conn = create_connection(url);
+        let conn = create_connection(&url);
 
         let txs_gen = prepare_txs(&config, &conn);
 
