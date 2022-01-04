@@ -44,9 +44,9 @@ pub struct Config {
     #[clap(long)]
     pub download_nonces: bool,
 
-    /// changes the awaited status of every transaction from Ready to SubmitOnly
+    /// changes the awaited status of every transaction from `SubmitOnly` to `Ready`
     #[clap(long)]
-    pub submit_only: bool,
+    pub wait_for_ready: bool,
 
     /// store txs after generation
     #[clap(long)]

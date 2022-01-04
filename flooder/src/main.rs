@@ -10,6 +10,7 @@ use rayon::prelude::*;
 use sp_core::{sr25519, Pair};
 use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
 use std::{
+    cmp::max,
     convert::TryInto,
     io::{Read, Write},
     iter::{once, repeat},
@@ -40,34 +41,29 @@ fn main() -> Result<(), anyhow::Error> {
     if !config.skip_initialization && config.phrase.is_none() && config.seed.is_none() {
         panic!("Needs --phrase or --seed");
     }
-
     let rate_limiting = match (config.transactions_in_interval, config.interval_secs) {
         (Some(tii), Some(is)) => Some((tii, is)),
         (None, None) => None,
         _ => panic!("--transactions-in-interval needs to be specified with --interval-secs"),
     };
-
-    let pool = create_connection_pool(&config.nodes);
-    let connection = pool.get(0).unwrap().clone();
-    let tx_status = match config.submit_only {
-        true => XtStatus::SubmitOnly,
-        false => XtStatus::Ready,
+    let tx_status = match config.wait_for_ready {
+        true => XtStatus::Ready,
+        false => XtStatus::SubmitOnly,
     };
     let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
     if let Some(threads) = config.threads {
         let threads = threads.try_into().expect("`threads` within usize range");
         thread_pool_builder = thread_pool_builder.num_threads(threads);
     }
-    let thread_pool = thread_pool_builder.build().expect("thread pool created");
+    let thread_pool = thread_pool_builder
+        .build()
+        .expect("thread-pool should be created");
 
-    // each thread should have its own connection
     let threads = thread_pool.current_num_threads();
-    let pool_size = if threads < pool.len() {
-        pool.len()
-    } else {
-        threads
-    };
-    let pool: Vec<_> = pool.into_iter().cycle().take(pool_size).collect();
+    info!("thread-pool reported {} threads", threads);
+    // each thread should have its own connection
+    let pool = create_connection_pool(&config.nodes, threads);
+    let connection = pool.get(0).unwrap().clone();
 
     info!(
         "Preparing transactions: {}ms",
@@ -451,8 +447,13 @@ fn send_tx<Call>(
     *hist += elapsed_time as u64;
 }
 
-fn create_connection_pool(nodes: &[String]) -> Vec<Api<sr25519::Pair, WsRpcClient>> {
-    nodes.iter().map(create_connection).collect()
+fn create_connection_pool(
+    nodes: &[String],
+    threads: usize,
+) -> Vec<Api<sr25519::Pair, WsRpcClient>> {
+    let pool_size = max(threads, nodes.len());
+    let pool = nodes.iter().map(create_connection);
+    pool.into_iter().cycle().take(pool_size).collect()
 }
 
 fn get_nonce(connection: &Api<sr25519::Pair, WsRpcClient>, account: &AccountId) -> u32 {
@@ -502,7 +503,7 @@ mod tests {
             tx_store_path: Some("/tmp/tx_store".to_string()),
             threads: None,
             download_nonces: false,
-            submit_only: false,
+            wait_for_ready: false,
             store_txs: true,
             interval_secs: None,
             transactions_in_interval: None,
