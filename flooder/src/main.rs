@@ -36,8 +36,9 @@ fn main() -> Result<(), anyhow::Error> {
     let config: Config = Config::parse();
     info!("Starting benchmark with config {:#?}", &config);
 
+    // we want to fail fast in case seed or phrase are incorrect
     if !config.skip_initialization && config.phrase.is_none() && config.seed.is_none() {
-        panic!("Needs --phrase or --seed")
+        panic!("Needs --phrase or --seed");
     }
 
     let rate_limiting = match (config.transactions_in_interval, config.interval_secs) {
@@ -46,10 +47,6 @@ fn main() -> Result<(), anyhow::Error> {
         _ => panic!("--transactions-in-interval needs to be specified with --interval-secs"),
     };
 
-    // we want to fail fast in case seed or phrase are incorrect
-    if !config.skip_initialization && config.phrase.is_none() && config.seed.is_none() {
-        panic!("Needs --phrase or --seed");
-    }
     let pool = create_connection_pool(&config.nodes);
     let connection = pool.get(0).unwrap().clone();
     let tx_status = match config.submit_only {
@@ -58,7 +55,7 @@ fn main() -> Result<(), anyhow::Error> {
     };
     let mut thread_pool_builder = rayon::ThreadPoolBuilder::new();
     if let Some(threads) = config.threads {
-        let threads = threads.try_into().expect("threads within usize range");
+        let threads = threads.try_into().expect("`threads` within usize range");
         thread_pool_builder = thread_pool_builder.num_threads(threads);
     }
     let thread_pool = thread_pool_builder.build().expect("thread pool created");
@@ -97,13 +94,14 @@ fn main() -> Result<(), anyhow::Error> {
             )
         },
     );
-    let pool = |tx_ix: usize| pool.get(tx_ix % pool.len()).unwrap();
+
+    let pool_getter = |tx_ix: usize| pool.get(tx_ix % pool.len()).unwrap();
 
     info!("flooding: {}ms", time_stats.elapsed().as_millis());
     let tick = Instant::now();
 
     flood(
-        pool,
+        pool_getter,
         txs.into_par_iter(),
         tx_status,
         &histogram,
