@@ -12,7 +12,6 @@ use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
 use std::convert::TryInto;
 use std::{
     cmp::max,
-    convert::TryInto,
     io::{Read, Write},
     iter::{once, repeat},
     path::Path,
@@ -457,7 +456,7 @@ fn create_connection_pool(
         .iter()
         .cycle()
         .take(pool_size)
-        .map(create_connection)
+        .map(|url| create_custom_connection(&url))
         .collect()
 }
 
