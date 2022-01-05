@@ -2,13 +2,14 @@ mod config;
 
 use clap::Parser;
 use codec::{Compact, Decode, Encode};
-use common::{create_connection, WsRpcClient};
+use common::{create_custom_connection, WsRpcClient};
 use config::Config;
 use hdrhistogram::Histogram as HdrHistogram;
 use log::{debug, info};
 use rayon::prelude::*;
 use sp_core::{sr25519, Pair};
 use sp_runtime::{generic, traits::BlakeTwo256, MultiAddress, OpaqueExtrinsic};
+use std::convert::TryInto;
 use std::{
     cmp::max,
     convert::TryInto,
@@ -512,7 +513,7 @@ mod tests {
             interval_secs: None,
             transactions_in_interval: None,
         };
-        let conn = create_connection(&url);
+        let conn = create_custom_connection(&url);
 
         let txs_gen = prepare_txs(&config, &conn);
 
