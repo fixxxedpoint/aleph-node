@@ -18,11 +18,18 @@ let
     patches = [];
   });
   # env = nixpkgs.llvmPackages_12.stdenv;
-  env = nixpkgs.stdenv;
+  # env = nixpkgs.llvmPackages_12.libcxxStdenv;
+  # env = nixpkgs.llvmPackages_12.clang12Stdenv;
+  env = nixpkgs.clangStdenv;
+  # env = nixpkgs.llvmPackages_12.stdenv;
+  # env = nixplgs.libcxxStdenv
+  # env = nixpkgs.stdenv;
   cc = nixpkgs.wrapCCWith rec {
     cc = env.cc;
+    # cc = "cc";
     bintools = nixpkgs.wrapBintoolsWith {
       bintools = binutils-unwrapped';
+      # bintools = env.cc.bintools.bintools;
       libc = env.cc.bintools.libc;
     };
   };
@@ -30,17 +37,22 @@ let
     # stdenv = nixpkgs.stdenvNoCC;
     # stdenv = nixpkgs.clangStdenv;
     stdenv = nixpkgs.overrideCC env cc;
+
   };
 in
 with nixpkgs; minimalMkShell {
 # with nixpkgs; mkShell {
   buildInputs = [
-    clang_12
+    # clang_12
+    # zstd
     # libcxx
     # libcxxabi
     # llvm_12
     # llvmPackages.libcxxClang
     # llvmPackages.libcxxStdenv
+    # llvmPackages_12.clang
+    # llvmPackages_12.libclang
+    # llvmPackages_12.llvm
     openssl.dev
     pkg-config
     rust-nightly
@@ -50,9 +62,15 @@ with nixpkgs; minimalMkShell {
     darwin.apple_sdk.frameworks.Security
   ];
 
-  RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
-  LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
-  PROTOC = "${protobuf}/bin/protoc";
-  CC = "clang";
-  CXX = "clang";
+  # shellHook = ''
+  #   export CC=clang-12;
+  #   export LD_LIBRARY_PATH="${llvmPackages_12.libclang.lib}/lib";
+  # '';
+
+
+  # RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
+  # LIBCLANG_PATH = "${llvmPackages_12.libclang.lib}/lib";
+  # PROTOC = "${protobuf}/bin/protoc";
+  # CC = "clang";
+  # CXX = "clang";
 }
