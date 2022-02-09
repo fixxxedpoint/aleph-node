@@ -1,15 +1,8 @@
 [env]
-# CARGO_CFG_TARGET_FEATURE="avx2:fxsr:sse4.2:sse4.1:sse:sse2"
-# ROCKSDB_COMPILE="true"
 CC="clang"
-CXX="clang"
-# CFLAGS=" -DSNAPPY=0"
-# CXXFLAGS=" -DSNAPPY=0"
+CXX="clang++"
 
 [build]
-rustflags = ["-C", "target-feature=+crt-static", "-C", "target-cpu=cascadelake"]
+# rustflags = ["-C", "target-feature=+crt-static", "-C", "target-cpu=cascadelake"]
+rustflags = ["-C", "target-cpu=cascadelake"]
 target = "x86_64-unknown-linux-gnu"
-# rustflags = ["-C", "target-cpu=cascadelake"]
-# rustflags = ["--cfg", 'CARGO_CFG_TARGET_FEATURE="avx2:fxsr:sse4.2:sse4.1:sse:sse2"']
-# CARGO_CFG_TARGET_FEATURE="avx2:fxsr:sse4.2:sse4.1:sse:sse2"
-# ROCKSDB_COMPILE="true"
