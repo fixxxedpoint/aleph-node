@@ -9,30 +9,31 @@ let
     extensions = [ "rust-src" ];
     targets = [ "wasm32-unknown-unknown" ];
   });
-  # binutils-unwrapped' = nixpkgs.binutils-unwrapped.overrideAttrs (old: {
-  #   name = "binutils-2.36.1";
-  #   src = nixpkgs.fetchurl {
-  #     url = "https://ftp.gnu.org/gnu/binutils/binutils-2.36.1.tar.xz";
-  #     sha256 = "e81d9edf373f193af428a0f256674aea62a9d74dfe93f65192d4eae030b0f3b0";
-  #   };
-  #   patches = [];
-  # });
+  binutils-unwrapped' = nixpkgs.binutils-unwrapped.overrideAttrs (old: {
+    name = "binutils-2.36.1";
+    src = nixpkgs.fetchurl {
+      url = "https://ftp.gnu.org/gnu/binutils/binutils-2.36.1.tar.xz";
+      sha256 = "e81d9edf373f193af428a0f256674aea62a9d74dfe93f65192d4eae030b0f3b0";
+    };
+    patches = [];
+  });
   # env = nixpkgs.llvmPackages_12.stdenv;
-  # cc = nixpkgs.wrapCCWith rec {
-  #   cc = env.cc;
-  #   bintools = nixpkgs.wrapBintoolsWith {
-  #     bintools = binutils-unwrapped';
-  #     libc = env.cc.bintools.libc;
-  #   };
-  # };
-  # minimalMkShell = nixpkgs.mkShell.override {
-  #   # stdenv = nixpkgs.stdenvNoCC;
-  #   # stdenv = nixpkgs.clangStdenv;
-  #   stdenv = nixpkgs.overrideCC env cc;
-  # };
+  env = nixpkgs.stdenv;
+  cc = nixpkgs.wrapCCWith rec {
+    cc = env.cc;
+    bintools = nixpkgs.wrapBintoolsWith {
+      bintools = binutils-unwrapped';
+      libc = env.cc.bintools.libc;
+    };
+  };
+  minimalMkShell = nixpkgs.mkShell.override {
+    # stdenv = nixpkgs.stdenvNoCC;
+    # stdenv = nixpkgs.clangStdenv;
+    stdenv = nixpkgs.overrideCC env cc;
+  };
 in
-# with nixpkgs; minimalMkShell {
-with nixpkgs; mkShell {
+with nixpkgs; minimalMkShell {
+# with nixpkgs; mkShell {
   buildInputs = [
     clang_12
     # libcxx
@@ -52,4 +53,6 @@ with nixpkgs; mkShell {
   RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
   LIBCLANG_PATH = "${llvmPackages.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
+  CC = "clang";
+  CXX = "clang";
 }
