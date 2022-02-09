@@ -1,6 +1,6 @@
 [env]
-CC="clang"
-CXX="clang++"
+# CC="clang"
+# CXX="clang"
 
 [build]
 # rustflags = ["-C", "target-feature=+crt-static", "-C", "target-cpu=cascadelake"]
