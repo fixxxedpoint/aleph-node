@@ -24,11 +24,11 @@ let
       bintools = binutils-unwrapped';
     };
   };
-  minimalMkShell = with nixpkgs; pkgs.mkShell.override {
-    stdenv = nixpkgs.overrideCC env cc;
-  };
+  customEnv = nixpkgs.overrideCC env cc;
 in
-with nixpkgs; minimalMkShell {
+with nixpkgs; customEnv.mkDerivation rec {
+  name = "aleph-node";
+  src = ./.;
 
   buildInputs = [
     llvmPackages_12.clang
@@ -39,22 +39,37 @@ with nixpkgs; minimalMkShell {
     protobuf
   ];
 
-  RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
-  LIBCLANG_PATH = "${llvmPackages_12.libclang.lib}/lib";
-  PROTOC = "${protobuf}/bin/protoc";
-  CFLAGS=" \
-      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-  ";
-  CXXFLAGS=" \
-      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-  ";
+  shellHook = preConfigure;
 
-  # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
-  # Set C flags for Rust's bindgen program. Unlike ordinary C
-  # compilation, bindgen does not invoke $CC directly. Instead it
-  # uses LLVM's libclang. To make sure all necessary flags are
-  # included we need to look in a few places.
-  BINDGEN_EXTRA_CLANG_ARGS=" \
-      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-  ";
+  buildPhase = ''
+    export HOME=`mktemp -d`
+    export RUST_SRC_PATH="${rust-nightly}/lib/rustlib/src/rust/src"
+    export LIBCLANG_PATH="${llvmPackages_12.libclang.lib}/lib"
+    export PROTOC="${protobuf}/bin/protoc"
+    export CFLAGS=" \
+        ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+        $CFLAGS
+    "
+    export CXXFLAGS+=" \
+        ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+        $CXXFLAGS
+    "
+    # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
+    # Set C flags for Rust's bindgen program. Unlike ordinary C
+    # compilation, bindgen does not invoke $CC directly. Instead it
+    # uses LLVM's libclang. To make sure all necessary flags are
+    # included we need to look in a few places.
+    export BINDGEN_EXTRA_CLANG_ARGS=" \
+        ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+        $BINDGEN_EXTRA_CLANG_ARGS
+    "
+    export RUSTFLAGS="-C target-cpu=cascadelake $RUSTFLAGS"
+
+    cargo build -vv --release -p aleph-node
+  '';
+
+  installPhase = ''
+    mkdir -p $out/bin
+    cp -r target/ $out/
+  '';
 }
