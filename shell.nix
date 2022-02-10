@@ -17,24 +17,31 @@ let
     };
     patches = [];
   });
-  env = nixpkgs.llvmPackages_12.stdenv;
+  # env = nixpkgs.llvmPackages_12.stdenv;
   # env = nixpkgs.stdenv;
+  env = nixpkgs.stdenvNoCC;
+  # env = nixpkgs.llvmPackages_12.stdenv;
   cc = nixpkgs.wrapCCWith rec {
+    # cc = null;
     cc = env.cc;
+    # cc = tools.clang-unwrapped
+    # cc = nixpkgs.llvmPackages_12.tools.clang-unwrapped;
     bintools = nixpkgs.wrapBintoolsWith {
       bintools = binutils-unwrapped';
-      libc = env.cc.bintools.libc;
+      # libc = env.cc.bintools.libc;
     };
   };
   minimalMkShell = nixpkgs.mkShell.override {
-    # stdenv = nixpkgs.stdenvNoCC;
+    stdenv = nixpkgs.stdenvNoCC;
     # stdenv = nixpkgs.clangStdenv;
-    stdenv = nixpkgs.overrideCC env cc;
+    # stdenv = nixpkgs.overrideCC env cc;
+    # stdenv = nixpkgs.overrideCC nixpkgs.stdenvNoCC cc;
   };
 in
 with nixpkgs; minimalMkShell {
 # with nixpkgs; mkShell {
   buildInputs = [
+    # binutils-unwrapped'
     # clang_12
     # libcxx
     # libcxxabi
@@ -43,6 +50,7 @@ with nixpkgs; minimalMkShell {
     # llvmPackages_12.libcxxStdenv
     llvmPackages_12.libclang
     llvmPackages_12.clang
+    llvmPackages_12.llvm
     openssl.dev
     pkg-config
     rust-nightly
@@ -58,13 +66,16 @@ with nixpkgs; minimalMkShell {
     # compilation, bindgen does not invoke $CC directly. Instead it
     # uses LLVM's libclang. To make sure all necessary flags are
     # included we need to look in a few places.
-    export BINDGEN_EXTRA_CLANG_ARGS="$(< ${env.cc}/nix-support/libc-crt1-cflags) \
-      $(< ${env.cc}/nix-support/libc-cflags) \
-      $(< ${env.cc}/nix-support/cc-cflags) \
-      $(< ${env.cc}/nix-support/libcxx-cxxflags) \
-      ${lib.optionalString env.cc.isClang "-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion env.cc.cc}/include"} \
-    "
+    # export BINDGEN_EXTRA_CLANG_ARGS="
+      "-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+    ";
+    # export CFLAGS+="-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion env.cc.cc}/include";
+    # export CXXFLAGS+="-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion env.cc.cc}/include";
   '';
+  # shellHOok = ''
+  #   unset CC;
+  #   unset CXX;
+  # '';
 
 
   RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
