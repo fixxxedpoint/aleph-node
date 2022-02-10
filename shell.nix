@@ -90,12 +90,12 @@ with nixpkgs; minimalMkShell {
     # export CC=cc;
     # export CXX=c++;
     # export LD=clang++;
-    export CFLAGS+=" \
-      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-    ";
-    export CXXFLAGS+=" \
-      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-    ";
+    # export CFLAGS+=" \
+    #   ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
+    # ";
+    # export CXXFLAGS+=" \
+    #   ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
+    # ";
   '';
   # shellHOok = ''
   #   unset CC;
@@ -106,6 +106,12 @@ with nixpkgs; minimalMkShell {
   RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
   LIBCLANG_PATH = "${llvmPackages_12.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
+  CFLAGS=" \
+      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
+  ";
+  CXXFLAGS=" \
+      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
+  ";
   # CC = "clang-12";
   # CXX = "clang-12";
 }
