@@ -17,91 +17,27 @@ let
     };
     patches = [];
   });
-  # env = nixpkgs.llvmPackages_12.stdenv;
   env = nixpkgs.llvmPackages_12.stdenv;
-  # env = mozillaOverlay.customStdenvs.clang12;
-  # env = nixpkgs.stdenv;
-  # env = nixpkgs.stdenvNoCC;
-  # env = nixpkgs.llvmPackages_12.stdenv;
   cc = nixpkgs.wrapCCWith rec {
-    # cc = null;
     cc = nixpkgs.llvmPackages_12.clang-unwrapped;
-    # cc = tools.clang-unwrapped
-    # cc = nixpkgs.llvmPackages_12.tools.clang-unwrapped;
     bintools = nixpkgs.wrapBintoolsWith {
       bintools = binutils-unwrapped';
-      # libc = env.cc.bintools.libc;
     };
   };
   minimalMkShell = with nixpkgs; pkgs.mkShell.override {
-    # stdenv = nixpkgs.stdenvNoCC;
-    # stdenv = nixpkgs.clangStdenv;
     stdenv = nixpkgs.overrideCC env cc;
-    # stdenv = nixpkgs.overrideCC nixpkgs.stdenvNoCC cc;
   };
-  # stdenv = nixpkgs.llvmPackages_12.stdenv;
-  # minimalMkShell = nixpkgs.mkShell.override {
-  #   bintools = nixpkgs.wrapBintoolsWith {
-  #     bintools = binutils-unwrapped';
-  #   };
-  #                                           };
 in
 with nixpkgs; minimalMkShell {
-# with nixpkgs; mkShell {
-  # nativeBuildInputs = [binutils-unwrapped'];
 
   buildInputs = [
-    # binutils-unwrapped'
-    # clang_12
-    # libcxx
-    # libcxxabi
-    # llvm_12
-    # llvmPackages_12.libcxxClang
-    # llvmPackages_12.bintools
-    # llvmPackages_12.libcxxStdenv
-    # llvmPackages_12.libclang
     llvmPackages_12.clang
-    # llvmPackages_12.llvm
     openssl.dev
     pkg-config
     rust-nightly
     cacert
     protobuf
-  ] ++ lib.optionals stdenv.isDarwin [
-    darwin.apple_sdk.frameworks.Security
   ];
-
-  shellHook = ''
-    # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
-    # Set C flags for Rust's bindgen program. Unlike ordinary C
-    # compilation, bindgen does not invoke $CC directly. Instead it
-    # uses LLVM's libclang. To make sure all necessary flags are
-    # included we need to look in a few places.
-    # export BINDGEN_EXTRA_CLANG_ARGS="$(< ${llvmPackages_12.stdenv.cc}/nix-support/libc-crt1-cflags) \
-    #   $(< ${llvmPackages_12.stdenv.cc}/nix-support/libc-cflags) \
-    #   $(< ${llvmPackages_12.stdenv.cc}/nix-support/cc-cflags) \
-    #   $(< ${llvmPackages_12.stdenv.cc}/nix-support/libcxx-cxxflags) \
-    #   $(< $-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"})
-    #   ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
-    # "
-    export BINDGEN_EXTRA_CLANG_ARGS=" \
-      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-    ";
-    # export CC=cc;
-    # export CXX=c++;
-    # export LD=clang++;
-    # export CFLAGS+=" \
-    #   ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-    # ";
-    # export CXXFLAGS+=" \
-    #   ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
-    # ";
-  '';
-  # shellHOok = ''
-  #   unset CC;
-  #   unset CXX;
-  # '';
-
 
   RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
   LIBCLANG_PATH = "${llvmPackages_12.libclang.lib}/lib";
@@ -112,6 +48,13 @@ with nixpkgs; minimalMkShell {
   CXXFLAGS=" \
       ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
   ";
-  # CC = "clang-12";
-  # CXX = "clang-12";
+
+  # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
+  # Set C flags for Rust's bindgen program. Unlike ordinary C
+  # compilation, bindgen does not invoke $CC directly. Instead it
+  # uses LLVM's libclang. To make sure all necessary flags are
+  # included we need to look in a few places.
+  BINDGEN_EXTRA_CLANG_ARGS=" \
+      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
+  ";
 }
