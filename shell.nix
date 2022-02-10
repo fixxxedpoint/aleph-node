@@ -39,9 +39,7 @@ with nixpkgs; customEnv.mkDerivation rec {
     protobuf
   ];
 
-  shellHook = preConfigure;
-
-  buildPhase = ''
+  shellHook = ''
     export HOME=`mktemp -d`
     export RUST_SRC_PATH="${rust-nightly}/lib/rustlib/src/rust/src"
     export LIBCLANG_PATH="${llvmPackages_12.libclang.lib}/lib"
@@ -64,12 +62,16 @@ with nixpkgs; customEnv.mkDerivation rec {
         $BINDGEN_EXTRA_CLANG_ARGS
     "
     export RUSTFLAGS="-C target-cpu=cascadelake $RUSTFLAGS"
+  '';
+
+  buildPhase = ''
+    ${shellHook}
 
     cargo build -vv --release -p aleph-node
   '';
 
   installPhase = ''
     mkdir -p $out/bin
-    cp -r target/ $out/
+    mv -r target/ $out/
   '';
 }
