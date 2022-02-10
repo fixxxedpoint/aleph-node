@@ -18,13 +18,14 @@ let
     patches = [];
   });
   # env = nixpkgs.llvmPackages_12.stdenv;
-  env = mozillaOVerlay.customStdenvs.clang12;
+  env = nixpkgs.llvmPackages_12.stdenv;
+  # env = mozillaOverlay.customStdenvs.clang12;
   # env = nixpkgs.stdenv;
   # env = nixpkgs.stdenvNoCC;
   # env = nixpkgs.llvmPackages_12.stdenv;
   cc = nixpkgs.wrapCCWith rec {
     # cc = null;
-    cc = env.cc;
+    cc = nixpkgs.llvmPackages_12.clang-unwrapped;
     # cc = tools.clang-unwrapped
     # cc = nixpkgs.llvmPackages_12.tools.clang-unwrapped;
     bintools = nixpkgs.wrapBintoolsWith {
@@ -32,7 +33,7 @@ let
       # libc = env.cc.bintools.libc;
     };
   };
-  minimalMkShell = nixpkgs.mkShell.override {
+  minimalMkShell = with nixpkgs; pkgs.mkShell.override {
     # stdenv = nixpkgs.stdenvNoCC;
     # stdenv = nixpkgs.clangStdenv;
     stdenv = nixpkgs.overrideCC env cc;
@@ -89,6 +90,12 @@ with nixpkgs; minimalMkShell {
     # export CC=cc;
     # export CXX=c++;
     # export LD=clang++;
+    export CFLAGS+=" \
+      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
+    ";
+    export CXXFLAGS+=" \
+      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
+    ";
   '';
   # shellHOok = ''
   #   unset CC;
