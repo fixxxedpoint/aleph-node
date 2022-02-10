@@ -18,8 +18,9 @@ let
     patches = [];
   });
   # env = nixpkgs.llvmPackages_12.stdenv;
+  env = mozillaOVerlay.customStdenvs.clang12;
   # env = nixpkgs.stdenv;
-  env = nixpkgs.stdenvNoCC;
+  # env = nixpkgs.stdenvNoCC;
   # env = nixpkgs.llvmPackages_12.stdenv;
   cc = nixpkgs.wrapCCWith rec {
     # cc = null;
@@ -32,14 +33,22 @@ let
     };
   };
   minimalMkShell = nixpkgs.mkShell.override {
-    stdenv = nixpkgs.stdenvNoCC;
+    # stdenv = nixpkgs.stdenvNoCC;
     # stdenv = nixpkgs.clangStdenv;
-    # stdenv = nixpkgs.overrideCC env cc;
+    stdenv = nixpkgs.overrideCC env cc;
     # stdenv = nixpkgs.overrideCC nixpkgs.stdenvNoCC cc;
   };
+  # stdenv = nixpkgs.llvmPackages_12.stdenv;
+  # minimalMkShell = nixpkgs.mkShell.override {
+  #   bintools = nixpkgs.wrapBintoolsWith {
+  #     bintools = binutils-unwrapped';
+  #   };
+  #                                           };
 in
 with nixpkgs; minimalMkShell {
 # with nixpkgs; mkShell {
+  # nativeBuildInputs = [binutils-unwrapped'];
+
   buildInputs = [
     # binutils-unwrapped'
     # clang_12
@@ -47,10 +56,11 @@ with nixpkgs; minimalMkShell {
     # libcxxabi
     # llvm_12
     # llvmPackages_12.libcxxClang
+    # llvmPackages_12.bintools
     # llvmPackages_12.libcxxStdenv
-    llvmPackages_12.libclang
+    # llvmPackages_12.libclang
     llvmPackages_12.clang
-    llvmPackages_12.llvm
+    # llvmPackages_12.llvm
     openssl.dev
     pkg-config
     rust-nightly
@@ -66,11 +76,19 @@ with nixpkgs; minimalMkShell {
     # compilation, bindgen does not invoke $CC directly. Instead it
     # uses LLVM's libclang. To make sure all necessary flags are
     # included we need to look in a few places.
-    # export BINDGEN_EXTRA_CLANG_ARGS="
-      "-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+    # export BINDGEN_EXTRA_CLANG_ARGS="$(< ${llvmPackages_12.stdenv.cc}/nix-support/libc-crt1-cflags) \
+    #   $(< ${llvmPackages_12.stdenv.cc}/nix-support/libc-cflags) \
+    #   $(< ${llvmPackages_12.stdenv.cc}/nix-support/cc-cflags) \
+    #   $(< ${llvmPackages_12.stdenv.cc}/nix-support/libcxx-cxxflags) \
+    #   $(< $-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"})
+    #   ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+    # "
+    export BINDGEN_EXTRA_CLANG_ARGS=" \
+      ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"}
     ";
-    # export CFLAGS+="-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion env.cc.cc}/include";
-    # export CXXFLAGS+="-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion env.cc.cc}/include";
+    # export CC=cc;
+    # export CXX=c++;
+    # export LD=clang++;
   '';
   # shellHOok = ''
   #   unset CC;
@@ -81,6 +99,6 @@ with nixpkgs; minimalMkShell {
   RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
   LIBCLANG_PATH = "${llvmPackages_12.libclang.lib}/lib";
   PROTOC = "${protobuf}/bin/protoc";
-  # CC = "clang";
-  # CXX = "clang";
+  # CC = "clang-12";
+  # CXX = "clang-12";
 }
