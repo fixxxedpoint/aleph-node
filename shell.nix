@@ -40,7 +40,7 @@ with nixpkgs; customEnv.mkDerivation rec {
   ];
 
   shellHook = ''
-    export HOME=`mktemp -d`
+    export CARGO_HOME="$out/cargo"
     export RUST_SRC_PATH="${rust-nightly}/lib/rustlib/src/rust/src"
     export LIBCLANG_PATH="${llvmPackages_12.libclang.lib}/lib"
     export PROTOC="${protobuf}/bin/protoc"
