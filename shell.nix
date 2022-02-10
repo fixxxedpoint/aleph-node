@@ -17,19 +17,12 @@ let
     };
     patches = [];
   });
-  # env = nixpkgs.llvmPackages_12.stdenv;
-  # env = nixpkgs.llvmPackages_12.libcxxStdenv;
-  # env = nixpkgs.llvmPackages_12.clang12Stdenv;
-  env = nixpkgs.clangStdenv;
-  # env = nixpkgs.llvmPackages_12.stdenv;
-  # env = nixplgs.libcxxStdenv
+  env = nixpkgs.llvmPackages_12.stdenv;
   # env = nixpkgs.stdenv;
   cc = nixpkgs.wrapCCWith rec {
     cc = env.cc;
-    # cc = "cc";
     bintools = nixpkgs.wrapBintoolsWith {
       bintools = binutils-unwrapped';
-      # bintools = env.cc.bintools.bintools;
       libc = env.cc.bintools.libc;
     };
   };
@@ -37,22 +30,19 @@ let
     # stdenv = nixpkgs.stdenvNoCC;
     # stdenv = nixpkgs.clangStdenv;
     stdenv = nixpkgs.overrideCC env cc;
-
   };
 in
 with nixpkgs; minimalMkShell {
 # with nixpkgs; mkShell {
   buildInputs = [
     # clang_12
-    # zstd
     # libcxx
     # libcxxabi
     # llvm_12
-    # llvmPackages.libcxxClang
-    # llvmPackages.libcxxStdenv
-    # llvmPackages_12.clang
-    # llvmPackages_12.libclang
-    # llvmPackages_12.llvm
+    # llvmPackages_12.libcxxClang
+    # llvmPackages_12.libcxxStdenv
+    llvmPackages_12.libclang
+    llvmPackages_12.clang
     openssl.dev
     pkg-config
     rust-nightly
@@ -62,15 +52,24 @@ with nixpkgs; minimalMkShell {
     darwin.apple_sdk.frameworks.Security
   ];
 
-  # shellHook = ''
-  #   export CC=clang-12;
-  #   export LD_LIBRARY_PATH="${llvmPackages_12.libclang.lib}/lib";
-  # '';
+  shellHook = ''
+    # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
+    # Set C flags for Rust's bindgen program. Unlike ordinary C
+    # compilation, bindgen does not invoke $CC directly. Instead it
+    # uses LLVM's libclang. To make sure all necessary flags are
+    # included we need to look in a few places.
+    export BINDGEN_EXTRA_CLANG_ARGS="$(< ${env.cc}/nix-support/libc-crt1-cflags) \
+      $(< ${env.cc}/nix-support/libc-cflags) \
+      $(< ${env.cc}/nix-support/cc-cflags) \
+      $(< ${env.cc}/nix-support/libcxx-cxxflags) \
+      ${lib.optionalString env.cc.isClang "-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion env.cc.cc}/include"} \
+    "
+  '';
 
 
-  # RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
-  # LIBCLANG_PATH = "${llvmPackages_12.libclang.lib}/lib";
-  # PROTOC = "${protobuf}/bin/protoc";
+  RUST_SRC_PATH = "${rust-nightly}/lib/rustlib/src/rust/src";
+  LIBCLANG_PATH = "${llvmPackages_12.libclang.lib}/lib";
+  PROTOC = "${protobuf}/bin/protoc";
   # CC = "clang";
   # CXX = "clang";
 }
