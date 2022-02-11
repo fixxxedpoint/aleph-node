@@ -70,7 +70,7 @@ with nixpkgs; customEnv.mkDerivation rec {
     ${shellHook}
     export CARGO_HOME="$out/cargo"
 
-    cargo build --release -p aleph-node
+    cargo build --locked --release -p aleph-node
   '';
 
   installPhase = ''
