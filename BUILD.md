@@ -6,7 +6,7 @@ In order to build a binary for `aleph-node` using docker one needs to install do
 docker build -t aleph-node/build -f docker/Dockerfile_build .
 ```
 Created docker-image contains all necessary native build-time dependencies of `aleph-node` (without rust/cargo dependencies).
-One can interact with such docker-image in two ways, using the `nix-shell` or `nix-build` command:
+One can interact with such docker-image in two ways, using the `nix-shell` or `nix-build` commands:
 `nix-shell` - spawns a shell that includes all build dependencies:
 ```
 docker run -ti --volume=$(pwd):/node/build aleph-node/build -s
@@ -18,3 +18,6 @@ Another way to interact with this docker image is to allow it to only provide us
 ```
 docker run -ti --volume=$(pwd):/node/build aleph-node/build # outputs the `aleph-node` binary in current dir
 ```
+
+## WARNING
+`nix` attempts to copy whole source tree in current directory before it starts the compilation process. This includes all binary artifacts stored in `target` directory or any other files not under git.
