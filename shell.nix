@@ -9,22 +9,23 @@ let
     extensions = [ "rust-src" ];
     targets = [ "wasm32-unknown-unknown" ];
   });
-  binutils-unwrapped' = nixpkgs.binutils-unwrapped.overrideAttrs (old: {
-    name = "binutils-2.36.1";
-    src = nixpkgs.fetchurl {
-      url = "https://ftp.gnu.org/gnu/binutils/binutils-2.36.1.tar.xz";
-      sha256 = "e81d9edf373f193af428a0f256674aea62a9d74dfe93f65192d4eae030b0f3b0";
-    };
-    patches = [];
-  });
+  # binutils-unwrapped' = nixpkgs.binutils-unwrapped.overrideAttrs (old: {
+  #   name = "binutils-2.36.1";
+  #   src = nixpkgs.fetchurl {
+  #     url = "https://ftp.gnu.org/gnu/binutils/binutils-2.36.1.tar.xz";
+  #     sha256 = "e81d9edf373f193af428a0f256674aea62a9d74dfe93f65192d4eae030b0f3b0";
+  #   };
+  #   patches = [];
+  # });
   env = nixpkgs.llvmPackages_12.stdenv;
-  cc = nixpkgs.wrapCCWith rec {
-    cc = nixpkgs.llvmPackages_12.clang-unwrapped;
-    bintools = nixpkgs.wrapBintoolsWith {
-      bintools = binutils-unwrapped';
-    };
-  };
-  customEnv = nixpkgs.overrideCC env cc;
+  # cc = nixpkgs.wrapCCWith rec {
+  #   cc = env.cc;
+  #   bintools = nixpkgs.wrapBintoolsWith {
+  #     bintools = binutils-unwrapped';
+  #   };
+  # };
+  # customEnv = nixpkgs.overrideCC env cc;
+  customEnv = env;
 in
 with nixpkgs; customEnv.mkDerivation rec {
   name = "aleph-node";
@@ -32,6 +33,8 @@ with nixpkgs; customEnv.mkDerivation rec {
 
   buildInputs = [
     llvmPackages_12.clang
+    # binutils-unwrapped'
+    llvmPackages_12.lld
     openssl.dev
     pkg-config
     rust-nightly
@@ -61,7 +64,7 @@ with nixpkgs; customEnv.mkDerivation rec {
         ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
         $BINDGEN_EXTRA_CLANG_ARGS
     "
-    export RUSTFLAGS="-C target-cpu=cascadelake $RUSTFLAGS"
+    export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=lld -C target-cpu=cascadelake $RUSTFLAGS"
   '';
 
   buildPhase = ''
