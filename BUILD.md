@@ -11,6 +11,8 @@ One can interact with such docker-image in two ways, using the `nix-shell` or `n
 ```
 docker run -ti --volume=$(pwd):/node/build aleph-node/build -s
 cargo build --release -p aleph-node # it will build `aleph-node` in cargo's default target directory, i.e. `./target/x86_64-unknown-linux-gnu/release/aleph-node`
+patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 target/x86_64-unknown-linux-gnu/release/aleph-node # sets a proper loader
+
 ```
 This way, our docker instance maintains all build artifacts inside of project's root directory, which allows to speed up ongoing build invocations, i.e. next time one invokes `cargo build` it should take significantly less time.
 
