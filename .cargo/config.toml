@@ -1,8 +1,13 @@
-[env]
-# CC="clang"
-# CXX="clang"
+[rust]
+lld = true
 
 [build]
-# rustflags = ["-C", "target-feature=+crt-static", "-C", "target-cpu=cascadelake"]
-rustflags = ["-C", "target-cpu=cascadelake"]
-target = "x86_64-unknown-linux-gnu"
+# rustflags = ["-C", "linker=lld", "-C", "target-cpu=cascadelake"]
+# rustflags = ["-C", "target-cpu=cascadelake"]
+# rustflags = ["-C", "linker=lld", "-C", "link-arg=-fuse-ld=lld", "-C", "target-cpu=cascadelake"]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld", "-C", "target-cpu=cascadelake"]
+# target = "x86_64-unknown-linux-gnu"
+
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-fuse-ld=lld", "-C", "target-cpu=cascadelake"]
+# linker = "lld"

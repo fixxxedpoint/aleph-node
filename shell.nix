@@ -7,7 +7,7 @@ let
   nixpkgs = import <nixpkgs> { overlays = [ mozillaOverlay ]; };
   rust-nightly = with nixpkgs; ((rustChannelOf { date = "2021-10-24"; channel = "nightly"; }).rust.override {
     extensions = [ "rust-src" ];
-    targets = [ "wasm32-unknown-unknown" ];
+    targets = [ "x86_64-unknown-linux-gnu", "wasm32-unknown-unknown" ];
   });
   # binutils-unwrapped' = nixpkgs.binutils-unwrapped.overrideAttrs (old: {
   #   name = "binutils-2.36.1";
@@ -17,7 +17,8 @@ let
   #   };
   #   patches = [];
   # });
-  env = nixpkgs.llvmPackages_12.stdenv;
+  llvm = nixpkgs.llvmPackages_13;
+  env = llvm.stdenv;
   # cc = nixpkgs.wrapCCWith rec {
   #   cc = env.cc;
   #   bintools = nixpkgs.wrapBintoolsWith {
@@ -32,9 +33,9 @@ with nixpkgs; customEnv.mkDerivation rec {
   src = ./.;
 
   buildInputs = [
-    llvmPackages_12.clang
+    llvm.clang
     # binutils-unwrapped'
-    llvmPackages_12.lld
+    llvm.lld
     openssl.dev
     pkg-config
     rust-nightly
@@ -43,16 +44,16 @@ with nixpkgs; customEnv.mkDerivation rec {
   ];
 
   shellHook = ''
-    export CARGO_HOME="$out/cargo"
+    # export CARGO_HOME="$out/cargo"
     export RUST_SRC_PATH="${rust-nightly}/lib/rustlib/src/rust/src"
-    export LIBCLANG_PATH="${llvmPackages_12.libclang.lib}/lib"
+    export LIBCLANG_PATH="${llvm.libclang.lib}/lib"
     export PROTOC="${protobuf}/bin/protoc"
     export CFLAGS=" \
-        ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+        ${"-isystem ${llvm.libclang.lib}/lib/clang/${lib.getVersion llvm.stdenv.cc.cc}/include"} \
         $CFLAGS
     "
     export CXXFLAGS+=" \
-        ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+        ${"-isystem ${llvm.libclang.lib}/lib/clang/${lib.getVersion llvm.stdenv.cc.cc}/include"} \
         $CXXFLAGS
     "
     # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
@@ -61,10 +62,14 @@ with nixpkgs; customEnv.mkDerivation rec {
     # uses LLVM's libclang. To make sure all necessary flags are
     # included we need to look in a few places.
     export BINDGEN_EXTRA_CLANG_ARGS=" \
-        ${"-isystem ${llvmPackages_12.libclang.lib}/lib/clang/${lib.getVersion llvmPackages_12.stdenv.cc.cc}/include"} \
+        ${"-isystem ${llvm.libclang.lib}/lib/clang/${lib.getVersion llvm.stdenv.cc.cc}/include"} \
         $BINDGEN_EXTRA_CLANG_ARGS
     "
-    export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=lld -C target-cpu=cascadelake $RUSTFLAGS"
+    # export RUSTFLAGS="-C linker=clang -C link-arg=-fuse-ld=lld -C target-cpu=cascadelake $RUSTFLAGS"
+    # export RUSTFLAGS="-C link-arg=-fuse-ld=lld -C target-cpu=cascadelake $RUSTFLAGS"
+    # export RUSTFLAGS="-C linker=lld -C target-cpu=cascadelake $RUSTFLAGS"
+    # export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="lld"
+    # export RUSTFLAGS="-C target-cpu=cascadelake $RUSTFLAGS"
   '';
 
   buildPhase = ''
