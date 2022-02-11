@@ -1,13 +1,13 @@
 ### Build
-We provide a build procedure based on the `nix` package manager. There are several ways to interact with this process. Users can install `nix` locally or interact with by the means of docker. We prepared a simple docker-image that provides one with necessary tools for the build process. One can attempt at reproducing the build process without using `nix` by simply installing all dependencies described in the `shell.nix` file and following execution of its `buildPhase`.
+We provide a build procedure based on the `nix` package manager. There are several ways to interact with this process. Users can install `nix` locally or interact with it using docker. We prepared a simple docker image that provides necessary tools for the whole build process. You can attempt at reproducing the build process without using `nix` by simply installing all dependencies described by the `shell.nix` file and following execution of its `buildPhase`.
 
-In order to build a binary for `aleph-node` using docker one needs to install docker locally, i.e. in case of the Ubuntu linux distribution, by executing `sudo apt install docker.io`. Next step is to prepare our docker-image that handles the build process, by invoking:
+In order to build a binary for `aleph-node` using docker one needs first to install docker, i.e. in case of the Ubuntu linux distribution, by executing `sudo apt install docker.io`. Next step is to prepare our docker-image that handles the build process, by invoking:
 ```
 docker build -t aleph-node/build -f docker/Dockerfile_build .
 ```
 Created docker-image contains all necessary native build-time dependencies of `aleph-node` (without rust/cargo dependencies).
-One can interact with such docker-image in two ways, using the `nix-shell` or `nix-build` commands:
-`nix-shell` - spawns a shell that includes all build dependencies:
+One can interact with that docker-image in two ways, using the `nix-shell` or `nix-build` commands:
+`nix-shell` - spawns a shell that includes all build dependencies. Within it we can simply call `cargo build`:
 ```
 docker run -ti --volume=$(pwd):/node/build aleph-node/build -s
 cargo build --release -p aleph-node # it will build `aleph-node` in cargo's default target directory, i.e. `./target/x86_64-unknown-linux-gnu/release/aleph-node`
