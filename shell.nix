@@ -18,6 +18,7 @@ let
     patches = [];
   });
   llvm = nixpkgs.llvmPackages_13;
+  llvmVersionString = "13.0.0";
   env = llvm.stdenv;
   cc = nixpkgs.wrapCCWith rec {
     cc = env.cc;
@@ -46,11 +47,11 @@ with nixpkgs; customEnv.mkDerivation rec {
     export LIBCLANG_PATH="${llvm.libclang.lib}/lib"
     export PROTOC="${protobuf}/bin/protoc"
     export CFLAGS=" \
-        ${"-isystem ${llvm.libclang.lib}/lib/clang/13.0.0/include"} \
+        ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
         $CFLAGS
     "
     export CXXFLAGS+=" \
-        ${"-isystem ${llvm.libclang.lib}/lib/clang/13.0.0/include"} \
+        ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
         $CXXFLAGS
     "
     # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
@@ -59,7 +60,7 @@ with nixpkgs; customEnv.mkDerivation rec {
     # uses LLVM's libclang. To make sure all necessary flags are
     # included we need to look in a few places.
     export BINDGEN_EXTRA_CLANG_ARGS=" \
-        ${"-isystem ${llvm.libclang.lib}/lib/clang/13.0.0/include"} \
+        ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
         $BINDGEN_EXTRA_CLANG_ARGS
     "
     export RUSTFLAGS="-C target-cpu=cascadelake $RUSTFLAGS"
@@ -71,6 +72,7 @@ with nixpkgs; customEnv.mkDerivation rec {
     export CARGO_HOME="$out/cargo"
 
     cargo build --locked --release -p aleph-node
+    patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 target/x86_64-unknown-linux-gnu/release/aleph-node
   '';
 
   installPhase = ''
