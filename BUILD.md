@@ -1,3 +1,8 @@
+## TL;DR
+```
+docker build -t aleph-node/build -f docker/Dockerfile_build . && docker run -ti --volume=$(pwd):/node/build aleph-node/build
+```
+
 ### Build
 We provide a build procedure based on the `nix` package manager. There are several ways to interact with this process. Users can install `nix` locally or interact with it using docker. We prepared a simple docker image that provides necessary tools for the whole build process. You can attempt at reproducing the build process without using `nix` by simply installing all dependencies described by the `shell.nix` file and following execution of its `buildPhase`.
 
