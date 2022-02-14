@@ -1,6 +1,7 @@
 ## TL;DR
 ```
-docker build -t aleph-node/build -f docker/Dockerfile_build . && docker run -ti --volume=$(pwd):/node/build aleph-node/build
+docker build -t aleph-node/build -f docker/Dockerfile_build . && \
+docker run -ti --volume=$(pwd):/node/build aleph-node/build
 ```
 
 ### Build
@@ -19,9 +20,12 @@ Created docker-image contains all necessary native build-time dependencies of `a
 One can interact with that docker-image in two ways, using the `nix-shell` or `nix-build` commands:
 `nix-shell` approach - spawns a shell that includes all build dependencies. Within it we can simply call `cargo build`:
 ```
+# spawn nix-shell inside of our docker image
 docker run -ti --volume=$(pwd):/node/build aleph-node/build -s
-cargo build --release -p aleph-node # it will build `aleph-node` in cargo's default target directory, i.e. `./target/x86_64-unknown-linux-gnu/release/aleph-node`
-patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 target/x86_64-unknown-linux-gnu/release/aleph-node # sets the proper loader
+# build `aleph-node` and store it at the root of the source aleph-node's source directory
+cargo build --release -p aleph-node
+# set the proper loader (nix related)
+patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 target/x86_64-unknown-linux-gnu/release/aleph-node
 ```
 This way, our docker instance maintains all build artifacts inside of project's root directory, which allows to speed up
 ongoing build invocations, i.e. next time one invokes `cargo build` it should take significantly less time.
@@ -29,7 +33,8 @@ ongoing build invocations, i.e. next time one invokes `cargo build` it should ta
 Another way to interact with this docker image is to allow it to only provide us with a single `aleph-node` binary artifact,
 i.e. each time we call its build process it will start it from scratch in a isolated environment.
 ```
-docker run -ti --volume=$(pwd):/node/build aleph-node/build # outputs the `aleph-node` binary in current dir
+# outputs the `aleph-node` binary in current dir
+docker run -ti --volume=$(pwd):/node/build aleph-node/build 
 ```
 
 ## WARNING
