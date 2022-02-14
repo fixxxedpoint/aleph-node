@@ -18,6 +18,8 @@ Aleph node is based on a Substrate node where the default finality gadget (GRAND
 2. Clone this repository to your machine
 3. Run `cargo build --release -p aleph-node`
 
+For a less involved and more user-friendly process consult our [BUILD][BUILD] guide.
+
 ### Running
 
 To experiment with Aleph Node you can locally run a small blockchain network using the `run_nodes.sh` script from the root of this repository.  Please consult the script or the output of `run_nodes.sh -help` for additional parameters (like the number of nodes etc.). The script starts multiple instances of Aleph Node on your local machine, so please adjust the number of nodes carefully with performance of your system in mind. By default 4 nodes are started. 
@@ -48,3 +50,4 @@ The code in this repository is licensed under the terms of the the Apache Licens
 [e2e-tests-badge]: https://github.com/Cardinal-Cryptography/aleph-node/actions/workflows/e2e-tests-main-devnet.yml/badge.svg
 [license-image]: https://img.shields.io/badge/license-Apache2.0-blue.svg
 [license-link]: https://github.com/Cardinal-Cryptography/aleph-node/blob/main/LICENSE
+[BUILD]: ./BUILD.md
