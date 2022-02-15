@@ -63,7 +63,7 @@ with nixpkgs; customEnv.mkDerivation rec {
         ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
         $BINDGEN_EXTRA_CLANG_ARGS
     "
-    export RUSTFLAGS="-C target-cpu=cascadelake $RUSTFLAGS"
+    export RUSTFLAGS="-C target-cpu=x86-64-v3 $RUSTFLAGS"
     export CARGO_BUILD_TARGET="x86_64-unknown-linux-gnu"
   '';
 
@@ -72,7 +72,6 @@ with nixpkgs; customEnv.mkDerivation rec {
     export CARGO_HOME="$out/cargo"
 
     cargo build --locked --release -p aleph-node
-    patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 target/x86_64-unknown-linux-gnu/release/aleph-node
   '';
 
   installPhase = ''

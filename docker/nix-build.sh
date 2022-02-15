@@ -25,5 +25,6 @@ then
     nix-shell --pure $SHELL_NIX_FILE
 else
     nix-build $SHELL_NIX_FILE
+    patchelf --set-interpreter /lib64/ld-linux-x86-64.so.2 ./result/bin/aleph-node
     mv ./result/bin/aleph-node ./
 fi
