@@ -125,6 +125,7 @@ with nixpkgs; env.mkDerivation rec {
   '';
 
   fixupPhase = ''
+    rm -rf $CARGO_HOME
     find $out -type f -exec patchelf --shrink-rpath '{}' \; -exec strip '{}' \; 2>/dev/null
   '';
 }
