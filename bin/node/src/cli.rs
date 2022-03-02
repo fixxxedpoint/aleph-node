@@ -1,6 +1,6 @@
 use sc_cli::{Error, KeystoreParams, RunCmd, SharedParams};
 use sc_service::config::{BasePath, KeystoreConfig};
-use std::{collections::HashMap, convert::TryFrom, sync::Arc};
+use std::{collections::HashMap, convert::TryFrom, io::Write, path::PathBuf, sync::Arc};
 
 use sc_keystore::LocalKeystore;
 use sp_core::crypto::KeyTypeId;
@@ -138,4 +138,34 @@ pub enum Subcommand {
 
     /// Generate keys for local tests
     DevKeys(CLiDevKeys),
+
+    /// Takes a chainspec and generates a corresponfing raw chainspec
+    ConvertChainspecToRaw(ConvertChainspecToRawCmd),
+}
+
+/// Command used to go from chainspec to the raw chainspec format
+#[derive(Debug, StructOpt)]
+pub struct ConvertChainspecToRawCmd {
+    /// Specify path to JSON chainspec
+    #[structopt(long, parse(from_os_str))]
+    pub chain: PathBuf,
+}
+
+impl ConvertChainspecToRawCmd {
+    pub fn run(&self) -> Result<(), Error> {
+        // let spec = sc_service::GenericChainSpec::from_json_file(self.chain.to_owned())
+        //     .expect("Cannot read chainspec");
+        let spec = crate::chain_spec::ChainSpec::from_json_file(self.chain.to_owned())
+            .expect("Cannot read chainspec");
+
+        let raw_chainspec = sc_service::chain_ops::build_spec(&spec, true)?;
+        if std::io::stdout()
+            .write_all(raw_chainspec.as_bytes())
+            .is_err()
+        {
+            let _ = std::io::stderr().write_all(b"Error writing to stdout\n");
+        }
+
+        Ok(())
+    }
 }
