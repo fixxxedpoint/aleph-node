@@ -14,9 +14,11 @@ let
     sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
   }) { overlays = [ rustOverlay ]; };
 
-  rustToolchain = with nixpkgs; ((rustChannelOf { rustToolchain = ./rust-toolchain; }).rust.override {
+
+  rustToolchain = with nixpkgs; rustChannelOf { rustToolchain = ./rust-toolchain; };
+  customRust = rustToolchain.rust.override {
     targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
-  });
+  };
 
   # # allows to skip files listed by .gitignore
   # # otherwise `nix-build` copies everything, including the target directory
@@ -42,9 +44,11 @@ let
     ref = "refs/heads/nixpkgs-unstable";
     rev = "c82b46413401efa740a0b994f52e9903a4f6dcd5";
   }) { overlays = [
+         rustOverlay
          (self: super: {
-           rustc = rustToolchain.rust;
+           rustc = customRust;
            inherit (rustToolchain) cargo rust rust-fmt rust-std clippy;
+           # rust = customRust;
          })
        ]; }).crate2nix;
   crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" {};
