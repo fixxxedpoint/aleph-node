@@ -74,11 +74,14 @@ in
 with nixpkgs; naersk.buildPackage {
   name = "aleph-node";
   src = ./.;
-  buildInputs = [
+  stdenv = env;
+  nativeBuildInputs = [
     cacert
     git
-    protobuf
+  ];
+  buildInputs = [
     openssl.dev
+    protobuf
     pkg-config
     llvm.clang
     llvm.libclang
@@ -92,7 +95,6 @@ with nixpkgs; naersk.buildPackage {
   PROTOC="${protobuf}/bin/protoc";
   BINDGEN_EXTRA_CLANG_ARGS=" \
      ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
-     $BINDGEN_EXTRA_CLANG_ARGS
   ";
    CFLAGS=" \
      ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
