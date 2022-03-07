@@ -13,67 +13,25 @@ let
     };
   };
   rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ./rust-toolchain; } );
-  # rustToolchain = with nixpkgs; ( rustChannelOf { rustToolchain = ./rust-toolchain; } ).override rec {
-  #   rust = rust.override {
-  #     targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
-  #   };
-  # };
-  # customRust = rustToolchain.rust.override {
-  #   targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
-  # };
 
   # pinned version of nix packages
-  nixpkgs = import (builtins.fetchGit {
-    url = "https://github.com/NixOS/nixpkgs/";
-    ref = "refs/heads/nixpkgs-unstable";
-    rev = "c82b46413401efa740a0b994f52e9903a4f6dcd5";
+  nixpkgs = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/2c162d49cd5b979eb66ff1653aecaeaa01690fcc.tar.gz";
+    sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
   }) { overlays = [
          rustOverlay
-         # (import rustToolchain)
          (self: super: {
            inherit (rustToolchain) cargo rust-src rust-std;
            rustc = rustToolchain.rust;
-           # with rustToolchain;
-           # rustc = rustToolchain.rust;
-           # rustc = customRust;
-           # inherit (rustToolchain) cargo rust rust-fmt rust-std clippy;
-           # import rustToolchain;
-           # inherit (rustToolchain);
-           # import rustToolchain;
-           # rust = customRust;
          })
        ];
      };
 
-
-
-  # # allows to skip files listed by .gitignore
-  # # otherwise `nix-build` copies everything, including the target directory
-  # gitignoreSrc = nixpkgs.fetchFromGitHub {
-  #   owner = "hercules-ci";
-  #   repo = "gitignore.nix";
-  #   rev = "5b9e0ff9d3b551234b4f3eb3983744fa354b17f1";
-  #   sha256 = "o/BdVjNwcB6jOmzZjOH703BesSkkS5O7ej3xhyO8hAY=";
-  # };
-  # inherit (import gitignoreSrc { inherit (nixpkgs) lib; }) gitignoreSource;
-
-  # create2nixImport = import (builtins.fetchTarball {
-  #   url = "https://github.com/kolloch/crate2nix/archive/refs/tags/0.10.0.tar.gz";
-  #   sha256 = "aasd";
-  # });
+  # declares a build environment where C and C++ compilers are delivered by the llvm/clang project
+  # in this version build process should rely only on clang, without access to gcc
   llvm = nixpkgs.llvmPackages_11;
   env = llvm.stdenv;
   llvmVersionString = "${nixpkgs.lib.getVersion env.cc.cc}";
-  buildRustCrate = nixpkgs.buildRustCrate.override {
-    stdenv = env;
-  };
-  # crate2nix = nixpkgs.crate2nix;
-  # crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" {};
-  # cargoNix = nixpkgs.callPackage (crate2nixTools.generatedCargoNix {
-  #   name = "aleph-node";
-  #   # src = gitignoreSource ./.;
-  #   src = ./.;
-  # }) { inherit buildRustCrate; };
 
   # we use a newer version of rocksdb than the one provided by nixpkgs
   # we disable all compression algorithms and force it to use SSE 4.2 cpu instruction set
@@ -110,132 +68,28 @@ let
     buildInputs = [ nixpkgs.git ];
   });
 
-  pkgs = nixpkgs;
-  sourceFilter = name: type:
-    let
-      baseName = builtins.baseNameOf (builtins.toString name);
-    in
-      ! (
-        # Filter out git
-        baseName == ".gitignore"
-        || (type == "directory" && baseName == ".git")
-
-        # Filter out build results
-        || (
-          type == "directory" && (
-            baseName == "target"
-            || baseName == "_site"
-            || baseName == ".sass-cache"
-            || baseName == ".jekyll-metadata"
-            || baseName == "build-artifacts"
-          )
-        )
-
-        # Filter out nix-build result symlinks
-        || (
-          type == "symlink" && pkgs.lib.hasPrefix "result" baseName
-        )
-
-        # Filter out IDE config
-        || (
-          type == "directory" && (
-            baseName == ".idea" || baseName == ".vscode"
-          )
-        ) || pkgs.lib.hasSuffix ".iml" baseName
-
-        # Filter out nix build files
-        || baseName == "Cargo.nix"
-
-        # Filter out editor backup / swap files.
-        || pkgs.lib.hasSuffix "~" baseName
-        || builtins.match "^\\.sw[a-z]$$" baseName != null
-        || builtins.match "^\\..*\\.sw[a-z]$$" baseName != null
-        || pkgs.lib.hasSuffix ".tmp" baseName
-        || pkgs.lib.hasSuffix ".bak" baseName
-        || baseName == "tests.nix"
-      );
-
-  # cargoNix = import ./Cargo.nix { inherit pkgs; inherit buildRustCrate; };
-  # cargoNix = nixpkgs.callPackage ./Cargo.nix { inherit buildRustCrate; };
-  customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
-    stdenv = env;
-    defaultCrateOverrides = pkgs.defaultCrateOverrides // (
-      let protobufFix = attrs: {
-            buildInputs = [ pkgs.protobuf ];
-            PROTOC="${pkgs.protobuf}/bin/protoc";
-          };
-      in {
-        librocksdb-sys = attrs: {
-          buildInputs = [ customRocksdb ];
-          ROCKSDB_LIB_DIR="${customRocksdb}/lib";
-          ROCKSDB_STATIC=1;
-          LIBCLANG_PATH="${llvm.libclang.lib}/lib";
-        };
-
-        libp2p-core = protobufFix;
-
-        libp2p-plaintext = protobufFix;
-
-        libp2p-floodsub = protobufFix;
-
-        libp2p-gossipsub = protobufFix;
-
-        libp2p-identify = protobufFix;
-
-        libp2p-kad = protobufFix;
-
-        libp2p-relay = protobufFix;
-
-        libp2p-rendezvous = protobufFix;
-
-        libp2p-noise = protobufFix;
-
-        sc-network = protobufFix;
-
-        aleph-runtime = attrs: rec {
-          buildInputs = [pkgs.git pkgs.cacert];
-          CARGO = "${pkgs.cargo}/bin/cargo";
-          CARGO_HOME="$out/cargo";
-          src = pkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ./.; };
-          sourceRoot = "${src}/bin/runtime";
-          # dontMakeSourcesWritable = 1;
-          # OUT_DIR="target/build/aleph-runtime";
-          # CARGO_MANIFEST_DIR=".";
-         #  RUST_BACKTRACE="full";
-         #  BINDGEN_EXTRA_CLANG_ARGS=" \
-         #    ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
-         #   $BINDGEN_EXTRA_CLANG_ARGS
-         # ";
-
-        };
-    }
-    );
-  };
-  # cargoNix = import ./Cargo.nix { inherit pkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
   sources = import ./nix/sources.nix;
   naersk = nixpkgs.callPackage sources.naersk { stdenv = env; };
 in
-# cargoNix.workspaceMembers."aleph-node".build
-# cargoNix.workspaceMembers."aleph-runtime".build
-naersk.buildPackage {
-  # stdenv = env;
+with nixpkgs; naersk.buildPackage {
   name = "aleph-node";
   src = ./.;
   buildInputs = [
-    nixpkgs.cacert
-    nixpkgs.git
-    nixpkgs.protobuf
-    nixpkgs.openssl.dev
-    nixpkgs.pkg-config
+    cacert
+    git
+    protobuf
+    openssl.dev
+    pkg-config
     llvm.clang
     llvm.libclang
     customRocksdb
   ];
   compressTarget=false;
+
   ROCKSDB_LIB_DIR="${customRocksdb}/lib";
   ROCKSDB_STATIC=1;
   LIBCLANG_PATH="${llvm.libclang.lib}/lib";
-  PROTOC="${pkgs.protobuf}/bin/protoc";
+  PROTOC="${protobuf}/bin/protoc";
   BINDGEN_EXTRA_CLANG_ARGS=" \
      ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
      $BINDGEN_EXTRA_CLANG_ARGS
@@ -247,70 +101,3 @@ naersk.buildPackage {
      ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
    ";
 }
-
-#   # declares a build environment where C and C++ compilers are delivered by the llvm/clang project
-#   # in this version build process should rely only on clang, without access to gcc
-#   llvm = nixpkgs.llvmPackages_11;
-#   env = llvm.stdenv;
-#   llvmVersionString = "${nixpkgs.lib.getVersion env.cc.cc}";
-# in
-# with nixpkgs; env.mkDerivation rec {
-#   name = "aleph-node";
-#   src = gitignoreSource ./.;
-
-#   buildInputs = [
-#     rustToolchain
-#     llvm.clang
-#     openssl.dev
-#     protobuf
-#     customRocksdb
-#     pkg-config
-#     cacert
-#     git
-#     findutils
-#     patchelf
-#   ];
-
-#   shellHook = ''
-#     export RUST_SRC_PATH="${rustToolchain}/lib/rustlib/src/rust/src"
-#     export LIBCLANG_PATH="${llvm.libclang.lib}/lib"
-#     export PROTOC="${protobuf}/bin/protoc"
-#     export CFLAGS=" \
-#         ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
-#         $CFLAGS
-#     "
-#     export CXXFLAGS+=" \
-#         ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
-#         $CXXFLAGS
-#     "
-#     # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
-#     # Set C flags for Rust's bindgen program. Unlike ordinary C
-#     # compilation, bindgen does not invoke $CC directly. Instead it
-#     # uses LLVM's libclang. To make sure all necessary flags are
-#     # included we need to look in a few places.
-#     export BINDGEN_EXTRA_CLANG_ARGS=" \
-#         ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
-#         $BINDGEN_EXTRA_CLANG_ARGS
-#     "
-#     export ROCKSDB_LIB_DIR="${customRocksdb}/lib"
-#     export ROCKSDB_STATIC=1
-#   '';
-
-#   buildPhase = ''
-#     ${shellHook}
-#     export CARGO_HOME="$out/cargo"
-#     export CARGO_BUILD_TARGET="x86_64-unknown-linux-gnu"
-
-#     cargo build --locked --release -p aleph-node
-#   '';
-
-#   installPhase = ''
-#     mkdir -p $out/bin
-#     mv target/x86_64-unknown-linux-gnu/release/aleph-node $out/bin/
-#   '';
-
-#   fixupPhase = ''
-#     rm -rf $CARGO_HOME
-#     find $out -type f -exec patchelf --shrink-rpath '{}' \; -exec strip '{}' \; 2>/dev/null
-#   '';
-# }
