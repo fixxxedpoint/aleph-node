@@ -66,13 +66,26 @@ let
   buildRustCrate = nixpkgs.buildRustCrate.override {
     stdenv = env;
   };
-  crate2nix = nixpkgs.crate2nix;
-  crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" {};
-  cargoNix = nixpkgs.callPackage (crate2nixTools.generatedCargoNix {
-    name = "aleph-node";
-    # src = gitignoreSource ./.;
-    src = ./.;
-  }) { inherit buildRustCrate; };
+  # crate2nix = nixpkgs.crate2nix;
+  # crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" {};
+  # cargoNix = nixpkgs.callPackage (crate2nixTools.generatedCargoNix {
+  #   name = "aleph-node";
+  #   # src = gitignoreSource ./.;
+  #   src = ./.;
+  # }) { inherit buildRustCrate; };
+  pkgs = nixpkgs;
+  # cargoNix = import ./Cargo.nix { inherit pkgs; inherit buildRustCrate; };
+  # cargoNix = nixpkgs.callPackage ./Cargo.nix { inherit buildRustCrate; };
+  customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
+    stdenv = env;
+    # defaultCrateOverrides = pkgs.defaultCrateOverrides // {
+    #   funky-things = attrs: {
+    #     buildInputs = [ pkgs.openssl ];
+    #   };
+    # };
+  };
+  cargoNix = import ./Cargo.nix { inherit pkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+
 in
 cargoNix.workspaceMembers."aleph-node".build
 
