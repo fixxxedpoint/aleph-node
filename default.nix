@@ -4,21 +4,48 @@ let
   rustOverlay =
     import (builtins.fetchGit {
       url = "https://github.com/mozilla/nixpkgs-mozilla.git";
-      rev = "f233fdc4ff6ba2ffeb1e3e3cd6d63bb1297d6996";
+      rev = "15b7a05f20aab51c4ffbefddb1b448e862dccb7d";
     });
 
-  # pinned version of nix packages
-  # main reason for not using here the newest available version at the time or writing is that this way we depend on glibc version 2.31 (Ubuntu 20.04 LTS)
-  nixpkgs = import (builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/2c162d49cd5b979eb66ff1653aecaeaa01690fcc.tar.gz";
-    sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
-  }) { overlays = [ rustOverlay ]; };
-
-
-  rustToolchain = with nixpkgs; rustChannelOf { rustToolchain = ./rust-toolchain; };
-  customRust = rustToolchain.rust.override {
-    targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
+  overrideRustTarget = rustChannel: rustChannel // {
+    rust = rustChannel.rust.override {
+      targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
+    };
   };
+  rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ./rust-toolchain; } );
+  # rustToolchain = with nixpkgs; ( rustChannelOf { rustToolchain = ./rust-toolchain; } ).override rec {
+  #   rust = rust.override {
+  #     targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
+  #   };
+  # };
+  # customRust = rustToolchain.rust.override {
+  #   targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
+  # };
+
+  # pinned version of nix packages
+  nixpkgs = import (builtins.fetchGit {
+    url = "https://github.com/NixOS/nixpkgs/";
+    ref = "refs/heads/nixpkgs-unstable";
+    rev = "c82b46413401efa740a0b994f52e9903a4f6dcd5";
+  }) { overlays = [
+         rustOverlay
+         # (import rustToolchain)
+         (self: super: {
+           inherit (rustToolchain) cargo rust-src rust-std;
+           rustc = rustToolchain.rust;
+           # with rustToolchain;
+           # rustc = rustToolchain.rust;
+           # rustc = customRust;
+           # inherit (rustToolchain) cargo rust rust-fmt rust-std clippy;
+           # import rustToolchain;
+           # inherit (rustToolchain);
+           # import rustToolchain;
+           # rust = customRust;
+         })
+       ];
+     };
+
+
 
   # # allows to skip files listed by .gitignore
   # # otherwise `nix-build` copies everything, including the target directory
@@ -39,18 +66,7 @@ let
   buildRustCrate = nixpkgs.buildRustCrate.override {
     stdenv = env;
   };
-  crate2nix = (import (builtins.fetchGit {
-    url = "https://github.com/NixOS/nixpkgs/";
-    ref = "refs/heads/nixpkgs-unstable";
-    rev = "c82b46413401efa740a0b994f52e9903a4f6dcd5";
-  }) { overlays = [
-         rustOverlay
-         (self: super: {
-           rustc = customRust;
-           inherit (rustToolchain) cargo rust rust-fmt rust-std clippy;
-           # rust = customRust;
-         })
-       ]; }).crate2nix;
+  crate2nix = nixpkgs.crate2nix;
   crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" {};
   cargoNix = nixpkgs.callPackage (crate2nixTools.generatedCargoNix {
     name = "aleph-node";
