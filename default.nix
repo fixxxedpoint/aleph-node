@@ -63,6 +63,7 @@ let
   # });
   llvm = nixpkgs.llvmPackages_11;
   env = llvm.stdenv;
+  llvmVersionString = "${nixpkgs.lib.getVersion env.cc.cc}";
   buildRustCrate = nixpkgs.buildRustCrate.override {
     stdenv = env;
   };
@@ -73,56 +74,148 @@ let
   #   # src = gitignoreSource ./.;
   #   src = ./.;
   # }) { inherit buildRustCrate; };
+
+  # we use a newer version of rocksdb than the one provided by nixpkgs
+  # we disable all compression algorithms and force it to use SSE 4.2 cpu instruction set
+  customRocksdb = nixpkgs.rocksdb.overrideAttrs (_: {
+
+    src = builtins.fetchGit {
+      url = "https://github.com/facebook/rocksdb.git";
+      ref = "refs/tags/v${rocksDBVersion}";
+    };
+
+    version = "${rocksDBVersion}";
+
+    patches = [];
+
+    cmakeFlags = [
+       "-DPORTABLE=0"
+       "-DWITH_JNI=0"
+       "-DWITH_BENCHMARK_TOOLS=0"
+       "-DWITH_TESTS=0"
+       "-DWITH_TOOLS=0"
+       "-DWITH_BZ2=0"
+       "-DWITH_LZ4=0"
+       "-DWITH_SNAPPY=0"
+       "-DWITH_ZLIB=0"
+       "-DWITH_ZSTD=0"
+       "-DWITH_GFLAGS=0"
+       "-DUSE_RTTI=0"
+       "-DFORCE_SSE42=1"
+       "-DROCKSDB_BUILD_SHARED=0"
+    ];
+
+    propagatedBuildInputs = [];
+
+    buildInputs = [ nixpkgs.git ];
+  });
+
   pkgs = nixpkgs;
+  sourceFilter = name: type:
+    let
+      baseName = builtins.baseNameOf (builtins.toString name);
+    in
+      ! (
+        # Filter out git
+        baseName == ".gitignore"
+        || (type == "directory" && baseName == ".git")
+
+        # Filter out build results
+        || (
+          type == "directory" && (
+            baseName == "target"
+            || baseName == "_site"
+            || baseName == ".sass-cache"
+            || baseName == ".jekyll-metadata"
+            || baseName == "build-artifacts"
+          )
+        )
+
+        # Filter out nix-build result symlinks
+        || (
+          type == "symlink" && pkgs.lib.hasPrefix "result" baseName
+        )
+
+        # Filter out IDE config
+        || (
+          type == "directory" && (
+            baseName == ".idea" || baseName == ".vscode"
+          )
+        ) || pkgs.lib.hasSuffix ".iml" baseName
+
+        # Filter out nix build files
+        || baseName == "Cargo.nix"
+
+        # Filter out editor backup / swap files.
+        || pkgs.lib.hasSuffix "~" baseName
+        || builtins.match "^\\.sw[a-z]$$" baseName != null
+        || builtins.match "^\\..*\\.sw[a-z]$$" baseName != null
+        || pkgs.lib.hasSuffix ".tmp" baseName
+        || pkgs.lib.hasSuffix ".bak" baseName
+        || baseName == "tests.nix"
+      );
+
   # cargoNix = import ./Cargo.nix { inherit pkgs; inherit buildRustCrate; };
   # cargoNix = nixpkgs.callPackage ./Cargo.nix { inherit buildRustCrate; };
   customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
     stdenv = env;
-    # defaultCrateOverrides = pkgs.defaultCrateOverrides // {
-    #   funky-things = attrs: {
-    #     buildInputs = [ pkgs.openssl ];
-    #   };
-    # };
+    defaultCrateOverrides = pkgs.defaultCrateOverrides // (
+      let protobufFix = attrs: {
+            buildInputs = [ pkgs.protobuf ];
+            PROTOC="${pkgs.protobuf}/bin/protoc";
+          };
+      in {
+        librocksdb-sys = attrs: {
+          buildInputs = [ customRocksdb ];
+          ROCKSDB_LIB_DIR="${customRocksdb}/lib";
+          ROCKSDB_STATIC=1;
+          LIBCLANG_PATH="${llvm.libclang.lib}/lib";
+        };
+
+        libp2p-core = protobufFix;
+
+        libp2p-plaintext = protobufFix;
+
+        libp2p-floodsub = protobufFix;
+
+        libp2p-gossipsub = protobufFix;
+
+        libp2p-identify = protobufFix;
+
+        libp2p-kad = protobufFix;
+
+        libp2p-relay = protobufFix;
+
+        libp2p-rendezvous = protobufFix;
+
+        libp2p-noise = protobufFix;
+
+        sc-network = protobufFix;
+
+        aleph-runtime = attrs: rec {
+          buildInputs = [pkgs.git pkgs.cacert];
+          CARGO = "${pkgs.cargo}/bin/cargo";
+          CARGO_HOME="$out/cargo";
+          src = pkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ./.; };
+          sourceRoot = "${src}/bin/runtime";
+          # dontMakeSourcesWritable = 1;
+          # OUT_DIR="target/build/aleph-runtime";
+          # CARGO_MANIFEST_DIR=".";
+         #  RUST_BACKTRACE="full";
+         #  BINDGEN_EXTRA_CLANG_ARGS=" \
+         #    ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
+         #   $BINDGEN_EXTRA_CLANG_ARGS
+         # ";
+
+        };
+    }
+    );
   };
   cargoNix = import ./Cargo.nix { inherit pkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 
 in
-cargoNix.workspaceMembers."aleph-node".build
-
-#   # we use a newer version of rocksdb than the one provided by nixpkgs
-#   # we disable all compression algorithms and force it to use SSE 4.2 cpu instruction set
-#   customRocksdb = nixpkgs.rocksdb.overrideAttrs (_: {
-
-#     src = builtins.fetchGit {
-#       url = "https://github.com/facebook/rocksdb.git";
-#       ref = "refs/tags/v${rocksDBVersion}";
-#     };
-
-#     version = "${rocksDBVersion}";
-
-#     patches = [];
-
-#     cmakeFlags = [
-#        "-DPORTABLE=0"
-#        "-DWITH_JNI=0"
-#        "-DWITH_BENCHMARK_TOOLS=0"
-#        "-DWITH_TESTS=0"
-#        "-DWITH_TOOLS=0"
-#        "-DWITH_BZ2=0"
-#        "-DWITH_LZ4=0"
-#        "-DWITH_SNAPPY=1"
-#        "-DWITH_ZLIB=0"
-#        "-DWITH_ZSTD=0"
-#        "-DWITH_GFLAGS=0"
-#        "-DUSE_RTTI=0"
-#        "-DFORCE_SSE42=1"
-#        "-DROCKSDB_BUILD_SHARED=0"
-#     ];
-
-#     propagatedBuildInputs = [];
-
-#     buildInputs = [ nixpkgs.snappy ];
-#   });
+# cargoNix.workspaceMembers."aleph-node".build
+cargoNix.workspaceMembers."aleph-runtime".build
 
 #   # declares a build environment where C and C++ compilers are delivered by the llvm/clang project
 #   # in this version build process should rely only on clang, without access to gcc
