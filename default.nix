@@ -211,11 +211,42 @@ let
     }
     );
   };
-  cargoNix = import ./Cargo.nix { inherit pkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
-
+  # cargoNix = import ./Cargo.nix { inherit pkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+  sources = import ./nix/sources.nix;
+  naersk = nixpkgs.callPackage sources.naersk { stdenv = env; };
 in
 # cargoNix.workspaceMembers."aleph-node".build
-cargoNix.workspaceMembers."aleph-runtime".build
+# cargoNix.workspaceMembers."aleph-runtime".build
+naersk.buildPackage {
+  # stdenv = env;
+  name = "aleph-node";
+  src = ./.;
+  buildInputs = [
+    nixpkgs.cacert
+    nixpkgs.git
+    nixpkgs.protobuf
+    nixpkgs.openssl.dev
+    nixpkgs.pkg-config
+    llvm.clang
+    llvm.libclang
+    customRocksdb
+  ];
+  compressTarget=false;
+  ROCKSDB_LIB_DIR="${customRocksdb}/lib";
+  ROCKSDB_STATIC=1;
+  LIBCLANG_PATH="${llvm.libclang.lib}/lib";
+  PROTOC="${pkgs.protobuf}/bin/protoc";
+  BINDGEN_EXTRA_CLANG_ARGS=" \
+     ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
+     $BINDGEN_EXTRA_CLANG_ARGS
+  ";
+   CFLAGS=" \
+     ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
+   ";
+   CXXFLAGS=" \
+     ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
+   ";
+}
 
 #   # declares a build environment where C and C++ compilers are delivered by the llvm/clang project
 #   # in this version build process should rely only on clang, without access to gcc
