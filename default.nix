@@ -1,4 +1,4 @@
-{ rocksDBVersion ? "6.29.3" }:
+{ rocksDBVersion ? "6.29.3", release ? false }:
 let
   # this overlay allows us to use a specified version of the rust toolchain
   rustOverlay =
@@ -74,7 +74,6 @@ in
 with nixpkgs; naersk.buildPackage {
   name = "aleph-node";
   src = ./.;
-  stdenv = env;
   nativeBuildInputs = [
     cacert
     git
@@ -88,6 +87,7 @@ with nixpkgs; naersk.buildPackage {
     customRocksdb
   ];
   compressTarget=false;
+  release=release;
 
   ROCKSDB_LIB_DIR="${customRocksdb}/lib";
   ROCKSDB_STATIC=1;
