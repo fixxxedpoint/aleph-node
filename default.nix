@@ -12,6 +12,7 @@ let
       targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
     };
   };
+  # use Rust toolchain declared by the rust-toolchain file
   rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ./rust-toolchain; } );
 
   # pinned version of nix packages
@@ -93,13 +94,18 @@ with nixpkgs; naersk.buildPackage {
   ROCKSDB_STATIC=1;
   LIBCLANG_PATH="${llvm.libclang.lib}/lib";
   PROTOC="${protobuf}/bin/protoc";
+  # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
+  # Set C flags for Rust's bindgen program. Unlike ordinary C
+  # compilation, bindgen does not invoke $CC directly. Instead it
+  # uses LLVM's libclang. To make sure all necessary flags are
+  # included we need to look in a few places.
   BINDGEN_EXTRA_CLANG_ARGS=" \
      ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
   ";
-   CFLAGS=" \
-     ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
-   ";
-   CXXFLAGS=" \
-     ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
-   ";
+  CFLAGS=" \
+    ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
+  ";
+  CXXFLAGS=" \
+    ${"-isystem ${llvm.libclang.lib}/lib/clang/${llvmVersionString}/include"} \
+  ";
 }
