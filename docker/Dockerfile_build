@@ -1,11 +1,13 @@
 FROM nixos/nix:2.6.0
 
-COPY docker/nix-build.sh /node/
-RUN chmod +x /node/nix-build.sh
-COPY default.nix /node/
+COPY docker/nix-build.sh /
+COPY . /node/
 WORKDIR /node
 RUN nix-shell --pure default.nix && \
-    nix-env -i patchelf
+    nix-env -i patchelf && \
+    rm -rf /node/
+RUN mv /nix-build.sh /node/
+RUN chmod +x /node/nix-build.sh
 
 WORKDIR /node/build
 ENTRYPOINT ["/node/nix-build.sh"]
