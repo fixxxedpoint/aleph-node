@@ -1,4 +1,4 @@
-{ rocksDBVersion ? "6.29.3", release ? false, crate ? "aleph-node" }:
+{ rocksDBVersion ? "6.29.3", release ? false }:
 let
   # this overlay allows us to use a specified version of the rust toolchain
   rustOverlay =
@@ -73,7 +73,7 @@ let
   naersk = nixpkgs.callPackage sources.naersk { stdenv = env; };
 in
 with nixpkgs; naersk.buildPackage {
-  name = "${crate}";
+  name = "aleph-node";
   src = ./.;
   nativeBuildInputs = [
     cacert
@@ -96,10 +96,11 @@ with nixpkgs; naersk.buildPackage {
       find . -type f -exec touch -cfht 197001010000 {} +
       find target -type f -exec touch -cfht 197001010001 {} +
       chmod +w -R target
-      cargo clean -p ${crate}
+      cargo clean -p aleph-runtime
+      cargo clean -p aleph-node
     '';
   };
-  cargoBuildOptions = x: x ++ [ "-p" "${crate}" ];
+  cargoBuildOptions = x: x ++ [ "-p" "aleph-node" ];
 
   RUSTFLAGS="-C target-cpu=x86-64-v3";
   ROCKSDB_LIB_DIR="${customRocksdb}/lib";
