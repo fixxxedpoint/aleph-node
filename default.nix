@@ -75,6 +75,7 @@ in
 with nixpkgs; naersk.buildPackage {
   name = "aleph-node";
   src = ./.;
+  # targets = ["bin/node"];
   nativeBuildInputs = [
     cacert
     git
@@ -87,8 +88,26 @@ with nixpkgs; naersk.buildPackage {
     llvm.libclang
     customRocksdb
   ];
-  compressTarget=false;
+  compressTarget=true;
   release=release;
+  # cargoBuild=old: "chmod +w -R target; CARGO_LOG=cargo::core::compiler::fingerprint=trace " + old;
+  cargoBuild=old: "CARGO_LOG=cargo::core::compiler::fingerprint=trace " + old;
+  override=old: {
+    # configurePhase=''
+    #   $old.configurePhase
+    #   find . -type f -exec touch {} +
+    #   chmod +w -R target
+    # '';
+
+    postConfigure=''
+      echo "zbyszko's postConfigure"
+      find . -type f -exec touch -cfht 197001010000 {} +
+      find target -type f -exec touch -cfht 197001010001 {} +
+      chmod +w -R target
+      cargo clean -p aleph-node
+    '';
+  };
+  cargoBuildOptions = x: x ++ [ "-p" "aleph-node" ];
 
   ROCKSDB_LIB_DIR="${customRocksdb}/lib";
   ROCKSDB_STATIC=1;
