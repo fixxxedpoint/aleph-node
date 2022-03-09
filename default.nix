@@ -1,4 +1,4 @@
-{ rocksDBVersion ? "6.29.3", release ? false }:
+{ rocksDBVersion ? "6.29.3", release ? false, crate ? "aleph-node" }:
 let
   # this overlay allows us to use a specified version of the rust toolchain
   rustOverlay =
@@ -73,7 +73,7 @@ let
   naersk = nixpkgs.callPackage sources.naersk { stdenv = env; };
 in
 with nixpkgs; naersk.buildPackage {
-  name = "aleph-node";
+  name = "${crate}";
   src = ./.;
   nativeBuildInputs = [
     cacert
@@ -92,14 +92,14 @@ with nixpkgs; naersk.buildPackage {
   override=old: {
     postConfigure=''
       # this is needed so cargo/rust doesn't rebuild all of the dependencies
-      # without it, its fingerprinting complains about mtime, about forces everything to rebuild
+      # without it, its fingerprinting mechanism complains about mtime, and forces a rebuild
       find . -type f -exec touch -cfht 197001010000 {} +
       find target -type f -exec touch -cfht 197001010001 {} +
       chmod +w -R target
-      cargo clean -p aleph-node
+      cargo clean -p ${crate}
     '';
   };
-  cargoBuildOptions = x: x ++ [ "-p" "aleph-node" ];
+  cargoBuildOptions = x: x ++ [ "-p" "${crate}" ];
 
   RUSTFLAGS="-C target-cpu=x86-64-v3";
   ROCKSDB_LIB_DIR="${customRocksdb}/lib";
