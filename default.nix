@@ -120,7 +120,7 @@ let
             buildInputs = [ pkgs.protobuf ];
             PROTOC="${pkgs.protobuf}/bin/protoc";
           };
-      in {
+      in rec {
         librocksdb-sys = attrs: {
           buildInputs = [ customRocksdb ];
           ROCKSDB_LIB_DIR="${customRocksdb}/lib";
@@ -148,10 +148,12 @@ let
 
         sc-network = protobufFix;
 
-        "aleph-runtime" = attrs: rec {
-          preBuild = ''
+        aleph-runtime = attrs: aleph-runtime-build attrs;
+        aleph-runtime-build = attrs: rec {
+          preConfigure = ''
             echo "hej zbyszko"
-            chmod +w -R target
+            chmod +w -R .
+            find .
           '';
           buildInputs = [pkgs.git pkgs.cacert];
           CARGO = "${pkgs.cargo}/bin/cargo";
