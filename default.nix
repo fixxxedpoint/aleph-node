@@ -148,7 +148,7 @@ let
 
         sc-network = protobufFix;
 
-        aleph-runtime = attrs: rec {
+        "aleph-runtime" = attrs: rec {
           preBuild = ''
             echo "hej zbyszko"
             chmod +w -R target
@@ -178,12 +178,12 @@ let
   };
   wrappedCrate2nix = nixpkgs.writeShellScriptBin "crate2nix" ''
     echo "wrapped crate2nix from zbyszko"
-    find cargo
-    rm cargo/config
-    find cargo
-    echo $(pwd)
+    # find cargo
+    # rm cargo/config
+    # find cargo
+    # echo $(pwd)
     rm $out/cargo/config
-    echo "$@"
+    # echo "$@"
     # awk -i inplace '{$1=$1};!seen[$0]++' $out/cargo/config
     exec ${nixpkgs.crate2nix}/bin/crate2nix "$@"
   '';
