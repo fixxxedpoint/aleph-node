@@ -112,11 +112,11 @@ let
     rm $out/cargo/config
     exec ${crate2nix}/bin/crate2nix "$@"
   '';
-  crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" { pkgs = nixpkgs; stdenv = env; };
+  crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; };
   generatedCargoNix = (crate2nixTools.generatedCargoNix {
     name = "aleph-node";
     src = ./.;
   }).overrideAttrs (old: { buildInputs = [wrappedCrate2nix crate2nix nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
-  cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+  cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; lib = nixpkgs.lib; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
 cargoNix.workspaceMembers."aleph-node".build
