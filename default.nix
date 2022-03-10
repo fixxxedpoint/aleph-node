@@ -15,10 +15,9 @@ let
   rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ./rust-toolchain; } );
 
   # pinned version of nix packages
-  nixpkgs = import (builtins.fetchGit {
-    url = "https://github.com/NixOS/nixpkgs/";
-    ref = "refs/heads/nixpkgs-unstable";
-    rev = "c82b46413401efa740a0b994f52e9903a4f6dcd5";
+  nixpkgs = import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/2c162d49cd5b979eb66ff1653aecaeaa01690fcc.tar.gz";
+    sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
   }) { overlays = [
          rustOverlay
          (self: super: {
