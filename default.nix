@@ -152,15 +152,20 @@ let
         aleph-runtime-build = attrs: rec {
           preConfigure = ''
             echo "hej zbyszko"
+            find .
+            mkdir -p target/wbuild/aleph-runtime/
+            touch target/wbuild/aleph-runtime/Cargo.lock
             chmod +w -R .
             find .
+            pwd
           '';
           buildInputs = [pkgs.git pkgs.cacert];
           CARGO = "${pkgs.cargo}/bin/cargo";
           CARGO_HOME=".cargo-home";
           # src = pkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ./.; };
           src = ./.;
-          sourceRoot = "${src}/bin/runtime";
+          workspace_member = "bin/runtime";
+          # sourceRoot = "${src}/bin/runtime";
           # dontMakeSourcesWritable = 1;
           # OUT_DIR="target/build/aleph-runtime";
           # CARGO_MANIFEST_DIR=".";
@@ -189,21 +194,22 @@ let
     # awk -i inplace '{$1=$1};!seen[$0]++' $out/cargo/config
     exec ${nixpkgs.crate2nix}/bin/crate2nix "$@"
   '';
-  # cargoNix = import ./Cargo.nix { inherit pkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
-  crate2nix = nixpkgs.crate2nix;
-  crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" { pkgs = nixpkgs; stdenv = env; };
+  cargoNix = import ./Cargo.nix { inherit pkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+  # crate2nix = nixpkgs.crate2nix;
+  # crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" { pkgs = nixpkgs; stdenv = env; };
+
   # generatedCargoNix = crate2nixTools.generatedCargoNix.overrideAttrs (old: { buildInputs = old.buildInputs ++ [ wrappedCrate2nix ]; });
   # cargoNix = nixpkgs.callPackage (crate2nixTools.generatedCargoNix {
   #   name = "aleph-node";
   #   # src = gitignoreSource ./.;
   #   src = ./.;
   # }) { buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
-  generatedCargoNix = (crate2nixTools.generatedCargoNix {
-    name = "aleph-node";
-    src = ./.;
-  # }).overrideAttrs (old: { buildInputs = [ nixpkgs.cargo nixpkgs.jq wrappedCrate2nix ]; });
-  }).overrideAttrs (old: { buildInputs = [wrappedCrate2nix nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
-  cargoNix = nixpkgs.callPackage (generatedCargoNix) { buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+  # generatedCargoNix = (crate2nixTools.generatedCargoNix {
+  #   name = "aleph-node";
+  #   src = ./.;
+  # # }).overrideAttrs (old: { buildInputs = [ nixpkgs.cargo nixpkgs.jq wrappedCrate2nix ]; });
+  # }).overrideAttrs (old: { buildInputs = [wrappedCrate2nix nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
+  # cargoNix = nixpkgs.callPackage (generatedCargoNix) { buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
 cargoNix.workspaceMembers."aleph-node".build
 # cargoNixOver.workspaceMembers."aleph-runtime".build { buildRustCrateForPkgsFunc = customBuildRustCrateForPkgs; }
