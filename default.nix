@@ -117,6 +117,6 @@ let
     name = "aleph-node";
     src = ./.;
   }).overrideAttrs (old: { buildInputs = [wrappedCrate2nix crate2nix nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
-  cargoNix = nixpkgs.callPackage generatedCargoNix { buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+  cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
 cargoNix.workspaceMembers."aleph-node".build
