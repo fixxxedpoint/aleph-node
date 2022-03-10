@@ -2,9 +2,9 @@
 let
   # this overlay allows us to use a specified version of the rust toolchain
   rustOverlay =
-    import (builtins.fetchGit {
-      url = "https://github.com/mozilla/nixpkgs-mozilla.git";
-      rev = "15b7a05f20aab51c4ffbefddb1b448e862dccb7d";
+    import (builtins.fetchTarball {
+      url = "https://github.com/mozilla/nixpkgs-mozilla/archive/15b7a05f20aab51c4ffbefddb1b448e862dccb7d.tar.gz";
+      sha256 = "0admybxrjan9a04wq54c3zykpw81sc1z1nqclm74a7pgjdp7iqv1";
     });
 
   overrideRustTarget = rustChannel: rustChannel // {
@@ -103,10 +103,9 @@ let
     }
     );
   };
-  crate2nix = (import (builtins.fetchGit {
-    url = "https://github.com/NixOS/nixpkgs/";
-    ref = "refs/heads/nixpkgs-unstable";
-    rev = "c82b46413401efa740a0b994f52e9903a4f6dcd5";
+  crate2nix = (import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/c82b46413401efa740a0b994f52e9903a4f6dcd5.tar.gz";
+    sha256 = "13s8g6p0gzpa1q6mwc2fj2v451dsars67m4mwciimgfwhdlxx0bk";
   }){}).crate2nix;
   wrappedCrate2nix = nixpkgs.writeShellScriptBin "crate2nix" ''
     rm $out/cargo/config
