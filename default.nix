@@ -23,7 +23,6 @@ let
          (self: super: {
            inherit (rustToolchain) cargo rust-src rust-std;
            rustc = rustToolchain.rust;
-           fetchGit = args: builtins.fetchGit (args // { allRefs = true; });
          })
        ];
      };
