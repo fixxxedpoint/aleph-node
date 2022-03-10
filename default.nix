@@ -104,10 +104,6 @@ let
     }
     );
   };
-  test = nixpkgs.fetchGit {
-      url = "https://github.com/facebook/rocksdb.git";
-      ref = "refs/tags/dupa";
-  };
   crate2nix = (import (builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/c82b46413401efa740a0b994f52e9903a4f6dcd5.tar.gz";
     sha256 = "13s8g6p0gzpa1q6mwc2fj2v451dsars67m4mwciimgfwhdlxx0bk";
@@ -123,5 +119,4 @@ let
   }).overrideAttrs (old: { buildInputs = [wrappedCrate2nix crate2nix nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
   cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
-# cargoNix.workspaceMembers."aleph-node".build
-test.dupa
+cargoNix.workspaceMembers."aleph-node".build
