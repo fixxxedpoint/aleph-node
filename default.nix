@@ -150,11 +150,12 @@ let
 
         aleph-runtime = attrs: rec {
           preBuild = ''
-            chmod +w -R .
+            echo "hej zbyszko"
+            chmod +w -R target
           '';
           buildInputs = [pkgs.git pkgs.cacert];
           CARGO = "${pkgs.cargo}/bin/cargo";
-          CARGO_HOME="$out/cargo";
+          CARGO_HOME=".cargo-home";
           # src = pkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ./.; };
           src = ./.;
           sourceRoot = "${src}/bin/runtime";
@@ -169,9 +170,9 @@ let
 
         };
 
-        aleph-node = attrs: rec {
-          preBuild = ''rm $out/cargo/config'';
-        };
+        # aleph-node = attrs: rec {
+        #   preBuild = ''rm $out/cargo/config'';
+        # };
     }
     );
   };
@@ -204,6 +205,8 @@ let
 in
 cargoNix.workspaceMembers."aleph-node".build
 # cargoNixOver.workspaceMembers."aleph-runtime".build { buildRustCrateForPkgsFunc = customBuildRustCrateForPkgs; }
+# cargoNix.workspaceMembers."aleph-runtime".build
+# cargoNix.workspaceMembers."aleph-runtime".build.override { preBuild = ''echo "hej zbyszko 2"; chmod +w -R $out''; }
 
 #   # declares a build environment where C and C++ compilers are delivered by the llvm/clang project
 #   # in this version build process should rely only on clang, without access to gcc
