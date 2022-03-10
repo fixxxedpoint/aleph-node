@@ -111,7 +111,7 @@ let
     rm $out/cargo/config
     exec ${crate2nix}/bin/crate2nix "$@"
   '';
-  crate2nixTools = nixpkgs.callPackage "${crate2nix.src}/tools.nix" { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; };
+  crate2nixTools = import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; };
   generatedCargoNix = (crate2nixTools.generatedCargoNix {
     name = "aleph-node";
     src = ./.;
