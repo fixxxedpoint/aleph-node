@@ -45,6 +45,8 @@ rec {
         export CARGO_HOME="$out/cargo"
         export HOME="$out"
 
+        crate_hashes="$out/crate-hashes.json"
+
         create2nix_options+=" -f ./${cargoToml}"
 
         set -x
