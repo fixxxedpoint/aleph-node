@@ -256,7 +256,6 @@ rec {
               [source."${parsed.url}"]
               git = "${parsed.url}"
               rev = "${parsed.rev}"
-              ${lib.optionalString (isNull (builtins.match ".*\\?rev=[0-9a-z]{40}.*" source)) ''branch = "${attrs.branch or "master"}"''}
               replace-with = "vendored-sources"
               '';
             gitSources = packagesByType."git" or [ ];
