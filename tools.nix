@@ -47,7 +47,7 @@ rec {
 
         crate_hashes="$out/crate-hashes.json"
 
-        create2nix_options+=" -f ./${cargoToml}"
+        create2nix_options=" -f ./${cargoToml}"
 
         set -x
 
@@ -55,14 +55,29 @@ rec {
           $create2nix_options \
           -o "Cargo-generated.nix" \
           -h "$crate_hashes" \
-          ${lib.escapeShellArgs additionalCargoNixArgs}
+          ${lib.escapeShellArgs additionalCargoNixArgs} || {
+          { set +x; } 2>/dev/null
+          echo "crate2nix failed." >&2
+          echo "== cargo/config (BEGIN)" >&2
+          sed 's/^/    /' $out/cargo/config >&2
+          echo ""
+          echo "== cargo/config (END)" >&2
+            echo ""
+            echo "== crate-hashes.json (BEGIN)" >&2
+          if [ -r $crate_hashes ]; then
+            sed 's/^/    /' $crate_hashes >&2
+            echo ""
+          else
+            echo "$crate_hashes missing"
+          fi
+          echo "== crate-hashes.json (END)" >&2
+          echo ""
+          echo "== ls -la (BEGIN)" >&2
+          ls -la
+          echo "== ls -la (END)" >&2
+          exit 3
+        }
         { set +x; } 2>/dev/null
-
-        if test -r "./crate-hashes.json" ; then
-          set -x
-          diff -u "./crate-hashes.json" $crate_hashes
-         { set +x; } 2>/dev/null
-        fi
 
         cp -r . $out/crate
 
