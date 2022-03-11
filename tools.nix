@@ -31,7 +31,7 @@ rec {
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
 
-      buildInputs = [ pkgs.rustc pkgs.cargo pkgs.jq crate2nix pkgs.cacert ];
+      buildInputs = [ pkgs.git pkgs.rustc pkgs.cargo pkgs.jq crate2nix pkgs.cacert ];
       preferLocalBuild = true;
 
       inherit src;
@@ -44,14 +44,11 @@ rec {
 
         export CARGO_HOME="$out/cargo"
         export HOME="$out"
+        export CARGO_NET_GIT_FETCH_WITH_CLI=true
 
         crate_hashes="$out/crate-hashes.json"
 
         create2nix_options=" -f ./${cargoToml}"
-
-        if test -r "${src}/crate2nix-sources" ; then
-          ln -s "${src}/crate2nix-sources" "$out/crate2nix-sources"
-        fi
 
         set -x
 
@@ -59,28 +56,7 @@ rec {
           $create2nix_options \
           -o "Cargo-generated.nix" \
           -h "$crate_hashes" \
-          ${lib.escapeShellArgs additionalCargoNixArgs} || {
-          { set +x; } 2>/dev/null
-          echo "crate2nix failed." >&2
-          echo "== cargo/config (BEGIN)" >&2
-          sed 's/^/    /' $out/cargo/config >&2
-          echo ""
-          echo "== cargo/config (END)" >&2
-            echo ""
-            echo "== crate-hashes.json (BEGIN)" >&2
-          if [ -r $crate_hashes ]; then
-            sed 's/^/    /' $crate_hashes >&2
-            echo ""
-          else
-            echo "$crate_hashes missing"
-          fi
-          echo "== crate-hashes.json (END)" >&2
-          echo ""
-          echo "== ls -la (BEGIN)" >&2
-          ls -la
-          echo "== ls -la (END)" >&2
-          exit 3
-        }
+          ${lib.escapeShellArgs additionalCargoNixArgs}
         { set +x; } 2>/dev/null
 
         cp -r . $out/crate
