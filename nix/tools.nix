@@ -32,7 +32,7 @@ rec {
 
           mkdir -p $CARGO_HOME
           cd $SOURCE
-          cargo metadata --locked
+          cargo metadata --locked >/dev/null
         '';
 
       cargoHomeForMetadata = cargoForMetadata crateDir;
