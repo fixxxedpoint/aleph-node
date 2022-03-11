@@ -49,6 +49,10 @@ rec {
 
         create2nix_options=" -f ./${cargoToml}"
 
+        if test -r "${src}/crate2nix-sources" ; then
+          ln -s "${src}/crate2nix-sources" "$out/crate2nix-sources"
+        fi
+
         set -x
 
         crate2nix generate \
