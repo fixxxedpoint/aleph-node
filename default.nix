@@ -111,7 +111,7 @@ let
   generatedCargoNix = (crate2nixTools.generatedCargoNix {
     name = "aleph-node";
     src = ./.;
-  }).overrideAttrs (old: { buildInputs = [crate2nix nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
+  }).overrideAttrs (old: { buildInputs = [crate2nix nixpkgs.nix-prefetch-git nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
   cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; lib = nixpkgs.lib; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
 cargoNix.workspaceMembers."aleph-node".build
