@@ -23,7 +23,6 @@ let
          (self: super: {
            inherit (rustToolchain) cargo rust-src rust-std;
            rustc = rustToolchain.rust;
-           fetchGit = args: builtins.fetchGit (args // { allRefs = true; });
          })
        ];
      };
@@ -39,7 +38,7 @@ let
   # we disable all compression algorithms and force it to use SSE 4.2 cpu instruction set
   customRocksdb = nixpkgs.rocksdb.overrideAttrs (_: {
 
-    src = nixpkgs.fetchGit {
+    src = builtins.fetchGit {
       url = "https://github.com/facebook/rocksdb.git";
       ref = "refs/tags/v${rocksDBVersion}";
     };
