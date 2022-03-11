@@ -23,6 +23,7 @@ let
          (self: super: {
            inherit (rustToolchain) cargo rust-src rust-std;
            rustc = rustToolchain.rust;
+           fetchGit = args: builtins.fetchGit (args // { allRefs = true; });
          })
        ];
      };
@@ -107,15 +108,11 @@ let
     url = "https://github.com/NixOS/nixpkgs/archive/c82b46413401efa740a0b994f52e9903a4f6dcd5.tar.gz";
     sha256 = "13s8g6p0gzpa1q6mwc2fj2v451dsars67m4mwciimgfwhdlxx0bk";
   }){}).crate2nix;
-  wrappedCrate2nix = nixpkgs.writeShellScriptBin "crate2nix" ''
-    rm $out/cargo/config
-    exec ${crate2nix}/bin/crate2nix "$@"
-  '';
   crate2nixTools = import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; };
   generatedCargoNix = (crate2nixTools.generatedCargoNix {
     name = "aleph-node";
     src = ./.;
-  }).overrideAttrs (old: { buildInputs = [wrappedCrate2nix crate2nix nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
+  });
   cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; lib = nixpkgs.lib; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
 cargoNix.workspaceMembers."aleph-node".build
