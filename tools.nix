@@ -54,6 +54,7 @@ rec {
           -o "Cargo-generated.nix" \
           -h "$crate_hashes" \
           ${lib.escapeShellArgs additionalCargoNixArgs}
+        { set +x; } 2>/dev/null
 
         if test -r "./crate-hashes.json" ; then
           set -x
