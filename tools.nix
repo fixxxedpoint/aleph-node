@@ -45,6 +45,7 @@ rec {
         export HOME="$out"
 
         cp ${vendor.cargoConfig} $out/cargo/config
+        awk -i inplace '{$1=$1};!seen[$0]++' $out/cargo/config
 
         crate_hashes="$out/crate-hashes.json"
 
