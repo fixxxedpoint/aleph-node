@@ -1,10 +1,3 @@
-#
-# Some tools that might be useful in builds.
-#
-# Part of the "public" API of crate2nix in the sense that we will try to
-# avoid breaking the API and/or mention breakages in the CHANGELOG.
-#
-
 { pkgs ? import ./nix/nixpkgs.nix { config = { }; }
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
@@ -102,19 +95,6 @@ rec {
       '';
 
     };
-
-  # Applies the default arguments from pkgs to the generated `Cargo.nix` file.
-  #
-  # name: will be part of the derivation name
-  # src: the source that is needed to build the crate, usually the crate/workspace root directory
-  # cargoToml: Path to the Cargo.toml file relative to src, "Cargo.toml" by default.
-  appliedCargoNix = { cargoToml ? "Cargo.toml", ... } @ args:
-    import (generatedCargoNix args) { inherit pkgs; };
-
-  generate =
-      generatedCargoNix;
-  generated =
-      appliedCargoNix;
 
   internal = rec {
     # Unpack sources and add a .cargo-checksum.json file to make cargo happy.
