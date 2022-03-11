@@ -28,7 +28,7 @@ rec {
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
 
-      buildInputs = [ pkgs.cargo pkgs.jq crate2nix ];
+      buildInputs = [ pkgs.rustc pkgs.cargo pkgs.jq crate2nix ];
       preferLocalBuild = true;
 
       inherit src;
