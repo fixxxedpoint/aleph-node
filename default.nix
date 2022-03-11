@@ -108,10 +108,10 @@ let
     sha256 = "13s8g6p0gzpa1q6mwc2fj2v451dsars67m4mwciimgfwhdlxx0bk";
   }){}).crate2nix;
   crate2nixTools = import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; };
-  generatedCargoNix = (crate2nixTools.generatedCargoNix {
+  generatedCargoNix = crate2nixTools.generatedCargoNix {
     name = "aleph-node";
     src = ./.;
-  }).overrideAttrs (old: { buildInputs = [crate2nix nixpkgs.nix-prefetch-git nixpkgs.rustc nixpkgs.cacert] ++ old.buildInputs; });
-  cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; lib = nixpkgs.lib; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+  };
+  cargoNix = nixpkgs.callPackage generatedCargoNix { pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
 cargoNix.workspaceMembers."aleph-node".build
