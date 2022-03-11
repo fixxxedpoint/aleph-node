@@ -56,7 +56,7 @@ rec {
           $create2nix_options \
           -o "Cargo-generated.nix" \
           -h "$crate_hashes" \
-          ${lib.escapeShellArgs additionalCargoNixArgs}
+          ${lib.escapeShellArgs additionalCargoNixArgs} \
         { set +x; } 2>/dev/null
 
         cp -r . $out/crate
