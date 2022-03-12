@@ -74,7 +74,7 @@ rec {
   internal = {
       cargoForMetadata = { crateDir ? ./., ... }:
         {
-          cargoDir = pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+          cargoDir = pkgs.runCommand "cargo-metadata" { envVariable = false; nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
             export CARGO_HOME=$out/cargo
             export HOME="$out"
             SOURCE=${crateDir}
