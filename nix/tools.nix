@@ -23,7 +23,7 @@ rec {
     }:
     let
       crateDir = dirOf (src + "/${cargoToml}");
-      cargoHomeForMetadata = internal.cargoForMetadata crateDir;
+      cargoHomeForMetadata = internal.cargoForMetadata { srcDir = crateDir; };
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
