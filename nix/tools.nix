@@ -23,7 +23,7 @@ rec {
     }:
     let
       crateDir = dirOf (src + "/${cargoToml}");
-      cargoMetadata = internal.cargoForMetadata { srcDir = crateDir; };
+      cargoMetadata = internal.cargoForMetadata { inherit crateDir; };
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
@@ -38,7 +38,7 @@ rec {
         set -e
 
         mkdir -p $out
-        cp -r ${cargoMetadata}/cargo $out/
+        cp -r ${cargoMetadata.cargoDir}/cargo $out/
 
         export CARGO="${pkgs.cargo}/bin/cargo"
         export CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -71,15 +71,17 @@ rec {
     };
 
   internal = {
-      cargoForMetadata = { srcDir ? ./., ... }:
-        pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
-          export CARGO_HOME=$out/cargo
-          export HOME="$out"
-          SOURCE=${srcDir}
+      cargoForMetadata = { crateDir ? ./., ... }:
+        {
+          cargoDir = pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+            export CARGO_HOME=$out/cargo
+            export HOME="$out"
+            SOURCE=${crateDir}
 
-          mkdir -p $CARGO_HOME
-          cd $SOURCE
-          cargo metadata --locked >/dev/null 2>/dev/null
-        '';
+            mkdir -p $CARGO_HOME
+            cd $SOURCE
+            cargo metadata --locked >/dev/null 2>/dev/null
+          '';
+        };
   };
 }
