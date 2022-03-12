@@ -22,7 +22,7 @@ rec {
     , additionalCargoNixArgs ? [ ]
     }:
     let
-      crateDir = dirOf (./. + "/Cargo.toml");
+      crateDir = dirOf (src + "/${cargoToml}");
       cargoMetadata = internal.cargoForMetadata { srcDir = crateDir; };
     in
     stdenv.mkDerivation {
