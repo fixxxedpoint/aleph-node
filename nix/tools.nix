@@ -22,7 +22,8 @@ rec {
     , additionalCargoNixArgs ? [ ]
     }:
     let
-      crateDir = dirOf (src + "/${cargoToml}");
+      crateDirTmp = dirOf (src + "/${cargoToml}");
+      crateDir = builtins.trace crateDirTmp crateDirTmp;
       cargoMetadata = internal.cargoForMetadata { inherit crateDir; };
     in
     stdenv.mkDerivation {
