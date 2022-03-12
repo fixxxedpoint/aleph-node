@@ -3,6 +3,7 @@
 , stdenv ? pkgs.stdenv
 , strictDeprecation ? true
 , crate2nix ? pkgs.crate2nix
+, srcDir ? ./.
 }:
 rec {
 
@@ -21,10 +22,6 @@ rec {
     , cargoToml ? "Cargo.toml"
     , additionalCargoNixArgs ? [ ]
     }:
-    let
-      crateDir = dirOf (src + "/${cargoToml}");
-      cargoHomeForMetadata = internal.cargoForMetadata { srcDir = crateDir; };
-    in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
 
@@ -38,7 +35,7 @@ rec {
         set -e
 
         mkdir -p $out
-        cp -r ${cargoHomeForMetadata}/cargo $out/
+        cp -r ${internal.cargoForMetadata}/cargo $out/
 
         export CARGO="${pkgs.cargo}/bin/cargo"
         export CARGO_NET_GIT_FETCH_WITH_CLI=true
@@ -71,7 +68,7 @@ rec {
     };
 
   internal = {
-      cargoForMetadata = { srcDir ? ./. }:
+      cargoForMetadata =
         pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
           export CARGO_HOME=$out/cargo
           export HOME="$out"
