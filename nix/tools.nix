@@ -23,19 +23,7 @@ rec {
     }:
     let
       crateDir = dirOf (src + "/${cargoToml}");
-
-      cargoForMetadata = srcDir:
-        pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
-          export CARGO_HOME=$out/cargo
-          export HOME="$out"
-          SOURCE=${srcDir}
-
-          mkdir -p $CARGO_HOME
-          cd $SOURCE
-          cargo metadata --locked >/dev/null 2>/dev/null
-        '';
-
-      cargoHomeForMetadata = cargoForMetadata crateDir;
+      cargoHomeForMetadata = internal.cargoForMetadata crateDir;
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
@@ -81,4 +69,17 @@ rec {
       '';
 
     };
+
+  internal = {
+      cargoForMetadata = { srcDir ? ./. }:
+        pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+          export CARGO_HOME=$out/cargo
+          export HOME="$out"
+          SOURCE=${srcDir}
+
+          mkdir -p $CARGO_HOME
+          cd $SOURCE
+          cargo metadata --locked >/dev/null 2>/dev/null
+        '';
+  };
 }
