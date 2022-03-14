@@ -38,7 +38,7 @@ let
 
   buildRecipe = pkgs.runCommand "cargo-chef prepare" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
     cd ${crateDir}
-    cargo-chef prepare --recipe-path $out
+    cargo-chef chef prepare --recipe-path $out
   '';
 
   cachedDependencies = recipeJson: pkgs.runCommand "cargo-chef cook" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
@@ -47,7 +47,7 @@ let
     mkdir -p $CARGO_HOME
     echo ${recipeJson} >$TMP/recipe.json
 
-    cargo-chef cook --recipe-path $TMP/recipe.json
+    cargo-chef chef cook --recipe-path $TMP/recipe.json
     mv $CARGO_HOME/* $out/
     rm -rf $TMP
   '';
