@@ -24,7 +24,17 @@ rec {
     let
       crateDirTmp = dirOf (src + "/${cargoToml}");
       crateDir = builtins.trace crateDirTmp crateDirTmp;
-      cargoMetadata = internal.cargoForMetadata { inherit crateDir; };
+      cargoDir = pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]/nix/store/7iccyifdsxmgd6m5h634zd4pxjlxacjz-aleph-node; } ''
+/nix/store/7fpvkjbd8zqdfrzgxn2hmm1y0cdjpw7p-aleph-node
+        export CARGO_HOME=$out/cargo
+        export HOME="$out"
+        SOURCE=${crateDir}
+
+        mkdir -p $CARGO_HOME
+        cd $SOURCE
+        cargo metadata --locked >/dev/null 2>/dev/null
+      '';
+      cargoMetadata = { inherit cargoDir; };
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
@@ -70,19 +80,4 @@ rec {
       '';
 
     };
-
-  internal = {
-      cargoForMetadata = { crateDir ? ./., ... }:
-        {
-          cargoDir = pkgs.runCommand "cargo-metadata" { envVariable = false; nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
-            export CARGO_HOME=$out/cargo
-            export HOME="$out"
-            SOURCE=${crateDir}
-
-            mkdir -p $CARGO_HOME
-            cd $SOURCE
-            cargo metadata --locked >/dev/null 2>/dev/null
-          '';
-        };
-  };
 }
