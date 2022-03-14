@@ -28,7 +28,7 @@ let
   #   cp $CARGO_HOME/bin/cargo-chef $out/bin/
   # '';
 
-  cargo-chef = (pkgs.runCommandCC.override { inherit stdenv; }) "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+  cargo-chef = (pkgs.callPackage pkgs.runCommandCC { inherit stdenv; }) "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
     export CARGO_HOME=$out/cargo
     mkdir -p $CARGO_HOME
     mkdir -p $out/bin
