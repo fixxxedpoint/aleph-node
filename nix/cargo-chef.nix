@@ -23,6 +23,8 @@ let
     TMP=$out/tmp
     export CARGO_HOME=$TMP/.cargo-home
     mkdir -p $CARGO_HOME
+    mkdir target
+    chmod -x target
 
     yes yes | cargo-chef chef cook --recipe-path ${recipeJson} || true
     mv $CARGO_HOME/* $out/
