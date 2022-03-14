@@ -12,7 +12,7 @@ let
       targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
     };
   };
-  rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ./rust-toolchain; } );
+  rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ../rust-toolchain; } );
 
   # pinned version of nix packages
   nixpkgs = import (builtins.fetchTarball {
