@@ -8,7 +8,7 @@ let
   #     cargo-chef = buildRustCrate {
   #       crateName = "cargo-chef";
   #       version = "0.1.34";
-  #       sha256 = "1l7synziccnvarsq2kk22vps720ih6chmn016bhr2bq54hblbnl1";
+  #       sha256 = "XVCCAQeh9bz3Pp0pLgKXizvF8EtagksHjwNz0U//xQs=";
   #     };
   #   in
   #   builtins.symlinkJoin { name = "cargo-chef"; paths = [ cargo-chef ]; };
@@ -16,7 +16,7 @@ let
   cargo-chef = buildRustCrate {
     crateName = "cargo-chef";
     version = "0.1.34";
-    sha256 = "1l7synziccnvarsq2kk22vps720ih6chmn016bhr2bq54hblbnl1";
+    sha256 = "XVCCAQeh9bz3Pp0pLgKXizvF8EtagksHjwNz0U//xQs=";
   };
 
   buildRecipe = pkgs.runCommand "cargo-chef prepare" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
