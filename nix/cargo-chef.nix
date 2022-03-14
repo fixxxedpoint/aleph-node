@@ -24,7 +24,7 @@ let
     cargo-chef prepare --recipe-path $out
   '';
 
-  cachedDeps = recipeJson: pkgs.runCommand "cargo-chef cook" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+  cachedDependencies = recipeJson: pkgs.runCommand "cargo-chef cook" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
     TMP=$out/tmp
     export CARGO_HOME=$TMP/.cargo-home
     mkdir -p $CARGO_HOME
@@ -36,4 +36,4 @@ let
   '';
 
 in
-cachedDeps (builtins.readFile "${buildRecipe}")
+cachedDependencies (builtins.readFile "${buildRecipe}")

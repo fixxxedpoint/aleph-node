@@ -22,18 +22,8 @@ rec {
     , additionalCargoNixArgs ? [ ]
     }:
     let
-      crateDirTmp = dirOf (src + "/${cargoToml}");
-      crateDir = builtins.trace crateDirTmp crateDirTmp;
-      cargoDir = pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
-        export CARGO_HOME=$out/cargo
-        export HOME="$out"
-        SOURCE=${crateDir}
-
-        mkdir -p $CARGO_HOME
-        cd $SOURCE
-        cargo metadata --locked >/dev/null 2>/dev/null
-      '';
-      cargoMetadata = { inherit cargoDir; };
+      crateDir = dirOf (src + "/${cargoToml}");
+      cachedDependencies = import ./nix/cargo-chef.nix { inherit pkgs crateDir; };
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
@@ -47,12 +37,12 @@ rec {
       buildPhase = ''
         set -e
 
-        mkdir -p $out
-        cp -r ${cargoMetadata.cargoDir}/cargo $out/
+        export CARGO_HOME="$out/.cargo-home"
+        mkdir -p $$CARGO_HOME
+        cp -r ${cachedDependencies}/* $CARGO_HOME/
 
         export CARGO="${pkgs.cargo}/bin/cargo"
         export CARGO_NET_GIT_FETCH_WITH_CLI=true
-        export CARGO_HOME="$out/cargo"
         export HOME="$out"
 
         crate_hashes="$out/crate-hashes.json"
