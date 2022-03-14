@@ -24,8 +24,7 @@ rec {
     let
       crateDirTmp = dirOf (src + "/${cargoToml}");
       crateDir = builtins.trace crateDirTmp crateDirTmp;
-      cargoDir = pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]/nix/store/7iccyifdsxmgd6m5h634zd4pxjlxacjz-aleph-node; } ''
-/nix/store/7fpvkjbd8zqdfrzgxn2hmm1y0cdjpw7p-aleph-node
+      cargoDir = pkgs.runCommand "cargo-metadata" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
         export CARGO_HOME=$out/cargo
         export HOME="$out"
         SOURCE=${crateDir}
