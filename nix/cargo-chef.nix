@@ -4,21 +4,50 @@
 , crateDir
 }:
 let
-  cargo-fetcher = (pkgs.runCommandCC "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+  # cargo-chef =
+  #   let
+  #     cargo-chef = buildRustCrate {
+  #       crateName = "cargo-chef";
+  #       version = "0.1.34";
+  #       sha256 = "XVCCAQeh9bz3Pp0pLgKXizvF8EtagksHjwNz0U//xQs=";
+  #     };
+  #   in
+  #   builtins.symlinkJoin { name = "cargo-chef"; paths = [ cargo-chef ]; };
+
+  # cargo-chef = buildRustCrate {
+  #   crateName = "cargo-chef";
+  #   version = "0.1.34";
+  #   sha256 = "XVCCAQeh9bz3Pp0pLgKXizvF8EtagksHjwNz0U//xQs=";
+  # };
+
+  # cargo-chef = pkgs.runCommand "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+  #   export CARGO_HOME=$out/cargo
+  #   mkdir -p $CARGO_HOME
+  #   mkdir -p $out/bin
+  #   cargo install cargo-chef --locked
+  #   cp $CARGO_HOME/bin/cargo-chef $out/bin/
+  # '';
+
+  cargo-chef = (pkgs.runCommandCC "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
     export CARGO_HOME=$out/cargo
     mkdir -p $CARGO_HOME
     mkdir -p $out/bin
-    cargo install cargo-fetcher --locked --version 0.12.1 --features=fs
-    cp $CARGO_HOME/bin/cargo-fetcher $out/bin/
+    cargo install cargo-chef --locked
+    cp $CARGO_HOME/bin/cargo-chef $out/bin/
   '').overrideAttrs (_: { inherit stdenv; });
 
-  cachedDependencies = cargoLock: pkgs.runCommand "cargo-chef cook" { nativeBuildInputs = [ cargo-fetcher pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+  buildRecipe = pkgs.runCommand "cargo-chef prepare" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+    cd ${crateDir}
+    cargo-chef chef prepare --recipe-path $out
+  '';
+
+  cachedDependencies = recipeJson: pkgs.runCommand "cargo-chef cook" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
     TMP=$out/tmp
     export CARGO_HOME=$TMP/.cargo-home
     mkdir -p $CARGO_HOME
-    echo ${cargoLock} >$TMP/Cargo.lock
+    echo ${recipeJson} >$TMP/recipe.json
 
-    cargo-fetcher --include-index --lock-file $TMP/Cargo.lock --url file:$CARGO_HOME sync
+    cargo-chef chef cook --recipe-path $TMP/recipe.json
     mv $CARGO_HOME/* $out/
     rm -rf $TMP
   '';
