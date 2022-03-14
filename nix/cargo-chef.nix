@@ -47,7 +47,7 @@ let
     mkdir -p $CARGO_HOME
     echo ${recipeJson} >$TMP/recipe.json
 
-    cargo-chef chef cook --recipe-path $TMP/recipe.json
+    yes yes | cargo-chef chef cook --recipe-path $TMP/recipe.json
     mv $CARGO_HOME/* $out/
     rm -rf $TMP
   '';
