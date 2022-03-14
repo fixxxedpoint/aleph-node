@@ -26,7 +26,7 @@ let
     mkdir target
     chmod -x target
 
-    yes yes | cargo-chef chef cook --recipe-path ${recipeJson} || true
+    yes yes | cargo-chef chef cook --check --recipe-path ${recipeJson} || true
     mv $CARGO_HOME/* $out/
     rm -rf $TMP
   '').overrideAttrs (_: { inherit stdenv; });
