@@ -13,11 +13,18 @@ let
   #   in
   #   builtins.symlinkJoin { name = "cargo-chef"; paths = [ cargo-chef ]; };
 
-  cargo-chef = buildRustCrate {
-    crateName = "cargo-chef";
-    version = "0.1.34";
-    sha256 = "XVCCAQeh9bz3Pp0pLgKXizvF8EtagksHjwNz0U//xQs=";
-  };
+  # cargo-chef = buildRustCrate {
+  #   crateName = "cargo-chef";
+  #   version = "0.1.34";
+  #   sha256 = "XVCCAQeh9bz3Pp0pLgKXizvF8EtagksHjwNz0U//xQs=";
+  # };
+  cargo-chef = pkgs.runCommand "cargo-chef" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+    export CARGO_HOME=$out/cargo
+    mkdir -p $CARGO_HOME
+    mkdir -p $out/bin
+    cargo install cargo-chef --locked
+    cp $CARGO_HOME/bin/cargo-chef $out/bin/
+  '';
 
   buildRecipe = pkgs.runCommand "cargo-chef prepare" { nativeBuildInputs = [ cargo-chef pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
     cd ${crateDir}
