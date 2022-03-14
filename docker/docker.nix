@@ -1,7 +1,7 @@
 { pkgs ? import ../nix/nixpkgs.nix {}
 }:
 let
-  alephNode = (import ../nix/aleph-node.nix {}).workspaceMembers."aleph-node";
+  alephNode = (import ../nix/aleph-node.nix {}).workspaceMembers."aleph-node".build;
   buildDependencies = pkgs.lib.unique (alephNode.completeDeps ++ alephNode.completeBuildDeps);
 in
 pkgs.dockerTools.streamLayeredImage {
