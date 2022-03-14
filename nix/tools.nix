@@ -40,6 +40,7 @@ rec {
         export CARGO_HOME="$out/.cargo-home"
         mkdir -p $CARGO_HOME
         cp -r ${cachedDependencies}/* $CARGO_HOME/
+        chmod +w -R $CARGO_HOME
 
         export CARGO="${pkgs.cargo}/bin/cargo"
         export CARGO_NET_GIT_FETCH_WITH_CLI=true
