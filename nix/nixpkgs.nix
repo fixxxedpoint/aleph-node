@@ -1,3 +1,4 @@
+{}:
 let
   # this overlay allows us to use a specified version of the rust toolchain
   rustOverlay =
