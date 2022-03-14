@@ -38,7 +38,7 @@ rec {
         set -e
 
         export CARGO_HOME="$out/.cargo-home"
-        mkdir -p $$CARGO_HOME
+        mkdir -p $CARGO_HOME
         cp -r ${cachedDependencies}/* $CARGO_HOME/
 
         export CARGO="${pkgs.cargo}/bin/cargo"
