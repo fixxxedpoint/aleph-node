@@ -69,7 +69,7 @@ let
         libp2p-noise = protobufFix;
         sc-network = protobufFix;
         aleph-runtime = attrs: rec {
-          src = ./.;
+          src = ../.;
           workspace_member = "bin/runtime";
           buildInputs = [pkgs.git pkgs.cacert];
           CARGO = "${pkgs.cargo}/bin/cargo";
@@ -85,7 +85,7 @@ let
   inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix;
   project = import (generatedCargoNix {
     name = "aleph-node";
-    src = ./.;
+    src = ../.;
   }){ pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
 project
