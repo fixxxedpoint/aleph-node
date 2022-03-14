@@ -1,4 +1,5 @@
 { pkgs ? import <nixpkgs> {}
+, stdenv ? pkgs.stdenv
 , buildRustCrate ? pkgs.buildRustCrate
 , crateDir
 }:
@@ -18,7 +19,16 @@ let
   #   version = "0.1.34";
   #   sha256 = "XVCCAQeh9bz3Pp0pLgKXizvF8EtagksHjwNz0U//xQs=";
   # };
-  cargo-chef = pkgs.runCommand "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+
+  # cargo-chef = pkgs.runCommand "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
+  #   export CARGO_HOME=$out/cargo
+  #   mkdir -p $CARGO_HOME
+  #   mkdir -p $out/bin
+  #   cargo install cargo-chef --locked
+  #   cp $CARGO_HOME/bin/cargo-chef $out/bin/
+  # '';
+
+  cargo-chef = (pkgs.runCommandCC.override { inherit stdenv; }) "cargo-chef" { nativeBuildInputs = [ pkgs.cargo pkgs.rustc pkgs.cacert ]; } ''
     export CARGO_HOME=$out/cargo
     mkdir -p $CARGO_HOME
     mkdir -p $out/bin

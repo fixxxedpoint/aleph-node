@@ -23,7 +23,7 @@ rec {
     }:
     let
       crateDir = dirOf (src + "/${cargoToml}");
-      cachedDependencies = import ./cargo-chef.nix { inherit pkgs crateDir; };
+      cachedDependencies = import ./cargo-chef.nix { inherit pkgs crateDir stdenv; };
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
