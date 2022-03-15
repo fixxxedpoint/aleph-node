@@ -10,6 +10,9 @@ let
       toPackageId = { name, version, source, ... }:
               "${name} ${version} (${source})";
 
+      toPackageIdForImportCargoLock = { name, version, source, ... }:
+              "${name}-${version}";
+
       lockFiles =
         let
           fromCrateDir =
@@ -73,7 +76,7 @@ let
           rev = lib.last splitQuestion;
         };
 
-      mkGitHash = { source, ... }@attrs:
+      mkGitHash = { toPackageIdFun ? toPackageId }: { source, ... }@attrs:
         let
           parsed = parseGitSource source;
           src = builtins.fetchGit {
@@ -86,11 +89,12 @@ let
           '';
         in
         {
-          name = toPackageId attrs;
+          name = toPackageIdFun attrs;
           value = builtins.readFile hash;
         };
 
-      extraHashes = builtins.listToAttrs (map mkGitHash unhashedGitDeps);
+      extraHashes = builtins.listToAttrs (map (mkGitHash { toPackageIdFun = toPackageId; }) unhashedGitDeps);
+      extraHashesForImportCargoLock = builtins.listToAttrs (map (mkGitHash { toPackageIdFun = toPackageIdForImportCargoLock; }) unhashedGitDeps);
 
       sourceType = { source ? null, ... } @ package:
         assert source == null || builtins.isString source;
@@ -115,7 +119,7 @@ let
       packagesWithType = builtins.filter (pkg: (sourceType pkg) != null) packages;
       packagesByType = lib.groupBy sourceType packagesWithType;
   in
-  extraHashes;
+  { inherit extraHashes extraHashesForImportCargoLock; };
 in
 rec {
 
@@ -143,7 +147,9 @@ rec {
       }) {}).rustPlatform.importCargoLock;
 
       hashes = outputHashes crateDir;
-      vendoredCargoLock = importCargoLock { lockFileContents = cargoLock; outputHashes = hashes; };
+      extraHashesForImportCargoLock = hashes.extraHashesForImportCargoLock;
+      extraHashes = hashes.extraHashes;
+      vendoredCargoLock = importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };
       vendoredCargoConfig = vendoredCargoLock + "/.cargo/config";
     in
     stdenv.mkDerivation {
@@ -185,10 +191,10 @@ rec {
 
         crate_hashes="$out/crate-hashes.json"
         if test -r "./crate-hashes.json" ; then
-          printf "$(jq -s '.[0] * ${builtins.toJSON hashes}' "./crate-hashes.json")" > "$crate_hashes"
+          printf "$(jq -s '.[0] * ${builtins.toJSON extraHashes}' "./crate-hashes.json")" > "$crate_hashes"
           chmod +w "$crate_hashes"
         else
-          printf '${builtins.toJSON hashes}' > "$crate_hashes"
+          printf '${builtins.toJSON extraHashes}' > "$crate_hashes"
         fi
 
         crate2nix_options=""
