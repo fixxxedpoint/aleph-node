@@ -5,7 +5,7 @@ let
   }) {};
 
   alephNode = (import ../nix/aleph-node.nix {}).workspaceMembers."aleph-node".build;
-  buildDependencies = nixpkgs.lib.unique (alephNode.completeDeps ++ alephNode.completeBuildDeps ++ alephNode.nativeBuildInputs ++ alephNode.buildInputs);
+  buildDependencies = nixpkgs.lib.unique (alephNode.completeDeps ++ alephNode.completeBuildDeps ++ alephNode.nativeBuildInputs ++ alephNode.buildInputs ++ alephNode.depsBuildBuild);
 in
 nixpkgs.dockerTools.buildImage {
   name = "aleph_build_image";
