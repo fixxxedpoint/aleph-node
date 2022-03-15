@@ -144,7 +144,7 @@ rec {
 
       hashes = outputHashes crateDir;
       vendoredCargoLock = importCargoLock { lockFileContents = cargoLock; outputHashes = hashes; };
-      vendoredCargoConfig = vendoredCargoLock + ".cargo/config";
+      vendoredCargoConfig = vendoredCargoLock + "/.cargo/config";
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
