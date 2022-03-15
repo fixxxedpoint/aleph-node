@@ -28,7 +28,7 @@ rec {
         sha256 = "1hnwh2w5rhxgbp6c8illcrzh85ky81pyqx9309bkgpivyzjf2nba";
       }) {}).rustPlatform.importCargoLock;
 
-      vendoredCargoLock = importCargoLock cargoLock;
+      vendoredCargoLock = importCargoLock { lockFileContents = cargoLock; };
       vendoredCargoConfig = vendoredCargoLock + ".cargo/config";
     in
     stdenv.mkDerivation {
