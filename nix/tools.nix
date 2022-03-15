@@ -160,13 +160,20 @@ rec {
 
         mkdir -p "$out/cargo"
         cp -r ${vendoredCargoConfig} $out/cargo/config
+        # chmod +w $out/cargo/config
 
-        cat > $out/cargo/config <<EOF
-        [source."https://github.com/paritytech/substrate.git#afb74de23dfe2994e7ce38c0870efb9734e966f7"]
-        git = "https://github.com/paritytech/substrate.git"
-        branch = "polkadot-v0.9.13"
-        replace-with = "vendored-sources"
-        EOF
+        # cat > $out/cargo/config <<EOF
+        # [source.crates-io]
+        # replace-with = "vendored-sources"
+
+        # [source.vendored-sources]
+        # directory = "cargo-vendor-dir"
+
+        # [source."https://github.com/paritytech/substrate.git#afb74de23dfe2994e7ce38c0870efb9734e966f7"]
+        # git = "https://github.com/paritytech/substrate.git"
+        # branch = "polkadot-v0.9.13"
+        # replace-with = "vendored-sources"
+        # EOF
 
         ln -s ${vendoredCargoLock} $out/cargo-vendor-dir
 
@@ -177,6 +184,12 @@ rec {
         export CARGO_NET_GIT_FETCH_WITH_CLI=true
 
         crate_hashes="$out/crate-hashes.json"
+        if test -r "./crate-hashes.json" ; then
+          printf "$(jq -s '.[0] * ${builtins.toJSON hashes}' "./crate-hashes.json")" > "$crate_hashes"
+          chmod +w "$crate_hashes"
+        else
+          printf '${builtins.toJSON hashes}' > "$crate_hashes"
+        fi
 
         crate2nix_options=""
         if [ -r ./${cargoToml} ]; then
