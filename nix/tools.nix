@@ -8,7 +8,7 @@ let
   outputHashes = crateDir:
     let
       toPackageId = { name, version, source, ... }:
-              "${name}-${version}";
+              "${name} ${version} (${source})";
 
       lockFiles =
         let
