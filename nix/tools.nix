@@ -171,9 +171,6 @@ rec {
         export CARGO_HOME="$out/cargo"
         export HOME="$out"
 
-        export CARGO="${pkgs.cargo}/bin/cargo"
-        export CARGO_NET_GIT_FETCH_WITH_CLI=true
-
         crate_hashes="$out/crate-hashes.json"
         if test -r "./crate-hashes.json" ; then
           printf "$(jq -s '.[0] * ${builtins.toJSON extraHashes}' "./crate-hashes.json")" > "$crate_hashes"
