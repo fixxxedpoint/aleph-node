@@ -7,11 +7,13 @@ let
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
   toolsDependencies = [ alephNodeDrv.generated.buildInputs alephNodeDrv.generated.nativeBuildInputs];
+  allBuildDeps = deps: deps ++ (builtins.concatMap (dep: dep.buildInputs ++ dep.nativeBuildInputs) deps);
   buildDependencies = nixpkgs.lib.unique (
-    alephNode.completeDeps ++
-    alephNode.completeBuildDeps ++
+    (allBuildDeps alephNode.completeDeps) ++
+    (allBuildDeps alephNode.completeBuildDeps) ++
     alephNode.nativeBuildInputs ++
     alephNode.buildInputs ++
+    [alephNode.stdenv] ++
     toolsDependencies ++
     [nixpkgs.nix_2_6]);
 in
