@@ -22,13 +22,14 @@ rec {
     , additionalCargoNixArgs ? [ ]
     }:
     let
-      crateDir = dirOf (src + "/${cargoToml}");
-      cachedDependencies = import ./cargo-chef.nix { inherit pkgs crateDir stdenv; };
+      cargoLock = builtins.readFile (src + "/Cargo.lock");
+      vendoredCargoLock = pkgs.rust.importCargoLock cargoLock;
+      vendoredCargoConfig = vendoredCargoLock + ".cargo/config";
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
 
-      buildInputs = [ cachedDependencies pkgs.cacert pkgs.git pkgs.rustc pkgs.cargo pkgs.jq crate2nix ];
+      buildInputs = [ pkgs.cacert pkgs.git pkgs.rustc pkgs.cargo pkgs.jq crate2nix ];
       preferLocalBuild = true;
 
       inherit src;
@@ -37,14 +38,14 @@ rec {
       buildPhase = ''
         set -e
 
-        export CARGO_HOME="$out/.cargo-home"
-        mkdir -p $CARGO_HOME
-        cp -r ${cachedDependencies}/* $CARGO_HOME/
-        chmod +w -R $CARGO_HOME
+        mkdir -p "$out/cargo"
+        cp -r ${vendoredCargoConfig} $out/cargo/config
+
+        export CARGO_HOME="$out/cargo"
+        export HOME="$out"
 
         export CARGO="${pkgs.cargo}/bin/cargo"
         export CARGO_NET_GIT_FETCH_WITH_CLI=true
-        export HOME="$out"
 
         crate_hashes="$out/crate-hashes.json"
 
