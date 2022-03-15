@@ -8,7 +8,7 @@ let
     export CARGO_HOME=$out/cargo
     mkdir -p $CARGO_HOME
     mkdir -p $out/bin
-    cargo install cargo-chef --locked
+    cargo install cargo-chef  --locked --version 0.1.34
     cp $CARGO_HOME/bin/cargo-chef $out/bin/
   '').overrideAttrs (_: { inherit stdenv; });
 
