@@ -1,7 +1,5 @@
-{ rocksDBVersion ? "6.29.3" }:
+{ rocksDBVersion ? "6.29.3", nixpkgs ? import ./nixpkgs.nix {} }:
 let
-  nixpkgs = import ./nixpkgs.nix {};
-
   llvm = nixpkgs.llvmPackages_11;
   env = llvm.stdenv;
   llvmVersionString = "${nixpkgs.lib.getVersion env.cc.cc}";
@@ -78,10 +76,7 @@ let
     }
     );
   };
-  crate2nix = (import (builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/c82b46413401efa740a0b994f52e9903a4f6dcd5.tar.gz";
-    sha256 = "13s8g6p0gzpa1q6mwc2fj2v451dsars67m4mwciimgfwhdlxx0bk";
-  }){}).crate2nix;
+  crate2nix = nixpkgs.crate2nix;
   inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix;
   project = import (generatedCargoNix {
     name = "aleph-node";

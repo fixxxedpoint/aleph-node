@@ -14,6 +14,11 @@ let
   };
   rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ../rust-toolchain; } );
 
+  crate2nix = (import (builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/c82b46413401efa740a0b994f52e9903a4f6dcd5.tar.gz";
+    sha256 = "13s8g6p0gzpa1q6mwc2fj2v451dsars67m4mwciimgfwhdlxx0bk";
+  }){}).crate2nix;
+
   # pinned version of nix packages
   nixpkgs = import (builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/2c162d49cd5b979eb66ff1653aecaeaa01690fcc.tar.gz";
@@ -23,6 +28,8 @@ let
          (self: super: {
            inherit (rustToolchain) cargo rust-src rust-std;
            rustc = rustToolchain.rust;
+
+           inherit crate2nix;
          })
        ];
      };
