@@ -1,4 +1,4 @@
-{ pkgs ? import ./nix/nixpkgs.nix { config = { }; }
+{ pkgs ? import ./nix/nixpkgs.nix {}
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
 , strictDeprecation ? true
@@ -28,7 +28,7 @@ rec {
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
 
-      buildInputs = [ pkgs.cacert pkgs.git pkgs.rustc pkgs.cargo pkgs.jq crate2nix ];
+      buildInputs = [ cachedDependencies pkgs.cacert pkgs.git pkgs.rustc pkgs.cargo pkgs.jq crate2nix ];
       preferLocalBuild = true;
 
       inherit src;

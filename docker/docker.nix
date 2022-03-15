@@ -4,10 +4,19 @@ let
     sha256 = "1hnwh2w5rhxgbp6c8illcrzh85ky81pyqx9309bkgpivyzjf2nba";
   }) {};
 
-  alephNode = (import ../nix/aleph-node.nix {}).workspaceMembers."aleph-node".build;
-  buildDependencies = nixpkgs.lib.unique (alephNode.completeDeps ++ alephNode.completeBuildDeps ++ alephNode.nativeBuildInputs ++ alephNode.buildInputs ++ alephNode.depsBuildBuild ++ alephNode.env ++ [nixpkgs.nix_2_6]);
+  alephNodeDrv = import ../nix/aleph-node.nix {};
+  alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
+  toolsDependencies = [ alephNodeDrv.generated.buildInputs alephNodeDrv.generated.nativeBuildInputs];
+  buildDependencies = nixpkgs.lib.unique (
+    alephNode.completeDeps ++
+    alephNode.completeBuildDeps ++
+    alephNode.nativeBuildInputs ++
+    alephNode.buildInputs ++
+    alephNode.depsBuildBuild ++
+    toolsDependencies ++
+    [nixpkgs.nix_2_6]);
 in
 nixpkgs.dockerTools.buildImage {
   name = "aleph_build_image";
-  contents = [ buildDependencies nixpkgs.bash ];
+  contents = [ buildDependencies ];
 }

@@ -78,9 +78,10 @@ let
   };
   crate2nix = nixpkgs.crate2nix;
   inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix;
-  project = import (generatedCargoNix {
+  generated = generatedCargoNix {
     name = "aleph-node";
     src = ../.;
-  }){ pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
+  };
+  project = import generated { pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
-project
+{ inherit project generated; }
