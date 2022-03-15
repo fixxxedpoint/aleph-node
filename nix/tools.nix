@@ -160,6 +160,7 @@ rec {
 
         mkdir -p "$out/cargo"
         cp -r ${vendoredCargoConfig} $out/cargo/config
+        ln -s ${vendoredCargoLock} $out/cargo-vendor-dir
 
         export CARGO_HOME="$out/cargo"
         export HOME="$out"
