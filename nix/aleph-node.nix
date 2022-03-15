@@ -71,7 +71,7 @@ let
           workspace_member = "bin/runtime";
           buildInputs = [pkgs.git pkgs.cacert];
           CARGO = "${pkgs.cargo}/bin/cargo";
-          CARGO_HOME=".cargo-home";
+          CARGO_HOME="$out/cargo";
         };
     }
     );
