@@ -65,8 +65,10 @@ let
         assert builtins.isString source;
         let
           withoutGitPlus = lib.removePrefix "git+" source;
-          splitHash = lib.splitString "#" withoutGitPlus;
-          splitQuestion = lib.concatMap (lib.splitString "?") splitHash;
+          # splitHash = lib.splitString "#" withoutGitPlus;
+          # https://github.com/paritytech/substrate.git#afb74de23dfe2994e7ce38c0870efb9734e966f7
+          # splitQuestion = lib.concatMap (lib.splitString "?") splitHash;
+          splitQuestion = lib.concatMap (lib.splitString "?") withoutGitPlus;
         in
         {
           url = builtins.head splitQuestion;
