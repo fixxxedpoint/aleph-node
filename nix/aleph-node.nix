@@ -78,7 +78,7 @@ let
             src = ../.;
             workspace_member = "bin/runtime";
             buildInputs = [pkgs.git pkgs.cacert];
-            CARGO = "${pkgs.cargo}/bin/cargo";
+            CARGO = "CARGO_HOME='$out/cargo' ${pkgs.cargo}/bin/cargo";
             CARGO_HOME="$out/cargo";
             preConfigure = ''
               mkdir -p "$out/cargo"
