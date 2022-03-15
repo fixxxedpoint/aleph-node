@@ -166,21 +166,6 @@ rec {
 
         mkdir -p "$out/cargo"
         cp -r ${vendoredCargoConfig} $out/cargo/config
-        # chmod +w $out/cargo/config
-
-        # cat > $out/cargo/config <<EOF
-        # [source.crates-io]
-        # replace-with = "vendored-sources"
-
-        # [source.vendored-sources]
-        # directory = "cargo-vendor-dir"
-
-        # [source."https://github.com/paritytech/substrate.git#afb74de23dfe2994e7ce38c0870efb9734e966f7"]
-        # git = "https://github.com/paritytech/substrate.git"
-        # branch = "polkadot-v0.9.13"
-        # replace-with = "vendored-sources"
-        # EOF
-
         ln -s ${vendoredCargoLock} $out/cargo-vendor-dir
 
         export CARGO_HOME="$out/cargo"
