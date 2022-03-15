@@ -42,6 +42,9 @@ let
     buildInputs = [ nixpkgs.git ];
   });
 
+  crate2nix = nixpkgs.crate2nix;
+  inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix vendoredCargoLock;
+
   customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
     stdenv = env;
     defaultCrateOverrides = pkgs.defaultCrateOverrides // (
@@ -66,18 +69,26 @@ let
         libp2p-rendezvous = protobufFix;
         libp2p-noise = protobufFix;
         sc-network = protobufFix;
-        aleph-runtime = attrs: rec {
-          src = ../.;
-          workspace_member = "bin/runtime";
-          buildInputs = [pkgs.git pkgs.cacert];
-          CARGO = "${pkgs.cargo}/bin/cargo";
-          CARGO_HOME="$out/cargo";
-        };
+        aleph-runtime = attrs:
+          let
+            vendoredCargo = vendoredCargoLock ../. "Cargo.toml";
+            vendoredCargoConfig = vendoredCargo + "/.cargo/config";
+          in
+          rec {
+            src = ../.;
+            workspace_member = "bin/runtime";
+            buildInputs = [pkgs.git pkgs.cacert];
+            CARGO = "${pkgs.cargo}/bin/cargo";
+            CARGO_HOME="$out/cargo";
+            preConfigure = ''
+              mkdir -p "$out/cargo"
+              cp -r ${vendoredCargoConfig} $out/cargo/config
+              ln -s ${vendoredCargo} $out/cargo-vendor-dir
+            '';
+          };
     }
     );
   };
-  crate2nix = nixpkgs.crate2nix;
-  inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix;
   generated = generatedCargoNix {
     name = "aleph-node";
     src = ../.;
