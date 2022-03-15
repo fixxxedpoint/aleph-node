@@ -13,6 +13,7 @@ let
     alephNode.nativeBuildInputs ++
     alephNode.buildInputs ++
     alephNode.depsBuildBuild ++
+    alephNode.env ++
     toolsDependencies ++
     [nixpkgs.nix_2_6]);
 in
