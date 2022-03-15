@@ -23,7 +23,7 @@ rec {
     }:
     let
       cargoLock = builtins.readFile (src + "/Cargo.lock");
-      vendoredCargoLock = pkgs.rust.importCargoLock cargoLock;
+      vendoredCargoLock = pkgs.rustPlatform.importCargoLock cargoLock;
       vendoredCargoConfig = vendoredCargoLock + ".cargo/config";
     in
     stdenv.mkDerivation {
