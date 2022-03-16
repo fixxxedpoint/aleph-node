@@ -4,7 +4,7 @@ let
 
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
-  buildDependencies = nixpkgs.runCommand "aleph-node dependencies" { exportReferencesGraph = [ "deps" alephNode.drvPath ]; } ''cp deps $out'';
+  buildDependencies = import alephNode.drvPath;
 
   nixFromDockerHub = nixpkgs.dockerTools.pullImage {
     imageName = "nixos/nix";
