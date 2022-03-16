@@ -1,4 +1,4 @@
-{ rocksDBVersion ? "6.29.3", nixpkgs ? import ./nixpkgs.nix {} }:
+{ rocksDBVersion ? "6.29.3", nixpkgs ? import ./nixpkgs.nix }:
 let
   llvm = nixpkgs.llvmPackages_11;
   env = llvm.stdenv;
