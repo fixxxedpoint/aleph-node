@@ -15,6 +15,7 @@ let
 
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
+  toolsDependencies = [ alephNodeDrv.generated.buildInputs alephNodeDrv.generated.nativeBuildInputs];
   allBuildDeps = deps: deps ++ (builtins.concatMap (dep: dep.buildInputs ++ dep.nativeBuildInputs) deps);
   buildDependencies = nixpkgs.lib.unique (
     (allBuildDeps alephNode.completeDeps) ++
@@ -23,6 +24,7 @@ let
     alephNode.buildInputs ++
     [alephNode.stdenv.cc] ++
     fetchDependencies ++
+    toolsDependencies ++
     [nixpkgs.bash]);
 in
 nixpkgs.dockerTools.buildImage {
