@@ -13,9 +13,9 @@ let
     (allBuildDeps alephNode.completeBuildDeps) ++
     alephNode.nativeBuildInputs ++
     alephNode.buildInputs ++
-    [alephNode.stdenv] ++
+    [alephNode.stdenv.cc] ++
     toolsDependencies ++
-    [nixpkgs.nix_2_6]);
+    [nixpkgs.nix_2_6 nixpkgs.bash]);
 in
 nixpkgs.dockerTools.buildImage {
   name = "aleph_build_image";
