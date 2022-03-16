@@ -31,6 +31,6 @@ nixpkgs.dockerTools.buildImage {
   name = "aleph_build_image";
   contents = [buildDependencies];
   fromImage = nixFromDockerHub;
-  fromImageName = "nixos/nix";
+  fromImageName = "nix";
   fromImageTag = "2.6.0";
 }
