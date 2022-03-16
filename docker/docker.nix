@@ -20,4 +20,9 @@ in
 nixpkgs.dockerTools.buildImage {
   name = "aleph_build_image";
   contents = [ buildDependencies ];
+  config = {
+    Env = [
+      "USER=nobody"
+    ];
+  };
 }
