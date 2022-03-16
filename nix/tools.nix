@@ -46,7 +46,7 @@ let
 
       hashesFiles =
         builtins.map
-          (cargoLock: "${dirOf cargoLock}/crate-hashes.json")
+          (cargoLock: (dirOf cargoLock) + "/crate-hashes.json")
           lockFiles;
 
       hashes =
