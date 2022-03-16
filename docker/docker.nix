@@ -4,6 +4,14 @@ let
     sha256 = "1hnwh2w5rhxgbp6c8illcrzh85ky81pyqx9309bkgpivyzjf2nba";
   }) {};
 
+  nixFromDockerHub = nixpkgs.dockerTools.pullImage {
+    imageName = "nixos/nix";
+    imageDigest = "sha256:85299d86263a3059cf19f419f9d286cc9f06d3c13146a8ebbb21b3437f598357";
+    sha256 = "19fw0n3wmddahzr20mhdqv6jkjn1kanh6n2mrr08ai53dr8ph5n7";
+    finalImageTag = "2.6.0";
+    finalImageName = "nix";
+  };
+
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
   toolsDependencies = [ alephNodeDrv.generated.buildInputs alephNodeDrv.generated.nativeBuildInputs];
@@ -15,14 +23,10 @@ let
     alephNode.buildInputs ++
     [alephNode.stdenv.cc] ++
     toolsDependencies ++
-    [nixpkgs.nix_2_6 nixpkgs.bash]);
+    [nixpkgs.bash]);
 in
 nixpkgs.dockerTools.buildImage {
   name = "aleph_build_image";
-  contents = [ buildDependencies ];
-  config = {
-    Env = [
-      "USER=nobody"
-    ];
-  };
+  contents = [buildDependencies];
+  fromImage = nixFromDockerHub;
 }
