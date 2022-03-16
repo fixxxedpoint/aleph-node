@@ -74,7 +74,8 @@ let
             vendoredCargo = vendoredCargoLock ../. "Cargo.toml";
             vendoredCargoConfig = vendoredCargo + "/.cargo/config";
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
-              CARGO_HOME="$out/cargo" ${pkgs.cargo}/bin/cargo
+               export CARGO_HOME="$out/cargo"
+               exec ${pkgs.cargo}/bin/cargo "$@"
             '';
           in
           rec {
@@ -87,6 +88,7 @@ let
               mkdir -p "$out/cargo"
               cp -r ${vendoredCargoConfig} $out/cargo/config
               ln -s ${vendoredCargo} $out/cargo-vendor-dir
+              cp ${vendoredCargo}/Cargo.lock $out/Cargo.lock
             '';
           };
     }
