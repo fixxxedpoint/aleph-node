@@ -90,6 +90,9 @@ let
               ln -s ${vendoredCargo} $out/cargo-vendor-dir
               cp ${vendoredCargo}/Cargo.lock $out/Cargo.lock
             '';
+            postBuild = ''
+              rm -rf $out
+            '';
           };
     }
     );
