@@ -76,7 +76,7 @@ let
           rev = lib.last splitQuestion;
         };
 
-      mkGitHash = { toPackageIdFun ? toPackageId }: { source, ... }@attrs:
+      mkGitHash = toPackageIdFun: { source, ... }@attrs:
         let
           parsed = parseGitSource source;
           src = builtins.fetchGit {
@@ -93,8 +93,8 @@ let
           value = builtins.readFile hash;
         };
 
-      extraHashes = builtins.listToAttrs (map (mkGitHash { toPackageIdFun = toPackageId; }) unhashedGitDeps);
-      extraHashesForImportCargoLock = builtins.listToAttrs (map (mkGitHash { toPackageIdFun = toPackageIdForImportCargoLock; }) unhashedGitDeps);
+      extraHashes = builtins.listToAttrs (map (mkGitHash toPackageId) unhashedGitDeps);
+      extraHashesForImportCargoLock = builtins.listToAttrs (map (mkGitHash toPackageIdForImportCargoLock) unhashedGitDeps);
 
       sourceType = { source ? null, ... } @ package:
         assert source == null || builtins.isString source;
