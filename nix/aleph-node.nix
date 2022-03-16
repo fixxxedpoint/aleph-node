@@ -73,12 +73,15 @@ let
           let
             vendoredCargo = vendoredCargoLock ../. "Cargo.toml";
             vendoredCargoConfig = vendoredCargo + "/.cargo/config";
+            wrappedCargo = pkgs.writeShellScriptBin "hello" ''
+              CARGO_HOME="$out/cargo" ${pkgs.cargo}/bin/cargo
+            '';
           in
           rec {
             src = ../.;
             workspace_member = "bin/runtime";
             buildInputs = [pkgs.git pkgs.cacert];
-            CARGO = "CARGO_HOME='$out/cargo' ${pkgs.cargo}/bin/cargo";
+            CARGO = "${wrappedCargo}";
             CARGO_HOME="$out/cargo";
             preConfigure = ''
               mkdir -p "$out/cargo"
