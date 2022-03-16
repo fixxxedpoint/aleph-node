@@ -3,9 +3,6 @@ let
   llvm = nixpkgs.llvmPackages_11;
   env = llvm.stdenv;
   llvmVersionString = "${nixpkgs.lib.getVersion env.cc.cc}";
-  buildRustCrate = nixpkgs.buildRustCrate.override {
-    stdenv = env;
-  };
 
   # we use a newer version of rocksdb than the one provided by nixpkgs
   # we disable all compression algorithms and force it to use SSE 4.2 cpu instruction set
