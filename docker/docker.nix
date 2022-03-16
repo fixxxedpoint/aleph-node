@@ -8,7 +8,7 @@ let
   nixFromDockerHub = nixpkgs.dockerTools.pullImage {
     imageName = "nixos/nix";
     imageDigest = "sha256:f0c68f870c655d8d96658ca762a0704a30704de22d16b4956e762a2ddfbccb09";
-    sha256 = "sha256-yHjUZkw/QwZ/L0nMWg19qSqJCFwo40LjOOs5+eKkNgM=";
+    sha256 = "sha256-pje9GziBsB28BDzhNSnrphN6xzxxsEnP2YDp7zAED8o=";
     finalImageTag = "2.6.0";
     finalImageName = "nixos/nix";
   };
