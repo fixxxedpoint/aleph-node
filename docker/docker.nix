@@ -10,7 +10,7 @@ let
     imageDigest = "sha256:f0c68f870c655d8d96658ca762a0704a30704de22d16b4956e762a2ddfbccb09";
     sha256 = "sha256-yHjUZkw/QwZ/L0nMWg19qSqJCFwo40LjOOs5+eKkNgM=";
     finalImageTag = "2.6.0";
-    finalImageName = "nix";
+    finalImageName = "nixos/nix";
   };
 
   alephNodeDrv = import ../nix/aleph-node.nix {};
@@ -31,6 +31,6 @@ nixpkgs.dockerTools.buildImage {
   name = "aleph_build_image";
   contents = [buildDependencies];
   fromImage = nixFromDockerHub;
-  fromImageName = "nix";
+  fromImageName = "nixos/nix";
   fromImageTag = "2.6.0";
 }
