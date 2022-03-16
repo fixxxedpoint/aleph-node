@@ -69,6 +69,7 @@ let
         libp2p-rendezvous = protobufFix;
         libp2p-noise = protobufFix;
         sc-network = protobufFix;
+        prost-build = protobufFix;
         aleph-runtime = attrs:
           let
             vendoredCargo = vendoredCargoLock ../. "Cargo.toml";
