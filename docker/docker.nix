@@ -9,7 +9,7 @@ let
     mkdir -p $out
     tar cfa $out/aleph-node.src.tar.gz ${alephNodeDrv.src}
   '';
-  dockerEntrypointScript = nixpkgs.writeScriptBin "docker-entrypoint.sh" (builtins.readFile ./docker_entrypoint.sh);
+  dockerEntrypointScript = nixpkgs.writeScriptBin "docker_entrypoint.sh" (builtins.readFile ./docker_entrypoint.sh);
 
   alephNodeImage = nixpkgs.dockerTools.buildImage {
     name = "aleph-node";
@@ -17,9 +17,9 @@ let
     contents = [alephNode alephNodeSrc dockerEntrypointScript mainNixpkgs.bash mainNixpkgs.coreutils mainNixpkgs.cacert];
     config = {
       Env = [
-        "PATH=${alephNode}/bin:${mainNixpkgs.bash}/bin:${mainNixpkgs.coreutils}/bin"
+        "PATH=${alephNode}/bin:${dockerEntrypointScript}/bin:${mainNixpkgs.bash}/bin:${mainNixpkgs.coreutils}/bin"
       ];
-      Entrypoint = "${dockerEntrypointScript}/bin/docker-entrypoint.sh";
+      Entrypoint = "${dockerEntrypointScript}/bin/docker_entrypoint.sh";
       ExposedPorts = {
         "30333" = {};
         "9933" = {};
