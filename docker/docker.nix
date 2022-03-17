@@ -9,7 +9,7 @@ let
     mkdir -p $out
     tar cfa $out/aleph-node.src.tar.gz ${alephNodeDrv.src}
   '';
-  dockerEntrypointScript = nixpkgs.writeScriptBin "docker_entrypoint.sh" (builtins.readFile ./docker_entrypoint.sh).overrideAttrs(old: {
+  dockerEntrypointScript = (nixpkgs.writeScriptBin "docker_entrypoint.sh" (builtins.readFile ./docker_entrypoint.sh)).overrideAttrs(old: {
     buildCommand = "${old.buildCommand}\n patchShebangs $out";
   });
 
