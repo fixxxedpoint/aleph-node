@@ -106,9 +106,8 @@ let
             '';
             postBuild = ''
               # we need to clean after ourselves
-              rm -rf $out/cargo
-              rm -rf $out/cargo-vendor-dir
-              rm $out/Cargo.lock
+              # buildRustCrate derivation will populate it with necessary artifacts
+              rm -rf $out
             '';
           };
     }
