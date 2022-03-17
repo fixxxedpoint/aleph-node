@@ -1,8 +1,7 @@
 # defines a derivation that builds a minimal docker image containing aleph-node and its src folder
 let
-  versions = import ../nix/versions.nix;
-  nixpkgs = versions.dockerNixpkgs;
-  mainNixpkgs = versions.mainNixpkgs;
+  nixpkgs = import ../nix/nixpkgs;
+  nixpkgsForDocker = (import ../nix/versions.nix).dockerNixpkgs;
 
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
@@ -19,13 +18,13 @@ let
     '';
   });
 
-  alephNodeImage = nixpkgs.dockerTools.buildImage {
+  alephNodeImage = nixpkgsForDocker.dockerTools.buildImage {
     name = "aleph-node";
     created = "now";
-    contents = [alephNode alephNodeSrc dockerEntrypointScript mainNixpkgs.bash mainNixpkgs.coreutils mainNixpkgs.cacert];
+    contents = [alephNode alephNodeSrc dockerEntrypointScript nixpkgs.bash nixpkgs.coreutils nixpkgs.cacert];
     config = {
       Env = [
-        "PATH=${alephNode}/bin:${dockerEntrypointScript}/bin:${mainNixpkgs.bash}/bin:${mainNixpkgs.coreutils}/bin"
+        "PATH=${alephNode}/bin:${dockerEntrypointScript}/bin:${nixpkgs.bash}/bin:${nixpkgs.coreutils}/bin"
       ];
       Entrypoint = "${dockerEntrypointScript}/bin/docker_entrypoint.sh";
       ExposedPorts = {
