@@ -1,6 +1,6 @@
 # defines a derivation that builds a minimal docker image containing aleph-node and its src folder
 let
-  nixpkgs = import ../nix/nixpkgs;
+  nixpkgs = import ../nix/nixpkgs.nix;
   nixpkgsForDocker = (import ../nix/versions.nix).dockerNixpkgs;
 
   alephNodeDrv = import ../nix/aleph-node.nix {};
