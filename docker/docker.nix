@@ -17,7 +17,7 @@ let
   alephBuildImage = nixpkgs.dockerTools.buildImage {
     name = "aleph_build_image";
     contents = [alephNodeSrc];
-    runAsRoot = ''
+    extraCommands = ''
       nix-build "${alephNodeSrc}"
     '';
     fromImage = nixFromDockerHub;
@@ -27,11 +27,20 @@ let
 
   alephNodeImage = nixpkgs.dockerTools.buildImage {
     name = "aleph-node";
-    contents = [alephNode "${alephNodeSrc}/docker/docker_entrypoint.sh"];
-    runAsRoot = ''mkdir -p /node'';
+    contents = [alephNode "${alephNodeSrc}/docker/docker_entrypoint.sh" nixpkgs.bash];
+    extraCommands = ''
+      mkdir -p /node
+      cp "${alephNodeSrc}/docker/docker_entrypoint.sh" /node
+      chmod +x /node/docker_entrypoint.sh
+    '';
     config = {
       WorkingDir = "/node";
       Entrypoint = "./docker_entrypoint.sh";
+      ExposedPorts = {
+        "30333" = {};
+        "9933" = {};
+        "9944" = {};
+      };
     };
   };
 in
