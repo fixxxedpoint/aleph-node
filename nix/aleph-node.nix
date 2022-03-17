@@ -48,6 +48,7 @@ let
     in
     ! (type == "directory" && baseName == "target");
 
+  # removes `target` directory from our build derivation
   src = nixpkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ../.; };
 
   customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
