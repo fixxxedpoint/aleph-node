@@ -1,3 +1,4 @@
+# declares all pinned versions of packages we are using during the build
 rec {
   fetchImportCargoLock = builtins.fetchTarball {
     url = "https://github.com/NixOS/nixpkgs/archive/be872a7453a176df625c12190b8a6c10f6b21647.tar.gz";

@@ -54,6 +54,7 @@ let
     stdenv = env;
     defaultCrateOverrides = pkgs.defaultCrateOverrides // (
       let protobufFix = attrs: {
+            # provides env variables necessary to use protobuf during compilation
             buildInputs = [ pkgs.protobuf ];
             PROTOC="${pkgs.protobuf}/bin/protoc";
           };
@@ -61,6 +62,7 @@ let
         librocksdb-sys = attrs: {
           buildInputs = [ customRocksdb ];
           ROCKSDB_LIB_DIR="${customRocksdb}/lib";
+          # forces librocksdb-sys to statically compile with our customRocksdb
           ROCKSDB_STATIC=1;
           LIBCLANG_PATH="${llvm.libclang.lib}/lib";
         };
@@ -76,8 +78,10 @@ let
         sc-network = protobufFix;
         prost-build = protobufFix;
         aleph-runtime = attrs:
+          # this is a bit tricky - aleph-runtime's build.rs calls Cargo, so we need to provide it a populated
+          # CARGO_HOME, otherwise it tries to download them (doesn't work with sandboxed nix-build)
           let
-            vendoredCargo = vendoredCargoLock ../. "Cargo.toml";
+            vendoredCargo = vendoredCargoLock "${src}" "Cargo.toml";
             vendoredCargoConfig = vendoredCargo + "/.cargo/config";
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
                export CARGO_HOME="$out/cargo"
@@ -86,18 +90,24 @@ let
           in
           rec {
             inherit src;
+            # otherwise it has no access to other dependencies in our workspace
             workspace_member = "bin/runtime";
             buildInputs = [pkgs.git pkgs.cacert];
             CARGO = "${wrappedCargo}/bin/cargo";
             CARGO_HOME="$out/cargo";
+            # build.rs is called during `configure` phase, so we need to setup during `preConfigure`
             preConfigure = ''
+              # populates vendored CARGO_HOME
               mkdir -p "$out/cargo"
               cp -r ${vendoredCargoConfig} $out/cargo/config
               ln -s ${vendoredCargo} $out/cargo-vendor-dir
               cp ${vendoredCargo}/Cargo.lock $out/Cargo.lock
             '';
             postBuild = ''
-              rm -rf $out
+              # we need to clean after ourselves
+              rm -rf $out/cargo
+              rm -rf $out/cargo-vendor-dir
+              rm $out/Cargo.lock
             '';
           };
     }
