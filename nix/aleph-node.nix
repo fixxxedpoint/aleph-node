@@ -42,6 +42,14 @@ let
   crate2nix = nixpkgs.crate2nix;
   inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix vendoredCargoLock;
 
+  sourceFilter = name: type:
+    let
+      baseName = builtins.baseNameOf (builtins.toString name);
+    in
+    ! (type == "directory" && baseName == "target");
+
+  src = nixpkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ../.; };
+
   customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
     stdenv = env;
     defaultCrateOverrides = pkgs.defaultCrateOverrides // (
@@ -77,7 +85,7 @@ let
             '';
           in
           rec {
-            src = ../.;
+            inherit src;
             workspace_member = "bin/runtime";
             buildInputs = [pkgs.git pkgs.cacert];
             CARGO = "${wrappedCargo}/bin/cargo";
@@ -96,17 +104,10 @@ let
     );
   };
 
-  sourceFilter = name: type:
-    let
-      baseName = builtins.baseNameOf (builtins.toString name);
-    in
-    ! (type == "directory" && baseName == "target");
-
-  src = nixpkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ../.; };
   generated = generatedCargoNix {
     name = "aleph-node";
     inherit src;
   };
   project = import generated { pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
-{ inherit project generated src; }
+{ inherit project src; }

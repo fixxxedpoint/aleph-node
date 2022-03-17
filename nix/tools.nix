@@ -144,7 +144,7 @@ rec {
       importCargoLock = import ./importCargoLock.nix;
 
       hashes = outputHashes crateDir;
-      extraHashesForImportCargoLock = hashes.extraHashesForImportCargoLock;
+      extraHashesForImportCargoLock = builtins.trace hashes.extraHashesForImportCargoLock hashes.extraHashesForImportCargoLock;
       extraHashes = hashes.extraHashes;
       vendoredCargoLock = importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };
       vendoredCargoConfig = vendoredCargoLock + "/.cargo/config";
