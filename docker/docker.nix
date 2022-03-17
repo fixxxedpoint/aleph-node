@@ -6,7 +6,8 @@ let
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
   alephNodeSrc = nixpkgs.runCommand "aleph-node.src" {} ''
-    tar cfa aleph-node.src.tar.gz ${alephNodeDrv.src}
+    mkdir -p $out
+    tar cfa $out/aleph-node.src.tar.gz ${alephNodeDrv.src}
   '';
   dockerEntrypointScript = nixpkgs.writeScriptBin "docker-entrypoint.sh" (builtins.readFile ./docker_entrypoint.sh);
 
