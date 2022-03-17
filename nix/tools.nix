@@ -18,24 +18,7 @@ let
       toPackageIdForImportCargoLock = { name, version, source, ... }:
               "${name}-${version}";
 
-      lockFiles =
-        let
-          fromCrateDir =
-            if builtins.pathExists (crateDir + "/Cargo.lock")
-            then [ (crateDir + "/Cargo.lock") ]
-            else [ ];
-          fromSources =
-            if builtins.pathExists (crateDir + "/crate2nix-sources")
-            then
-              let
-                subdirsTypes = builtins.readDir (crateDir + "/crate2nix-sources");
-                subdirs = builtins.attrNames subdirsTypes;
-                toLockFile = subdir: (crateDir + "/crate2nix-sources/${subdir}/Cargo.lock");
-              in
-              builtins.map toLockFile subdirs
-            else [ ];
-        in
-        fromCrateDir ++ fromSources;
+      lockFiles = builtins.filter builtins.pathExists [ (crateDir + "/Cargo.lock") ];
 
       locked =
         let
@@ -175,12 +158,7 @@ rec {
 
         # we calculate hashes of all of the dependencies
         crate_hashes="$out/crate-hashes.json"
-        if test -r "./crate-hashes.json" ; then
-          printf "$(jq -s '.[0] * ${builtins.toJSON extraHashes}' "./crate-hashes.json")" > "$crate_hashes"
-          chmod +w "$crate_hashes"
-        else
-          printf '${builtins.toJSON extraHashes}' > "$crate_hashes"
-        fi
+        printf '${builtins.toJSON extraHashes}' > "$crate_hashes"
 
         crate2nix_options=""
         if [ -r ./${cargoToml} ]; then
