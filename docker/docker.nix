@@ -28,7 +28,7 @@ let
 
   alephNodeImage = nixpkgs.dockerTools.buildImage {
     name = "aleph-node";
-    contents = [alephNode "${alephNodeSrc}/docker/docker_entrypoint.sh" nixpkgs.bash nixpkgs.coreutils];
+    contents = [alephNode alephNodeSrc nixpkgs.bash nixpkgs.coreutils];
     extraCommands = ''
       mkdir -p /node
       cp "${alephNodeSrc}/docker/docker_entrypoint.sh" /node
