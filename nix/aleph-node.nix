@@ -95,10 +95,18 @@ let
     }
     );
   };
+
+  sourceFilter = name: type:
+    let
+      baseName = builtins.baseNameOf (builtins.toString name);
+    in
+    ! (type == "directory" && baseName == "target");
+
+  src = nixpkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ../.; };
   generated = generatedCargoNix {
     name = "aleph-node";
-    src = ../.;
+    inherit src;
   };
   project = import generated { pkgs = nixpkgs; buildRustCrateForPkgs = customBuildRustCrateForPkgs; };
 in
-{ inherit project generated; }
+{ inherit project generated src; }
