@@ -31,6 +31,7 @@ let
     contents = [alephNode alephNodeSrc nixpkgs.bash nixpkgs.coreutils];
     extraCommands = ''
       mkdir -p /node
+      chmod +w /node
       cp "${alephNodeSrc}/docker/docker_entrypoint.sh" /node
       chmod +x /node/docker_entrypoint.sh
     '';
