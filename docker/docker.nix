@@ -46,5 +46,5 @@ let
   };
 in
 {
-  inherit alephNodeImage alephBuilImage;
+  inherit alephNodeImage alephBuildImage;
 }
