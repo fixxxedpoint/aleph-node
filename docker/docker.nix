@@ -1,6 +1,7 @@
 let
   versions = import ../nix/versions.nix;
   nixpkgs = versions.dockerNixpkgs;
+  mainNixpkgs = versions.mainNixpkgs;
   nixFromDockerHub = nixpkgs.dockerTools.pullImage {
 
     imageName = "nixos/nix";
@@ -29,7 +30,7 @@ let
 
   alephNodeImage = nixpkgs.dockerTools.buildImage {
     name = "aleph-node";
-    contents = [alephNode alephNodeSrc dockerEntrypointScript nixpkgs.bash nixpkgs.coreutils];
+    contents = [alephNode dockerEntrypointScript mainNixpkgs.bash mainNixpkgs.coreutils mainNixpkgs.cacert];
     config = {
       Env = [
         "PATH=${alephNode}/bin"
