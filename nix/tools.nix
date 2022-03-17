@@ -61,7 +61,7 @@ let
           rev = lib.last splitQuestion;
         };
 
-      mkGitHash = toPackageIdFun: { source, ... }@attrs:
+      mkGitHash = toPackageIdFun: { source, name, ... }@attrs:
         let
           parsed = parseGitSource source;
           src = builtins.fetchGit {
@@ -69,7 +69,7 @@ let
             inherit (parsed) url rev;
             allRefs = true;
           };
-          hash = pkgs.runCommand "hash-of-${attrs.name}" { nativeBuildInputs = [ pkgs.nix ]; } ''
+          hash = pkgs.runCommand "hash-of-${name}" { nativeBuildInputs = [ pkgs.nix ]; } ''
             echo -n "$(nix-hash --type sha256 ${src})" > $out
           '';
         in
