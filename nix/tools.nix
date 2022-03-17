@@ -161,11 +161,11 @@ rec {
       buildPhase = ''
         set -e
 
-        mkdir -p "$out/cargo"
-        cp -r ${vendoredCargoConfig} $out/cargo/config
-        ln -s ${vendoredCargoLock} $out/cargo-vendor-dir
-
         export CARGO_HOME="$out/cargo"
+        mkdir -p $CARGO_HOME
+        cp -r ${vendoredCargoConfig} $CARGO_HOME/config
+        cp ${vendoredCargoLock}/Cargo.lock $out/Cargo.lock
+        ln -s ${vendoredCargoLock} $out/cargo-vendor-dir
         export HOME="$out"
 
         crate_hashes="$out/crate-hashes.json"
