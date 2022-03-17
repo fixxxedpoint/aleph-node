@@ -10,7 +10,10 @@ let
     tar cfa $out/aleph-node.src.tar.gz ${alephNodeDrv.src}
   '';
   dockerEntrypointScript = (nixpkgs.writeScriptBin "docker_entrypoint.sh" (builtins.readFile ./docker_entrypoint.sh)).overrideAttrs(old: {
-    buildCommand = "${old.buildCommand}\n patchShebangs $out";
+    buildCommand = ''
+      ${old.buildCommand}
+      patchShebangs $out
+    '';
   });
 
   alephNodeImage = nixpkgs.dockerTools.buildImage {
