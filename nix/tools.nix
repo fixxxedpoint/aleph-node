@@ -147,7 +147,7 @@ rec {
       importCargoLock = import ./importCargoLock.nix;
 
       hashes = outputHashes crateDir;
-      extraHashesForImportCargoLock = builtins.trace hashes.extraHashesForImportCargoLock hashes.extraHashesForImportCargoLock;
+      extraHashesForImportCargoLock = hashes.extraHashesForImportCargoLock;
       extraHashes = hashes.extraHashes;
       # this downloads all of our build dependencies (rust) and stores them locally in /nix/store
       vendoredCargoLock = importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };
