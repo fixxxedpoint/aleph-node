@@ -12,13 +12,14 @@ let
 
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
-  alephNodeSrc = alephNode.src;
+  alephNodeSrc = ../.;
 
   alephBuildImage = nixpkgs.dockerTools.buildImage {
     name = "aleph_build_image";
     contents = [alephNodeSrc];
     extraCommands = ''
-      nix-build "${alephNodeSrc}"
+      cd ${alephNodeSrc}
+      nix-build
     '';
     fromImage = nixFromDockerHub;
     fromImageName = "nixos/nix";
@@ -27,7 +28,7 @@ let
 
   alephNodeImage = nixpkgs.dockerTools.buildImage {
     name = "aleph-node";
-    contents = [alephNode "${alephNodeSrc}/docker/docker_entrypoint.sh" nixpkgs.bash];
+    contents = [alephNode "${alephNodeSrc}/docker/docker_entrypoint.sh" nixpkgs.bash nixpkgs.coreutils];
     extraCommands = ''
       mkdir -p /node
       cp "${alephNodeSrc}/docker/docker_entrypoint.sh" /node
