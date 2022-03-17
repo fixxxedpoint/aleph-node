@@ -33,7 +33,7 @@ let
     contents = [alephNode dockerEntrypointScript mainNixpkgs.bash mainNixpkgs.coreutils mainNixpkgs.cacert];
     config = {
       Env = [
-        "PATH=${alephNode}/bin"
+        "PATH=${alephNode}/bin:${mainNixpkgs.bash}/bin:${mainNixpkgs.coreutils}/bin"
       ];
       Entrypoint = "${dockerEntrypointScript}/bin/docker-entrypoint.sh";
       ExposedPorts = {
