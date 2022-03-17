@@ -13,6 +13,7 @@ let
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
   alephNodeSrc = ../.;
+  dockerEntrypointScript = ./docker_entrypoint.sh;
 
   alephBuildImage = nixpkgs.dockerTools.buildImage {
     name = "aleph_build_image";
@@ -28,16 +29,13 @@ let
 
   alephNodeImage = nixpkgs.dockerTools.buildImage {
     name = "aleph-node";
-    contents = [alephNode alephNodeSrc nixpkgs.bash nixpkgs.coreutils];
-    extraCommands = ''
-      mkdir -p /node
-      chmod +w /node
-      cp "${alephNodeSrc}/docker/docker_entrypoint.sh" /node
-      chmod +x /node/docker_entrypoint.sh
-    '';
+    contents = [alephNode alephNodeSrc dockerEntrypointScript nixpkgs.bash nixpkgs.coreutils];
     config = {
       WorkingDir = "/node";
-      Entrypoint = "./docker_entrypoint.sh";
+      Env = [
+        "PATH=${alephNode}/bin"
+      ];
+      Entrypoint = "${dockerEntrypointScript}";
       ExposedPorts = {
         "30333" = {};
         "9933" = {};
