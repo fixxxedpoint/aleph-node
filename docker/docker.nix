@@ -18,8 +18,9 @@ let
 
   alephBuildImage = nixpkgs.dockerTools.buildImage {
     name = "aleph_build_image";
-    contents = [alephNodeSrc];
+    contents = [alephNodeSrc mainNixpkgs.patchelf];
     extraCommands = ''
+      nix-collect-garbage
       cd ${alephNodeSrc}
       nix-build
     '';
@@ -44,4 +45,6 @@ let
     };
   };
 in
-alephNodeImage
+{
+  inherit alephNodeImage alephBuilImage;
+}
