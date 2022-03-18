@@ -14,6 +14,7 @@ let
   # otherwise `nix-build` copies everything, including the target directory
   src = gitignoreSource ../.;
 
+  # we need this to generate nix-based build plan
   crate2nix = nixpkgs.crate2nix;
   inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix vendoredCargoLock;
 
@@ -21,13 +22,13 @@ let
   customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
     stdenv = env;
     defaultCrateOverrides = pkgs.defaultCrateOverrides // (
-      let protobufFix = attrs: {
+      let protobufFix = _: {
             # provides env variables necessary to use protobuf during compilation
             buildInputs = [ pkgs.protobuf ];
             PROTOC="${pkgs.protobuf}/bin/protoc";
           };
       in rec {
-        librocksdb-sys = attrs: {
+        librocksdb-sys = _: {
           buildInputs = [ customRocksdb ];
           LIBCLANG_PATH="${llvm.libclang.lib}/lib";
           ROCKSDB_LIB_DIR="${customRocksdb}/lib";
@@ -45,11 +46,11 @@ let
         libp2p-noise = protobufFix;
         sc-network = protobufFix;
         prost-build = protobufFix;
-        aleph-runtime = attrs:
+        aleph-runtime = _:
           # this is a bit tricky - aleph-runtime's build.rs calls Cargo, so we need to provide it a populated
           # CARGO_HOME, otherwise it tries to download crates  (it doesn't work with sandboxed nix-build)
           let
-            vendoredCargo = vendoredCargoLock "${src}" "Cargo.toml";
+            vendoredCargo = vendoredCargoLock "${src}" "Cargo.lock";
             CARGO_HOME="$out/.cargo";
             # this way Cargo called by build.rs can see our vendored CARGO_HOME
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
