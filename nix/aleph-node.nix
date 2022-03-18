@@ -85,7 +85,7 @@ let
             vendoredCargo = vendoredCargoLock "${src}" "Cargo.toml";
             vendoredCargoConfig = vendoredCargo + "/.cargo/config";
             CARGO_HOME_BASE="$out/.cargo-home";
-            CARGO_HOME="$CARGO_HOME_BASE/cargo";
+            CARGO_HOME="${CARGO_HOME_BASE}/cargo";
             # this way Cargo called by build.rs can see our vendored CARGO_HOME
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
                export CARGO_HOME="$out/cargo"
