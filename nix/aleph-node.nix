@@ -102,6 +102,7 @@ let
               mkdir -p $out
               ln -s ${vendoredCargo}/.cargo ${CARGO_HOME}
               ln -s ${vendoredCargo} $out/cargo-vendor-dir
+              ln -s ${vendoredCargo}/Cargo.lock $out/Cargo.lock
             '';
             postBuild = ''
               # we need to clean after ourselves

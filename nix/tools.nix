@@ -97,8 +97,7 @@ rec {
       extraHashesForImportCargoLock = hashes.extraHashesForImportCargoLock;
       extraHashes = hashes.extraHashes;
       # this downloads all of our build dependencies (rust) and stores them locally in /nix/store
-      vendoredCargoLock = importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };
-      vendoredCargoConfig = vendoredCargoLock + "/.cargo/config";
+      vendoredCargo = importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };
     in
     stdenv.mkDerivation {
       name = "${name}-crate2nix";
@@ -114,11 +113,11 @@ rec {
 
         # we need to propagate CARGO_HOME with all of our git dependencies
         CARGO_HOME_BASE="$out/.cargo-home"
-        export CARGO_HOME="$CARGO_HOME_BASE/cargo"
-        mkdir -p $CARGO_HOME
-        cp -r ${vendoredCargoConfig} $CARGO_HOME/config
-        cp ${vendoredCargoLock}/Cargo.lock $CARGO_HOME_BASE/Cargo.lock
-        ln -s ${vendoredCargoLock} $CARGO_HOME_BASE/cargo-vendor-dir
+        export CARGO_HOME="$out/.cargo-home/.cargo"
+        mkdir -p $out
+        ln -s ${vendoredCargo}/.cargo $CARGO_HOME
+        ln -s ${vendoredCargo} $CARGO_HOME/../cargo-vendor-dir
+        ln -s ${vendoredCargo}/Cargo.lock $CARGO_HOME/../Cargo.lock
         export HOME="$out"
 
         # we calculate hashes of all of the dependencies
