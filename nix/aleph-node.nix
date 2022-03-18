@@ -83,9 +83,7 @@ let
           # CARGO_HOME, otherwise it tries to download crates  (it doesn't work with sandboxed nix-build)
           let
             vendoredCargo = vendoredCargoLock "${src}" "Cargo.toml";
-            vendoredCargoConfig = vendoredCargo + "/.cargo/config";
-            CARGO_HOME_BASE="$out/.cargo-home";
-            CARGO_HOME="${CARGO_HOME_BASE}/cargo";
+            CARGO_HOME="$out/.cargo";
             # this way Cargo called by build.rs can see our vendored CARGO_HOME
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
                export CARGO_HOME="${CARGO_HOME}"
@@ -93,7 +91,7 @@ let
             '';
           in
           rec {
-            inherit src CARGO_HOME CARGO_HOME_BASE;
+            inherit src CARGO_HOME;
             # otherwise it has no access to other dependencies in our workspace
             workspace_member = "bin/runtime";
             buildInputs = [pkgs.git pkgs.cacert];
@@ -101,15 +99,12 @@ let
             # build.rs is called during `configure` phase, so we need to setup during `preConfigure`
             preConfigure = ''
               # populates vendored CARGO_HOME
-              mkdir -p $CARGO_HOME
-              cp -r ${vendoredCargoConfig} $CARGO_HOME/config
-              cp ${vendoredCargo}/Cargo.lock $CARGO_HOME_BASE/Cargo.lock
-              ln -s ${vendoredCargo} $CARGO_HOME_BASE/cargo-vendor-dir
+              ln -s ${vendoredCargo} $out
             '';
             postBuild = ''
               # we need to clean after ourselves
               # buildRustCrate derivation will populate it with necessary artifacts
-              rm -rf $out
+              rm $out
             '';
           };
     }
