@@ -56,7 +56,7 @@ let
         let
           packagesWithoutLocal = builtins.filter (p: p ? source) locked;
           packageById = package: { name = toPackageId package; value = package; };
-          # it removes duplicates (takes first occurrence)
+          # it removes duplicates (it takes first occurrence)
           packagesById = builtins.listToAttrs (builtins.map packageById packagesWithoutLocal);
         in
         builtins.attrValues packagesById;
@@ -90,13 +90,13 @@ rec {
     , additionalCargoNixArgs ? [ ]
     }:
     let
-      crateDir = dirOf (src + "/${cargoToml}");
+      crateDir = src;
       cargoLock = builtins.readFile (src + "/Cargo.lock");
 
       hashes = outputHashes crateDir;
       extraHashesForImportCargoLock = hashes.extraHashesForImportCargoLock;
       extraHashes = hashes.extraHashes;
-      # this downloads all of our build dependencies (rust) and stores them locally in /nix/store
+      # this downloads all of our git-based build dependencies for rust and stores them locally in /nix/store
       vendoredCargo = importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };
     in
     stdenv.mkDerivation {
