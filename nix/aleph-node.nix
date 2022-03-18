@@ -103,7 +103,7 @@ let
               # populates vendored CARGO_HOME
               mkdir -p $CARGO_HOME
               cp -r ${vendoredCargoConfig} $CARGO_HOME/config
-              cp ${vendoredCargoLock}/Cargo.lock $CARGO_HOME_BASE/Cargo.lock
+              cp ${vendoredCargo}/Cargo.lock $CARGO_HOME_BASE/Cargo.lock
               ln -s ${vendoredCargo} $CARGO_HOME_BASE/cargo-vendor-dir
             '';
             postBuild = ''
