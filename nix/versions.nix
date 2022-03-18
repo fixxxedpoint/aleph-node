@@ -57,4 +57,12 @@ rec {
     sha256 = "1hnwh2w5rhxgbp6c8illcrzh85ky81pyqx9309bkgpivyzjf2nba";
   };
   dockerNixpkgs = import fetchDockerNixpkgs {};
+
+  fetchGitignoreSource = mainNixpkgs.fetchFromGitHub {
+    owner = "hercules-ci";
+    repo = "gitignore.nix";
+    rev = "5b9e0ff9d3b551234b4f3eb3983744fa354b17f1";
+    sha256 = "o/BdVjNwcB6jOmzZjOH703BesSkkS5O7ej3xhyO8hAY=";
+  };
+  gitignoreSource = (import fetchGitignoreSource { inherit (mainNixpkgs) lib; }).gitignoreSource;
 }

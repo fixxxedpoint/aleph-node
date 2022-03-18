@@ -39,17 +39,13 @@ let
     buildInputs = [ nixpkgs.git ];
   });
 
+  # allows to skip files listed by .gitignore
+  # otherwise `nix-build` copies everything, including the target directory
+  gitignoreSource = (import ./versions.nix).gitignoreSource;
+  src = gitignoreSource ../.;
+
   crate2nix = nixpkgs.crate2nix;
   inherit (import ./tools.nix { pkgs = nixpkgs; lib = nixpkgs.lib; stdenv = env; inherit crate2nix; }) generatedCargoNix vendoredCargoLock;
-
-  sourceFilter = name: type:
-    let
-      baseName = builtins.baseNameOf (builtins.toString name);
-    in
-    ! (type == "directory" && baseName == "target");
-
-  # removes `target` directory from our build derivation
-  src = nixpkgs.lib.cleanSourceWith { filter = sourceFilter;  src = ../.; };
 
   customBuildRustCrateForPkgs = pkgs: pkgs.buildRustCrate.override {
     stdenv = env;
