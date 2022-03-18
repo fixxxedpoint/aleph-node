@@ -35,7 +35,7 @@ let
           rev = lib.last splitQuestion;
         };
 
-      mkGitHash = toPackageIdFun: { source, name, ... }@attrs:
+      mkGitHash = { source, name, ... }@attrs:
         let
           parsed = parseGitSource source;
           src = builtins.fetchGit {
