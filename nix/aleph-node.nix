@@ -2,46 +2,13 @@
 , versions ? import ./versions.nix
 , nixpkgs ? versions.nixpkgs
 , gitignoreSource ? versions.gitignoreSource
+, customRocksdb ? versions.customRocksdb
 }:
 let
   llvm = nixpkgs.llvmPackages_11;
+  # use stdenv with clang instead of gcc
   env = llvm.stdenv;
   llvmVersionString = "${nixpkgs.lib.getVersion env.cc.cc}";
-
-  # we use a newer version of rocksdb than the one provided by nixpkgs
-  # we disable all compression algorithms and force it to use SSE 4.2 cpu instruction set
-  customRocksdb = nixpkgs.rocksdb.overrideAttrs (_: {
-
-    src = builtins.fetchGit {
-      url = "https://github.com/facebook/rocksdb.git";
-      ref = "refs/tags/v${rocksDBVersion}";
-    };
-
-    version = "${rocksDBVersion}";
-
-    patches = [];
-
-    cmakeFlags = [
-       "-DPORTABLE=0"
-       "-DWITH_JNI=0"
-       "-DWITH_BENCHMARK_TOOLS=0"
-       "-DWITH_TESTS=0"
-       "-DWITH_TOOLS=0"
-       "-DWITH_BZ2=0"
-       "-DWITH_LZ4=0"
-       "-DWITH_SNAPPY=0"
-       "-DWITH_ZLIB=0"
-       "-DWITH_ZSTD=0"
-       "-DWITH_GFLAGS=0"
-       "-DUSE_RTTI=0"
-       "-DFORCE_SSE42=1"
-       "-DROCKSDB_BUILD_SHARED=0"
-    ];
-
-    propagatedBuildInputs = [];
-
-    buildInputs = [ nixpkgs.git ];
-  });
 
   # allows to skip files listed by .gitignore
   # otherwise `nix-build` copies everything, including the target directory
@@ -62,10 +29,10 @@ let
       in rec {
         librocksdb-sys = attrs: {
           buildInputs = [ customRocksdb ];
+          LIBCLANG_PATH="${llvm.libclang.lib}/lib";
           ROCKSDB_LIB_DIR="${customRocksdb}/lib";
           # forces librocksdb-sys to statically compile with our customRocksdb
           ROCKSDB_STATIC=1;
-          LIBCLANG_PATH="${llvm.libclang.lib}/lib";
         };
         libp2p-core = protobufFix;
         libp2p-plaintext = protobufFix;
@@ -98,7 +65,7 @@ let
             CARGO = "${wrappedCargo}/bin/cargo";
             # build.rs is called during `configure` phase, so we need to setup during `preConfigure`
             preConfigure = ''
-              # populates vendored CARGO_HOME
+              # populate vendored CARGO_HOME
               mkdir -p $out
               ln -s ${vendoredCargo}/.cargo ${CARGO_HOME}
               ln -s ${vendoredCargo} $out/cargo-vendor-dir

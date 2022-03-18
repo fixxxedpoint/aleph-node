@@ -65,4 +65,41 @@ rec {
     sha256 = "o/BdVjNwcB6jOmzZjOH703BesSkkS5O7ej3xhyO8hAY=";
   };
   gitignoreSource = (import fetchGitignoreSource { inherit (nixpkgs) lib; }).gitignoreSource;
+
+  fetchRocksdb = rocksDBVersion: builtins.fetchGit {
+    url = "https://github.com/facebook/rocksdb.git";
+    ref = "refs/tags/v${rocksDBVersion}";
+  };
+  # we use a newer version of rocksdb than the one provided by nixpkgs
+  # we disable all compression algorithms and force it to use SSE 4.2 cpu instruction set
+  customRocksdb = rocksDBVersion: nixpkgs.rocksdb.overrideAttrs (_: {
+
+    src = fetchRocksdb rocksDBVersion;
+
+    version = "${rocksDBVersion}";
+
+    patches = [];
+
+    cmakeFlags = [
+       "-DPORTABLE=0"
+       "-DWITH_JNI=0"
+       "-DWITH_BENCHMARK_TOOLS=0"
+       "-DWITH_TESTS=0"
+       "-DWITH_TOOLS=0"
+       "-DWITH_BZ2=0"
+       "-DWITH_LZ4=0"
+       "-DWITH_SNAPPY=0"
+       "-DWITH_ZLIB=0"
+       "-DWITH_ZSTD=0"
+       "-DWITH_GFLAGS=0"
+       "-DUSE_RTTI=0"
+       "-DFORCE_SSE42=1"
+       "-DROCKSDB_BUILD_SHARED=0"
+    ];
+
+    propagatedBuildInputs = [];
+
+    buildInputs = [ nixpkgs.git ];
+  });
+
 }

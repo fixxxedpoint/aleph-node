@@ -21,7 +21,7 @@ let
       toPackageId = { name, version, source, ... }:
               "${name} ${version} (${source})";
 
-      toPackageIdForImportCargoLock = { name, version, source, ... }:
+      toPackageIdForImportCargoLock = { name, version, ... }:
               "${name}-${version}";
 
       parseGitSource = source:
