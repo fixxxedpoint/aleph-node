@@ -100,6 +100,7 @@ let
             preConfigure = ''
               # populates vendored CARGO_HOME
               ln -s ${vendoredCargo} $out
+              ln -s ${vendoredCargo} $out/cargo-vendor-dir
             '';
             postBuild = ''
               # we need to clean after ourselves
