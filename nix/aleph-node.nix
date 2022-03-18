@@ -88,7 +88,7 @@ let
             CARGO_HOME="${CARGO_HOME_BASE}/cargo";
             # this way Cargo called by build.rs can see our vendored CARGO_HOME
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
-               export CARGO_HOME="$out/cargo"
+               export CARGO_HOME="${CARGO_HOME}"
                exec ${pkgs.cargo}/bin/cargo "$@"
             '';
           in
