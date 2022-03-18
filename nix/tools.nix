@@ -116,8 +116,8 @@ rec {
         export CARGO_HOME="$out/.cargo-home/.cargo"
         mkdir -p $CARGO_HOME_BASE
         ln -s ${vendoredCargo}/.cargo $CARGO_HOME
-        ln -s ${vendoredCargo} $CARGO_HOME/../cargo-vendor-dir
-        ln -s ${vendoredCargo}/Cargo.lock $CARGO_HOME/../Cargo.lock
+        ln -s ${vendoredCargo} $CARGO_HOME_BASE/cargo-vendor-dir
+        ln -s ${vendoredCargo}/Cargo.lock $CARGO_HOME_BASE/Cargo.lock
         export HOME="$out"
 
         # we calculate hashes of all of the dependencies
