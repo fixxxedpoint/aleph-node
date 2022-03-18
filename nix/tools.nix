@@ -157,9 +157,10 @@ rec {
   */
   vendoredCargoLock = src: cargoLock:
     let
-      crateDir = dirOf (src + "/${cargoLock}");
-      cargoLock = builtins.readFile (src + "/${cargoLock}");
+      lockFilePath = src + "/${cargoLock}";
+      crateDir = dirOf lockFilePath;
+      lockFileContents = builtins.readFile lockFilePath;
       extraHashesForImportCargoLock = (outputHashes crateDir).extraHashesForImportCargoLock;
     in
-    importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };
+    importCargoLock { inherit lockFileContents; outputHashes = extraHashesForImportCargoLock; };
 }
