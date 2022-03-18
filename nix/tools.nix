@@ -14,20 +14,15 @@
 let
   outputHashes = crateDir:
     let
+      lockFile = crateDir + "/Cargo.lock";
+
+      locked = (builtins.fromTOML (builtins.readFile lockFile)).package or [];
+
       toPackageId = { name, version, source, ... }:
               "${name} ${version} (${source})";
 
       toPackageIdForImportCargoLock = { name, version, source, ... }:
               "${name}-${version}";
-
-      lockFiles = builtins.filter builtins.pathExists [ (crateDir + "/Cargo.lock") ];
-
-      locked =
-        let
-          parseFile = cargoLock: builtins.fromTOML (builtins.readFile cargoLock);
-          allParsedFiles = builtins.map parseFile lockFiles;
-        in
-        lib.concatMap (lock: lock.package) allParsedFiles;
 
       parseGitSource = source:
         let
@@ -52,13 +47,7 @@ let
             echo -n "$(nix-hash --type sha256 ${src})" > $out
           '';
         in
-        {
-          name = toPackageIdFun attrs;
-          value = builtins.readFile hash;
-        };
-
-      extraHashes = builtins.listToAttrs (map (mkGitHash toPackageId) gitPackages);
-      extraHashesForImportCargoLock = builtins.listToAttrs (map (mkGitHash toPackageIdForImportCargoLock) gitPackages);
+        builtins.readFile hash;
 
       isGitSource = { source ? null, ... }:
         lib.hasPrefix "git+" source;
@@ -67,10 +56,18 @@ let
         let
           packagesWithoutLocal = builtins.filter (p: p ? source) locked;
           packageById = package: { name = toPackageId package; value = package; };
+          # it removes duplicates (takes first occurrence)
           packagesById = builtins.listToAttrs (builtins.map packageById packagesWithoutLocal);
         in
         builtins.attrValues packagesById;
+
       gitPackages = builtins.filter isGitSource packages;
+
+      packageToNamedHash = toPackageIdFun: package: { name = toPackageIdFun package; value = mkGitHash package; };
+
+      extraHashes = builtins.listToAttrs (map (packageToNamedHash toPackageId) gitPackages);
+
+      extraHashesForImportCargoLock = builtins.listToAttrs (map (packageToNamedHash toPackageIdForImportCargoLock) gitPackages);
   in
   { inherit extraHashes extraHashesForImportCargoLock; };
 in
