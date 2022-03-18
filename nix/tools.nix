@@ -113,11 +113,12 @@ rec {
         set -e
 
         # we need to propagate CARGO_HOME with all of our git dependencies
-        export CARGO_HOME="$out/cargo"
+        CARGO_HOME_BASE="$out/.cargo-home"
+        export CARGO_HOME="$CARGO_HOME_BASE/cargo"
         mkdir -p $CARGO_HOME
         cp -r ${vendoredCargoConfig} $CARGO_HOME/config
-        cp ${vendoredCargoLock}/Cargo.lock $out/Cargo.lock
-        ln -s ${vendoredCargoLock} $out/cargo-vendor-dir
+        cp ${vendoredCargoLock}/Cargo.lock $CARGO_HOME_BASE/Cargo.lock
+        ln -s ${vendoredCargoLock} $CARGO_HOME_BASE/cargo-vendor-dir
         export HOME="$out"
 
         # we calculate hashes of all of the dependencies
