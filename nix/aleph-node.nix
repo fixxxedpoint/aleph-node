@@ -79,7 +79,7 @@ let
         prost-build = protobufFix;
         aleph-runtime = attrs:
           # this is a bit tricky - aleph-runtime's build.rs calls Cargo, so we need to provide it a populated
-          # CARGO_HOME, otherwise it tries to download them (doesn't work with sandboxed nix-build)
+          # CARGO_HOME, otherwise it tries to download crates  (it doesn't work with sandboxed nix-build)
           let
             vendoredCargo = vendoredCargoLock "${src}" "Cargo.toml";
             vendoredCargoConfig = vendoredCargo + "/.cargo/config";
