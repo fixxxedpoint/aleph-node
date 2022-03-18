@@ -99,13 +99,14 @@ let
             # build.rs is called during `configure` phase, so we need to setup during `preConfigure`
             preConfigure = ''
               # populates vendored CARGO_HOME
-              ln -s ${vendoredCargo} $out
+              mkdir -p $out
+              ln -s ${vendoredCargo}/.cargo ${CARGO_HOME}
               ln -s ${vendoredCargo} $out/cargo-vendor-dir
             '';
             postBuild = ''
               # we need to clean after ourselves
               # buildRustCrate derivation will populate it with necessary artifacts
-              rm $out
+              rm -rf $out
             '';
           };
     }
