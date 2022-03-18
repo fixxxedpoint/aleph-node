@@ -93,7 +93,7 @@ let
             '';
           in
           rec {
-            inherit src CARGO_HOME;
+            inherit src CARGO_HOME CARGO_HOME_BASE;
             # otherwise it has no access to other dependencies in our workspace
             workspace_member = "bin/runtime";
             buildInputs = [pkgs.git pkgs.cacert];
