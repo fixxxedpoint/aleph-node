@@ -2,7 +2,7 @@
 , versions ? import ./versions.nix
 , nixpkgs ? versions.nixpkgs
 , gitignoreSource ? versions.gitignoreSource
-, customRocksdb ? versions.customRocksdb
+, customRocksdb ? versions.customRocksdb rocksDBVersion
 }:
 let
   llvm = nixpkgs.llvmPackages_11;
