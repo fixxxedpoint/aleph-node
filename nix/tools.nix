@@ -114,7 +114,7 @@ rec {
         # we need to propagate CARGO_HOME with all of our git dependencies
         CARGO_HOME_BASE="$out/.cargo-home"
         export CARGO_HOME="$out/.cargo-home/.cargo"
-        mkdir -p $CARGO_HOME/../
+        mkdir -p $CARGO_HOME_BASE
         ln -s ${vendoredCargo}/.cargo $CARGO_HOME
         ln -s ${vendoredCargo} $CARGO_HOME/../cargo-vendor-dir
         ln -s ${vendoredCargo}/Cargo.lock $CARGO_HOME/../Cargo.lock
