@@ -1,8 +1,9 @@
 # defines a derivation that builds a minimal docker image containing aleph-node and its src folder
+{ versions ? import ../nix/versions.nix
+, nixpkgs ? versions.nixpkgs
+, nixpkgsForDocker ? versions.dockerNixpkgs
+}:
 let
-  nixpkgs = import ../nix/nixpkgs.nix;
-  nixpkgsForDocker = (import ../nix/versions.nix).dockerNixpkgs;
-
   alephNodeDrv = import ../nix/aleph-node.nix {};
   alephNode = alephNodeDrv.project.workspaceMembers."aleph-node".build;
   # we include gziped src folder

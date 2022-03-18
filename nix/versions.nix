@@ -23,7 +23,7 @@ rec {
     sha256 = "0admybxrjan9a04wq54c3zykpw81sc1z1nqclm74a7pgjdp7iqv1";
   };
 
-  mainNixpkgs =
+  nixpkgs =
     let
       # this overlay allows us to use a specified version of the rust toolchain
       rustOverlay =

@@ -1,4 +1,8 @@
-{ rocksDBVersion ? "6.29.3", nixpkgs ? import ./nixpkgs.nix }:
+{ rocksDBVersion ? "6.29.3"
+, versions ? import ./versions.nix
+, nixpkgs ? versions.nixpkgs
+, gitignoreSource ? versions.gitignoreSource
+}:
 let
   llvm = nixpkgs.llvmPackages_11;
   env = llvm.stdenv;
@@ -41,7 +45,6 @@ let
 
   # allows to skip files listed by .gitignore
   # otherwise `nix-build` copies everything, including the target directory
-  gitignoreSource = (import ./versions.nix).gitignoreSource;
   src = gitignoreSource ../.;
 
   crate2nix = nixpkgs.crate2nix;

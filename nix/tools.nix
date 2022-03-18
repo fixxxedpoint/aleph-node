@@ -3,11 +3,13 @@
    Later, provides all cargo dependencies for other derivations (cargo is unable to access internet
    while in sanbox mode).
 */
-{ pkgs ? import ./nix/nixpkgs.nix {}
+{ versions ? import ./versions.nix
+, pkgs ? versions.nixpkgs
 , lib ? pkgs.lib
 , stdenv ? pkgs.stdenv
 , strictDeprecation ? true
 , crate2nix ? pkgs.crate2nix
+, importCargoLock ? versions.importCargoLock
 }:
 let
   outputHashes = crateDir:
@@ -127,7 +129,6 @@ rec {
     let
       crateDir = dirOf (src + "/${cargoToml}");
       cargoLock = builtins.readFile (src + "/Cargo.lock");
-      importCargoLock = import ./importCargoLock.nix;
 
       hashes = outputHashes crateDir;
       extraHashesForImportCargoLock = hashes.extraHashesForImportCargoLock;
@@ -188,7 +189,6 @@ rec {
     let
       crateDir = dirOf (src + "/${cargoToml}");
       cargoLock = builtins.readFile (src + "/Cargo.lock");
-      importCargoLock = import ./importCargoLock.nix;
       extraHashesForImportCargoLock = (outputHashes crateDir).extraHashesForImportCargoLock;
     in
     importCargoLock { lockFileContents = cargoLock; outputHashes = extraHashesForImportCargoLock; };

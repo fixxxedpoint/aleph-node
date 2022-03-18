@@ -1,1 +1,0 @@
-(import ./versions.nix).importCargoLock
