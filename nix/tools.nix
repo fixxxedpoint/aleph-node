@@ -1,6 +1,6 @@
 /* Declares two helper functions, i.e. generatedCargoNix and vendoredCargoLock. Former, generates
    a nix file in ad-hoc manner based on projects Cargo.lock and Cargo.toml files.
-   Later, provides all cargo dependencies for other derivations (cargo is unable to access internet
+   Later, provides all git dependencies for other derivations (cargo is unable to access internet
    while in sanbox mode).
 */
 { versions ? import ./versions.nix
@@ -34,25 +34,7 @@ let
         in
         lib.foldl merge { package = [ ]; metadata = { }; } allParsedFiles;
 
-      hashesFiles =
-        builtins.map
-          (cargoLock: (dirOf cargoLock) + "/crate-hashes.json")
-          lockFiles;
-
-      hashes =
-        let
-          parseFile = hashesFile:
-            if builtins.pathExists hashesFile
-            then builtins.fromJSON (builtins.readFile hashesFile)
-            else { };
-          parsedFiles = builtins.map parseFile hashesFiles;
-        in
-        lib.foldl (a: b: a // b) { } parsedFiles;
-
-      unhashedGitDeps = builtins.filter (p: ! hashes ? ${toPackageId p}) packagesByType.git or [ ];
-
       parseGitSource = source:
-        assert builtins.isString source;
         let
           withoutGitPlus = lib.removePrefix "git+" source;
           splitHash = lib.splitString "#" withoutGitPlus;
@@ -80,31 +62,21 @@ let
           value = builtins.readFile hash;
         };
 
-      extraHashes = builtins.listToAttrs (map (mkGitHash toPackageId) unhashedGitDeps);
-      extraHashesForImportCargoLock = builtins.listToAttrs (map (mkGitHash toPackageIdForImportCargoLock) unhashedGitDeps);
+      extraHashes = builtins.listToAttrs (map (mkGitHash toPackageId) gitPackages);
+      extraHashesForImportCargoLock = builtins.listToAttrs (map (mkGitHash toPackageIdForImportCargoLock) gitPackages);
 
-      sourceType = { source ? null, ... } @ package:
-        assert source == null || builtins.isString source;
-
-        if source == null then
-          null
-        else if source == "registry+https://github.com/rust-lang/crates.io-index" then
-          "crates-io"
-        else if lib.hasPrefix "git+" source then
-          "git"
-        else
-          builtins.throw "unknown source type: ${source}";
+      isGitSource = { source ? null, ... }:
+        lib.hasPrefix "git+" source;
 
       packages =
         let
-          packagesWithDuplicates = assert builtins.isList locked.package; locked.package;
+          packagesWithDuplicates = locked.package;
           packagesWithoutLocal = builtins.filter (p: p ? source) packagesWithDuplicates;
           packageById = package: { name = toPackageId package; value = package; };
           packagesById = builtins.listToAttrs (builtins.map packageById packagesWithoutLocal);
         in
         builtins.attrValues packagesById;
-      packagesWithType = builtins.filter (pkg: (sourceType pkg) != null) packages;
-      packagesByType = lib.groupBy sourceType packagesWithType;
+      gitPackages = builtins.filter isGitSource packages;
   in
   { inherit extraHashes extraHashesForImportCargoLock; };
 in
@@ -149,7 +121,7 @@ rec {
       buildPhase = ''
         set -e
 
-        # we need to propagate CARGO_HOME with all of our dependencies
+        # we need to propagate CARGO_HOME with all of our git dependencies
         export CARGO_HOME="$out/cargo"
         mkdir -p $CARGO_HOME
         cp -r ${vendoredCargoConfig} $CARGO_HOME/config
