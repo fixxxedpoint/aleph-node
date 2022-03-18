@@ -26,13 +26,8 @@ let
         let
           parseFile = cargoLock: builtins.fromTOML (builtins.readFile cargoLock);
           allParsedFiles = builtins.map parseFile lockFiles;
-          merge = merged: lock:
-            {
-              package = merged.package ++ lock.package or [ ];
-              metadata = merged.metadata // lock.metadata or { };
-            };
         in
-        lib.foldl merge { package = [ ]; metadata = { }; } allParsedFiles;
+        lib.concatMap (lock: lock.package) allParsedFiles;
 
       parseGitSource = source:
         let
