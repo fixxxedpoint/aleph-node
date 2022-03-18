@@ -65,8 +65,7 @@ let
 
       packages =
         let
-          packagesWithDuplicates = locked.package;
-          packagesWithoutLocal = builtins.filter (p: p ? source) packagesWithDuplicates;
+          packagesWithoutLocal = builtins.filter (p: p ? source) locked;
           packageById = package: { name = toPackageId package; value = package; };
           packagesById = builtins.listToAttrs (builtins.map packageById packagesWithoutLocal);
         in
