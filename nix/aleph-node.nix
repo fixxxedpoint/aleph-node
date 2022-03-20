@@ -47,7 +47,7 @@ let
         sc-network = protobufFix;
         substrate-test-runtime = attrs:
           let
-            substrateSrc = attrs.src + "../../";
+            substrateSrc = "${attrs.src}/../../";
             vendoredCargo = vendoredCargoLock "${substrateSrc}" "Cargo.lock";
             CARGO_HOME="$out/.cargo";
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
