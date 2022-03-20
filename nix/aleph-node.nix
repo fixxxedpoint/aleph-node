@@ -46,7 +46,40 @@ let
         libp2p-noise = protobufFix;
         sc-network = protobufFix;
         substrate-test-runtime = attrs:
-          builtins.removeAttrs (aleph-runtime attrs) [ "src" "workspace_member" ];
+          let
+            substrateSrc = attrs.src + "../../";
+            vendoredCargo = vendoredCargoLock "${substrateSrc}" "Cargo.lock";
+            CARGO_HOME="$out/.cargo";
+            wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
+               export CARGO_HOME="${CARGO_HOME}"
+               exec ${pkgs.cargo}/bin/cargo "$@"
+            '';
+          in
+          {
+            inherit CARGO_HOME;
+            src = substrateSrc;
+            workspace_member = "test-utils/runtime";
+            buildInputs = [pkgs.git pkgs.cacert];
+            CARGO = "${wrappedCargo}/bin/cargo";
+            preConfigure = ''
+              # populate vendored CARGO_HOME
+              mkdir -p $out
+              ln -s ${vendoredCargo}/.cargo ${CARGO_HOME}
+              ln -s ${vendoredCargo} $out/cargo-vendor-dir
+              ln -s ${vendoredCargo}/Cargo.lock $out/Cargo.lock
+            '';
+            postBuild = ''
+              # we need to clean after ourselves
+              # buildRustCrate derivation will populate it with necessary artifacts
+              rm -rf $out
+            '';
+          };
+
+        # substrate-test-runtime = attrs:
+        #   (aleph-runtime attrs) // {
+        #     src = attrs.src + "../../";
+        #     workspace_member = "test-utils/runtime";
+        #   };
         prost-build = protobufFix;
         aleph-runtime = _:
           # this is a bit tricky - aleph-runtime's build.rs calls Cargo, so we need to provide it a populated
