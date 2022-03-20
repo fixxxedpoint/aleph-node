@@ -65,19 +65,14 @@ let
             preConfigure = ''
               # populate vendored CARGO_HOME
               mkdir -p $out
-              ln -s ${vendoredCargo}/.cargo ${CARGO_HOME}
-              ln -s ${vendoredCargo}/Cargo.lock $out/Cargo.lock
               mkdir -p $out/cargo-vendor-dir
-              pushd .
-              cd ${vendoredCargo}
-              for d in */ ; do
-                ln -s $d $out/cargo-vendor-dir/
-              done
-              cd ${vendoredSubstrateCargo}
-              for d in */ ; do
+              for d in ${vendoredCargo}/*/ ; do
                 ln -sf $d $out/cargo-vendor-dir/
               done
-              popd
+              for d in ${vendoredSubstrateCargo}/*/ ; do
+                ln -sf $d $out/cargo-vendor-dir/
+              done
+              ln -s ${vendoredSubstrateCargo}/.cargo ${CARGO_HOME}
             '';
             postBuild = ''
               # we need to clean after ourselves
@@ -85,12 +80,6 @@ let
               rm -rf $out
             '';
           };
-
-        # substrate-test-runtime = attrs:
-        #   (aleph-runtime attrs) // {
-        #     src = attrs.src + "../../";
-        #     workspace_member = "test-utils/runtime";
-        #   };
         prost-build = protobufFix;
         aleph-runtime = _:
           # this is a bit tricky - aleph-runtime's build.rs calls Cargo, so we need to provide it a populated
