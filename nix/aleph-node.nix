@@ -71,11 +71,8 @@ let
               pushd .
               cd ${vendoredCargo}
               for d in */ ; do
-                ln -s d $out/cargo-vendor-dir/
+                ln -s $d $out/cargo-vendor-dir/
               done
-              popd
-
-              pushd .
               cd ${vendoredSubstrateCargo}
               for d in */ ; do
                 ln -sf $d $out/cargo-vendor-dir/
