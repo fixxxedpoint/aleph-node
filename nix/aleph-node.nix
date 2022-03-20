@@ -47,8 +47,10 @@ let
         sc-network = protobufFix;
         substrate-test-runtime = attrs:
           let
-            substrateSrc = "${attrs.src}/../../";
-            vendoredCargo = vendoredCargoLock "${substrateSrc}" "Cargo.lock";
+            substrateSrc = attrs.src;
+            # we need to merge these two vendored CARGO_HOMEs
+            vendoredSubstrateCargo = vendoredCargoLock "${substrateSrc}" "Cargo.lock";
+            vendoredCargo = vendoredCargoLock "${src}" "Cargo.lock";
             CARGO_HOME="$out/.cargo";
             wrappedCargo = pkgs.writeShellScriptBin "cargo" ''
                export CARGO_HOME="${CARGO_HOME}"
@@ -57,7 +59,6 @@ let
           in
           {
             inherit CARGO_HOME;
-            src = substrateSrc;
             workspace_member = "test-utils/runtime";
             buildInputs = [pkgs.git pkgs.cacert];
             CARGO = "${wrappedCargo}/bin/cargo";
@@ -65,8 +66,21 @@ let
               # populate vendored CARGO_HOME
               mkdir -p $out
               ln -s ${vendoredCargo}/.cargo ${CARGO_HOME}
-              ln -s ${vendoredCargo} $out/cargo-vendor-dir
               ln -s ${vendoredCargo}/Cargo.lock $out/Cargo.lock
+              mkdir -p $out/cargo-vendor-dir
+              pushd .
+              cd ${vendoredCargo}
+              for d in */ ; do
+                ln -s d $out/cargo-vendor-dir/
+              done
+              popd
+
+              pushd .
+              cd ${vendoredSubstrateCargo}
+              for d in */ ; do
+                ln -sf d $out/cargo-vendor-dir/
+              done
+              popd
             '';
             postBuild = ''
               # we need to clean after ourselves
