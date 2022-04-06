@@ -68,6 +68,13 @@ let
     sha256 = "o/BdVjNwcB6jOmzZjOH703BesSkkS5O7ej3xhyO8hAY=";
   };
   inherit (import gitignoreSrc { inherit (nixpkgs) lib; }) gitignoreSource;
+
+  fetchImportCargoLock = builtins.fetchTarball {
+    url = "https://github.com/NixOS/nixpkgs/archive/be872a7453a176df625c12190b8a6c10f6b21647.tar.gz";
+    sha256 = "1hnwh2w5rhxgbp6c8illcrzh85ky81pyqx9309bkgpivyzjf2nba";
+  };
+  importCargoLock = (import fetchImportCargoLock {}).rustPlatform.importCargoLock;
+  vendoredCargoLock = (import ./nix/tools.nix { pkgs = nixpkgs; inherit importCargoLock; }).vendoredCargoLock;
 in
 with nixpkgs; env.mkDerivation rec {
   name = "aleph-node";
@@ -86,7 +93,13 @@ with nixpkgs; env.mkDerivation rec {
     patchelf
   ];
 
-  shellHook = ''
+  CARGO_HOME=".cargo-home/.cargo";
+
+  shellHook =
+    let
+      vendoredCargo = vendoredCargoLock "${src}" "Cargo.lock";
+    in
+    ''
     export RUST_SRC_PATH="${rustToolchain}/lib/rustlib/src/rust/src"
     export LIBCLANG_PATH="${llvm.libclang.lib}/lib"
     export PROTOC="${protobuf}/bin/protoc"
@@ -109,11 +122,17 @@ with nixpkgs; env.mkDerivation rec {
     "
     export ROCKSDB_LIB_DIR="${customRocksdb}/lib"
     export ROCKSDB_STATIC=1
+
+    # populate vendored CARGO_HOME
+    mkdir -p .cargo-home
+    ln -s ${vendoredCargo}/.cargo ${CARGO_HOME}
+    ln -s ${vendoredCargo} .cargo-home/cargo-vendor-dir
+    ln -s ${vendoredCargo}/Cargo.lock .cargo-home/Cargo.lock
+    export CARGO_HOME="${CARGO_HOME}";
   '';
 
   buildPhase = ''
     ${shellHook}
-    export CARGO_HOME="$out/cargo"
     export CARGO_BUILD_TARGET="x86_64-unknown-linux-gnu"
 
     cargo build --locked --release -p aleph-node
