@@ -95,11 +95,7 @@ with nixpkgs; env.mkDerivation rec {
 
   CARGO_HOME=".cargo-home/.cargo";
 
-  shellHook =
-    let
-      vendoredCargo = vendoredCargoLock "${src}" "Cargo.lock";
-    in
-    ''
+  shellHook = ''
     export RUST_SRC_PATH="${rustToolchain}/lib/rustlib/src/rust/src"
     export LIBCLANG_PATH="${llvm.libclang.lib}/lib"
     export PROTOC="${protobuf}/bin/protoc"
@@ -122,6 +118,14 @@ with nixpkgs; env.mkDerivation rec {
     "
     export ROCKSDB_LIB_DIR="${customRocksdb}/lib"
     export ROCKSDB_STATIC=1
+  '';
+
+  buildPhase =
+    let
+      vendoredCargo = vendoredCargoLock "${src}" "Cargo.lock";
+    in
+    ''
+    ${shellHook}
 
     # populate vendored CARGO_HOME
     mkdir -p .cargo-home
@@ -129,10 +133,6 @@ with nixpkgs; env.mkDerivation rec {
     ln -s ${vendoredCargo} .cargo-home/cargo-vendor-dir
     ln -s ${vendoredCargo}/Cargo.lock .cargo-home/Cargo.lock
     export CARGO_HOME="${CARGO_HOME}";
-  '';
-
-  buildPhase = ''
-    ${shellHook}
     export CARGO_BUILD_TARGET="x86_64-unknown-linux-gnu"
 
     cargo build --locked --release -p aleph-node
