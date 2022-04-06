@@ -3,10 +3,8 @@
 , importCargoLock
 }:
 let
-  outputHashes = crateDir:
+  outputHashes = lockFile:
     let
-      lockFile = crateDir + "/Cargo.lock";
-
       lockFileContent = (builtins.fromTOML (builtins.readFile lockFile)).package or [];
 
       toPackageId = { name, version, source, ... }:
@@ -66,12 +64,11 @@ in
      crate/workspace root directory
      cargoLock: path to the Cargo.lock file relative to src
   */
-  vendoredCargoLock = src: cargoLock:
+  vendoredCargoLock = cargoLock:
     let
-      lockFilePath = src + "/${cargoLock}";
-      crateDir = dirOf lockFilePath;
-      lockFileContents = builtins.readFile lockFilePath;
-      extraHashesForImportCargoLock = outputHashes crateDir;
+      crateDir = dirOf cargoLock;
+      lockFileContents = builtins.readFile cargoLock;
+      extraHashesForImportCargoLock = outputHashes cargoLock;
     in
     importCargoLock { inherit lockFileContents; outputHashes = extraHashesForImportCargoLock; };
 }

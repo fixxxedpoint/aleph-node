@@ -125,7 +125,7 @@ with nixpkgs; env.mkDerivation rec {
 
   buildPhase =
     let
-      vendoredCargo = vendoredCargoLock "${src}" "Cargo.lock";
+      vendoredCargo = vendoredCargoLock "${src}/Cargo.lock";
     in
     ''
     ${shellHook}
@@ -136,7 +136,6 @@ with nixpkgs; env.mkDerivation rec {
     ln -s ${vendoredCargo} .cargo-home/cargo-vendor-dir
     ln -s ${vendoredCargo}/Cargo.lock .cargo-home/Cargo.lock
     export CARGO_HOME="${CARGO_HOME}";
-    export CARGO_BUILD_TARGET="x86_64-unknown-linux-gnu"
 
     RUSTFLAGS="${rustflags}" cargo build ${lib.optionalString verbose "-vv"} --locked --release -p aleph-node
   '';
