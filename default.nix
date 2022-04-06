@@ -1,4 +1,7 @@
-{ rocksDBVersion ? "6.29.3" }:
+{ rocksDBVersion ? "6.29.3"
+, rustflags ? "-C target-cpu=native"
+, verbose ? false
+}:
 let
   # this overlay allows us to use a specified version of the rust toolchain
   rustOverlay =
@@ -135,7 +138,7 @@ with nixpkgs; env.mkDerivation rec {
     export CARGO_HOME="${CARGO_HOME}";
     export CARGO_BUILD_TARGET="x86_64-unknown-linux-gnu"
 
-    cargo build --locked --release -p aleph-node
+    RUSTFLAGS="${rustflags}" cargo build ${lib.optionalString verbose "-vv"} --locked --release -p aleph-node
   '';
 
   installPhase = ''
