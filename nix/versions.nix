@@ -15,11 +15,31 @@ rec {
 
   crate2nix = (import fetchCrate2nix {}).crate2nix;
 
+  fetchCargo2nix = builtins.fetchTarball {
+    url = "https://github.com/cargo2nix/cargo2nix/archive/aeefb0a1b13f502ae9f3eda047725d257af1640d.tar.gz";
+    sha256 = "04chd3xay8g1p8la2w3s7cncr98sf2vhggnxl40lrjj6h0cxwpfc";
+  };
+
+  cargo2nix =
+    let
+      flake-compat = import (
+        builtins.fetchTarball {
+          url = "https://github.com/edolstra/flake-compat/archive/12c64ca55c1014cdc1b16ed5a804aa8576601ff2.tar.gz";
+          sha256 = "0jm6nzb83wa6ai17ly9fzpqc40wg1viib8klq8lby54agpl213w5"; }
+      );
+      cargo2nixDerivation = flake-compat { src = fetchCargo2nix; };
+    in
+    cargo2nixDerivation.defaultNix;
+
   # pinned version of nix packages
   # main reason for not using here the newest available version at the time or writing is that this way we depend on glibc version 2.31 (Ubuntu 20.04 LTS)
+  # fetchNixpkgs = (builtins.fetchTarball {
+  #   url = "https://github.com/NixOS/nixpkgs/archive/2c162d49cd5b979eb66ff1653aecaeaa01690fcc.tar.gz";
+  #   sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
+  # });
   fetchNixpkgs = (builtins.fetchTarball {
-    url = "https://github.com/NixOS/nixpkgs/archive/2c162d49cd5b979eb66ff1653aecaeaa01690fcc.tar.gz";
-    sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
+    url = "https://github.com/NixOS/nixpkgs/archive/master.tar.gz";
+    sha256 = "1dxmdrp4xwya46farph614vgh5x9a2w3zm8x3bs5hrjgbrkqghjz";
   });
 
   # this overlay allows us to use a specified version of the rust toolchain
@@ -28,18 +48,24 @@ rec {
     sha256 = "0admybxrjan9a04wq54c3zykpw81sc1z1nqclm74a7pgjdp7iqv1";
   };
 
+  fetchRustOverlayOxalica = builtins.fetchTarball {
+    url = "https://github.com/oxalica/rust-overlay/archive/c6fe2a14f10cb85659b8848bac87e4ff29a00f9a.tar.gz";
+    sha256 = "1lb6aadn8ahql8wmw8aq2k5m96ik9qgxw1h9rrlj8rjf60m10k5d";
+  };
+
   nixpkgs =
     let
       # this overlay allows us to use a specified version of the rust toolchain
-      rustOverlay =
-        import fetchRustOverlay;
+      # rustOverlay = import fetchRustOverlay;
+      rustOverlay = import fetchRustOverlayOxalica;
 
       overrideRustTarget = rustChannel: rustChannel // {
         rust = rustChannel.rust.override {
           targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
         };
       };
-      rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ../rust-toolchain; } );
+      # rustToolchain = with nixpkgs; overrideRustTarget ( rustChannelOf { rustToolchain = ../rust-toolchain; } );
+      # rustToolchain = with nixpkgs; ( rustChannelOf { rustToolchain = ../rust-toolchain; } );
 
       inherit crate2nix;
 
@@ -47,11 +73,12 @@ rec {
       nixpkgs = import fetchNixpkgs { overlays = [
             rustOverlay
             (self: super: {
-              inherit (rustToolchain) cargo rust-src rust-std;
-              rustc = rustToolchain.rust;
+              # inherit (rustToolchain) cargo rust-src rust-std;
+              # rustc = rustToolchain.rust;
 
-              inherit crate2nix;
+              # inherit crate2nix;
             })
+            (import "${fetchCargo2nix}/overlay")
           ];
         };
     in
