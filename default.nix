@@ -89,7 +89,8 @@ with nixpkgs; naersk.buildPackage {
   nativeBuildInputs = [
     cacert
     git
-    rustToolchain
+    rustToolchain.cargo
+    rustToolchain.rustc
     findutils
     patchelf
   ];
