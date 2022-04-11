@@ -25,7 +25,6 @@ if [ $SPAWN_SHELL = true ]
 then
     nix-shell --pure $SHELL_NIX_FILE
 else
-    export SUBSTRATE_CLI_GIT_COMMIT_HASH=$(git rev-parse --short HEAD)
     nix-build $SHELL_NIX_FILE
     # we need to change the dynamic linker
     # otherwise our binary references one that is specific for nix
