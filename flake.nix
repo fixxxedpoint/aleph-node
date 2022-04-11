@@ -31,7 +31,8 @@
 
         # create the workspace & dependencies package set
         rustPkgs = pkgs.rustBuilder.makePackageSet' {
-          rustChannel = "nightly-2021-10-24";
+          rustChannel = "1.56.1";
+          # rustChannel = "nightly-2021-10-24";
           packageFun = import ./Cargo.nix;
           # packageOverrides = pkgs: pkgs.rustBuilder.overrides.all; # Implied, if not specified
         };
