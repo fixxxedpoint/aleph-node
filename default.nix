@@ -85,6 +85,12 @@ let
     sha256 = "1jhagazh69w7jfbrchhdss54salxc66ap1a1yd7xasc92vr0qsx4";
   };
   naersk = nixpkgs.callPackage naerskSrc { stdenv = env; };
+  gitFolder = ./.git;
+  gitCommitDrv = nixpkgs.runCommand "gitCommit" { nativeBuildInputs = [nixpkgs.git]; } ''
+    cp -r ${gitFolder} ./
+    echo $(git rev-parse --short HEAD) > $out
+  '';
+  gitCommit = builtins.readFile gitCommitDrv;
 in
 with nixpkgs; naersk.buildPackage {
   name = "aleph-node";
@@ -105,6 +111,7 @@ with nixpkgs; naersk.buildPackage {
     pkg-config
   ];
 
+  SUBSTRATE_CLI_GIT_COMMIT_HASH="${gitCommit}";
   ROCKSDB_LIB_DIR="${customRocksdb}/lib";
   ROCKSDB_STATIC=1;
   LIBCLANG_PATH="${llvm.libclang.lib}/lib";
