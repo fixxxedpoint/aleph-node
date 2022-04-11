@@ -10,7 +10,7 @@
     nixpkgs.url = "github:nixos/nixpkgs?ref=release-21.05";
   };
 
-  outputs = { self, nixpkgs, cargo2nix, flake-utils, rust-overlay, ... }:
+  outputs = { self, nixpkgs, flake-utils, rust-overlay, ... }:
 
     # Build the output set for each default system and map system sets into
     # attributes, resulting in paths such as:
