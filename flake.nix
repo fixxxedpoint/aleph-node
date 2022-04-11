@@ -41,13 +41,13 @@
 
         # the packages in `nix build .#packages.<system>.<name>`
         packages = {
-          # nix build .#bigger-project
-          # nix build .#packages.x86_64-linux.bigger-project
-          bigger-project = (rustPkgs.workspace.bigger-project {}).bin;
+          # nix build .#aleph-node
+          # nix build .#packages.x86_64-linux.aleph-node
+          aleph-node = (rustPkgs.workspace.aleph-node {}).bin;
         };
 
         # nix build
-        defaultPackage = packages.bigger-project;
+        defaultPackage = packages.aleph-node;
       }
     );
 }
