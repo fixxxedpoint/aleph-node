@@ -80,8 +80,11 @@ let
   };
   inherit (import gitignoreSrc { inherit (nixpkgs) lib; }) gitignoreSource;
 
-  sources = import ./nix/sources.nix;
-  naersk = nixpkgs.callPackage sources.naersk { stdenv = env; };
+  naerskSrc = builtins.fetchTarball {
+    url = "https://github.com/nix-community/naersk/archive/2fc8ce9d3c025d59fee349c1f80be9785049d653.tar.gz";
+    sha256 = "1jhagazh69w7jfbrchhdss54salxc66ap1a1yd7xasc92vr0qsx4";
+  };
+  naersk = nixpkgs.callPackage naerskSrc { stdenv = env; };
 in
 with nixpkgs; naersk.buildPackage {
   name = "aleph-node";
