@@ -87,7 +87,7 @@ let
   naersk = nixpkgs.callPackage naerskSrc { stdenv = env; };
   gitFolder = ./.git;
   gitCommitDrv = nixpkgs.runCommand "gitCommit" { nativeBuildInputs = [nixpkgs.git]; } ''
-    cp -r ${gitFolder} ./
+    cp -r ${gitFolder} ./.git
     echo $(git rev-parse --short HEAD) > $out
   '';
   gitCommit = builtins.readFile gitCommitDrv;
