@@ -29,13 +29,32 @@
                       rust-overlay.overlay];
         };
 
+        rustChannel = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain;
+	rustToolchain' = with pkgs; (rust-bin.${rustChannel}.minimal).override {
+	  targets = [ "x86_64-unknown-linux-gnu" "wasm32-unknown-unknown" ];
+	};
+	# rustToolchain' = with pkgs; (rust-bin.nightly.${rustChannel}.minimal);
+        rustToolchain = builtins.trace rustToolchain' rustToolchain';
+
         # create the workspace & dependencies package set
-        rustPkgs = pkgs.rustBuilder.makePackageSet' {
-          rustChannel = "1.56.1";
+        rustPkgs = (pkgs.rustBuilder.makePackageSet {
+          # rustChannel = "${rustToolchain}/";
+          # rustChannel = "1.56.1";
           # rustChannel = "nightly-2021-10-24";
+          rustChannel = "/nix/store/a0mcw9giagr7dbz7gr9g0cmby7094hzd-rust-1.58.0-nightly-2021-10-23-91b931926/";
           packageFun = import ./Cargo.nix;
+          target = "x86_64-unknown-linux-gnu";
           # packageOverrides = pkgs: pkgs.rustBuilder.overrides.all; # Implied, if not specified
-        };
+          packageOverrides = pkgs: pkgs.rustBuilder.overrides.all ++ [
+            # parentheses disambiguate each makeOverride call as a single list element
+            (pkgs.rustBuilder.rustLib.makeOverride {
+              name = "names";
+              overrideAttrs = drv: {
+                features = ["application"];
+              };
+            })
+          ];
+        });
 
       in rec {
         # this is the output (recursive) set (expressed for each system)
