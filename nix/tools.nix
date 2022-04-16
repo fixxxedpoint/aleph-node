@@ -81,7 +81,7 @@ rec {
     let
       importCargoSrc = import (builtins.fetchTarball {
         url = "https://github.com/edolstra/import-cargo/archive/25d40be4a73d40a2572e0cc233b83253554f06c5.tar.gz";
-        sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
+        sha256 = "0dnwaz58s7pcfdvwi0crmx8cqlxi7il623n126db9nkq0fp41fvy";
       });
       importCargo = (import flakeCompat { src = importCargoSrc; }).defaultNix;
     in
