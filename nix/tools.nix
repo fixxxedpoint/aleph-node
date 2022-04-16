@@ -58,7 +58,7 @@ let
   in
   extraHashesForImportCargoLock;
 in
-{
+rec {
 /* allows to propagate downloaded crates to other derivations
      src: the source that is needed to build the crate, usually the
      crate/workspace root directory
@@ -71,4 +71,19 @@ in
       extraHashesForImportCargoLock = outputHashes cargoLock;
     in
     importCargoLock { inherit lockFileContents; outputHashes = extraHashesForImportCargoLock; };
+
+  flakeCompat = fetchTarball {
+    url = "https://github.com/edolstra/flake-compat/archive/12c64ca55c1014cdc1b16ed5a804aa8576601ff2.tar.gz";
+    sha256 = "0jm6nzb83wa6ai17ly9fzpqc40wg1viib8klq8lby54agpl213w5";
+  };
+
+  importCargo =
+    let
+      importCargoSrc = import (builtins.fetchTarball {
+        url = "https://github.com/edolstra/import-cargo/archive/25d40be4a73d40a2572e0cc233b83253554f06c5.tar.gz";
+        sha256 = "08k7jy14rlpbb885x8dyds5pxr2h64mggfgil23vgyw6f1cn9kz6";
+      });
+      importCargo = (import flakeCompat { src = importCargoSrc; }).defaultNix;
+    in
+    importCargo;
 }
