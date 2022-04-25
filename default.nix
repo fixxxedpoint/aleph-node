@@ -13,7 +13,7 @@
                    }
 }:
 let
-  versions = import ./nix/versions.nix rocksDbOptions;
+  versions = import ./nix/versions.nix { inherit rocksDbOptions; };
   nixpkgs = versions.nixpkgs;
   rustToolchain = versions.rustToolchain;
   naersk = versions.naersk;
