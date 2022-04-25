@@ -1,3 +1,10 @@
+{ rocksDbOptions ? { version = "6.29.3";
+                     useSnappy = false;
+                     patchVerifyChecksum = true;
+                     patchPath = ./nix/rocksdb.patch;
+                     enableJemalloc = true;
+                   }
+}:
 rec {
   rustToolchain =
     let
@@ -61,4 +68,47 @@ rec {
       };
     in
       import gitignoreSrc { inherit (nixpkgs) lib; };
+
+  # we use a newer version of rocksdb than the one provided by nixpkgs
+  # we disable all compression algorithms, force it to use SSE 4.2 cpu instruction set and disable its `verify_checksum` mechanism
+  customRocksdb = nixpkgs.rocksdb.overrideAttrs (_: {
+
+    src = builtins.fetchGit {
+      url = "https://github.com/facebook/rocksdb.git";
+      ref = "refs/tags/v${rocksDbOptions.version}";
+    };
+
+    version = "${rocksDbOptions.version}";
+
+    patches = nixpkgs.lib.optional rocksDbOptions.patchVerifyChecksum rocksDbOptions.patchPath;
+
+    cmakeFlags = [
+       "-DPORTABLE=0"
+       "-DWITH_JNI=0"
+       "-DWITH_BENCHMARK_TOOLS=0"
+       "-DWITH_TESTS=0"
+       "-DWITH_TOOLS=0"
+       "-DWITH_BZ2=0"
+       "-DWITH_LZ4=0"
+       "-DWITH_SNAPPY=${if rocksDbOptions.useSnappy then "1" else "0"}"
+       "-DWITH_ZLIB=0"
+       "-DWITH_ZSTD=0"
+       "-DWITH_GFLAGS=0"
+       "-DUSE_RTTI=0"
+       "-DFORCE_SSE42=1"
+       "-DROCKSDB_BUILD_SHARED=0"
+       "-DWITH_JEMALLOC=${if rocksDbOptions.enableJemalloc then "1" else "0"}"
+    ];
+
+    propagatedBuildInputs = [];
+
+    buildInputs = nixpkgs.lib.optionals rocksDbOptions.useSnappy [nixpkgs.snappy] ++
+                  nixpkgs.lib.optionals rocksDbOptions.enableJemalloc [nixpkgs.jemalloc] ++
+                 [nixpkgs.git];
+
+    shellHook = ''
+      export ROCKSDB_LIB_DIR=$out/lib
+      export ROCKSDB_STATIC=1
+    '';
+  });
 }

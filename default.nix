@@ -1,5 +1,4 @@
-{ versions ? import ./nix/versions.nix
-, release ? true
+{ release ? true
 , name ? "aleph-node"
 , crates ? { "aleph-node" = []; }
 , runTests ? false
@@ -14,6 +13,7 @@
                    }
 }:
 let
+  versions = import ./nix/versions.nix rocksDbOptions;
   nixpkgs = versions.nixpkgs;
   rustToolchain = versions.rustToolchain;
   naersk = versions.naersk;
@@ -23,48 +23,6 @@ let
   llvm = versions.llvm;
   env = versions.stdenv;
   llvmVersionString = "${nixpkgs.lib.getVersion env.cc.cc}";
-
-  # we use a newer version of rocksdb than the one provided by nixpkgs
-  # we disable all compression algorithms, force it to use SSE 4.2 cpu instruction set and disable its `verify_checksum` mechanism
-  customRocksdb = nixpkgs.rocksdb.overrideAttrs (_: {
-
-    src = builtins.fetchGit {
-      url = "https://github.com/facebook/rocksdb.git";
-      ref = "refs/tags/v${rocksDbOptions.version}";
-    };
-
-    version = "${rocksDbOptions.version}";
-
-    patches = nixpkgs.lib.optional rocksDbOptions.patchVerifyChecksum rocksDbOptions.patchPath;
-
-    cmakeFlags = [
-       "-DPORTABLE=0"
-       "-DWITH_JNI=0"
-       "-DWITH_BENCHMARK_TOOLS=0"
-       "-DWITH_TESTS=0"
-       "-DWITH_TOOLS=0"
-       "-DWITH_BZ2=0"
-       "-DWITH_LZ4=0"
-       "-DWITH_SNAPPY=${if rocksDbOptions.useSnappy then "1" else "0"}"
-       "-DWITH_ZLIB=0"
-       "-DWITH_ZSTD=0"
-       "-DWITH_GFLAGS=0"
-       "-DUSE_RTTI=0"
-       "-DFORCE_SSE42=1"
-       "-DROCKSDB_BUILD_SHARED=0"
-       "-DWITH_JEMALLOC=${if rocksDbOptions.enableJemalloc then "1" else "0"}"
-    ];
-
-    propagatedBuildInputs = [];
-
-    buildInputs = nixpkgs.lib.optionals rocksDbOptions.useSnappy [nixpkgs.snappy] ++
-                  nixpkgs.lib.optionals rocksDbOptions.enableJemalloc [nixpkgs.jemalloc] ++
-                 [nixpkgs.git];
-  });
-  rocksDbShellHook = if useCustomRocksDb
-                     then
-                       "export ROCKSDB_LIB_DIR=${customRocksdb}/lib; export ROCKSDB_STATIC=1"
-                     else "";
 
   # newer versions of substrate support providing a version hash by means of an env variable, i.e. SUBSTRATE_CLI_GIT_COMMIT_HASH
   gitFolder = ./.git;
@@ -118,14 +76,14 @@ with nixpkgs; naersk.buildPackage rec {
   buildInputs = [
     openssl.dev
     protobuf
-  ] ++ nixpkgs.lib.optional useCustomRocksDb customRocksdb;
+  ];
+  propagatedBuildInputs = nixpkgs.lib.optional useCustomRocksDb versions.customRocksdb;
   cargoBuildOptions = opts:
     packageFlags
     ++ [featuresFlag]
     ++ ["--locked" "--offline"]
     ++ opts;
   shellHook = ''
-    ${rocksDbShellHook}
     export SUBSTRATE_CLI_GIT_COMMIT_HASH=${SUBSTRATE_CLI_GIT_COMMIT_HASH}
     export RUSTFLAGS="${rustflags}"
     export LIBCLANG_PATH=${LIBCLANG_PATH};
@@ -150,7 +108,6 @@ with nixpkgs; naersk.buildPackage rec {
 
   SUBSTRATE_CLI_GIT_COMMIT_HASH="${gitCommit}";
   RUSTFLAGS="${rustflags}";
-  ROCKSDB_STATIC=1;
   LIBCLANG_PATH="${llvm.libclang.lib}/lib";
   PROTOC="${protobuf}/bin/protoc";
   # From: https://github.com/NixOS/nixpkgs/blob/1fab95f5190d087e66a3502481e34e15d62090aa/pkgs/applications/networking/browsers/firefox/common.nix#L247-L253
