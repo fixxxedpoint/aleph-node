@@ -2,12 +2,20 @@ use aleph_client::{keypair_from_string, KeyPair};
 
 use crate::config::Config;
 
+fn get_validator_seed(seed: u32) -> String {
+    format!("//{}", seed)
+}
+
+// fn get_validator_seeds(config: &Config) -> IntoIterator<Item = String> {
+//     (0..config
+// }
+
 // this should be extracted to common code
 pub fn get_validators_seeds(config: &Config) -> Vec<String> {
     match config.validators_seeds {
         Some(ref seeds) => seeds.clone(),
         None => (0..config.validators_count)
-            .map(|seed| format!("//{}", seed))
+            .map(get_validator_seed)
             .collect(),
     }
 }
@@ -26,4 +34,32 @@ pub fn accounts_seeds_to_keys(seeds: &[String]) -> Vec<KeyPair> {
 
 pub fn get_sudo_key(config: &Config) -> KeyPair {
     keypair_from_string(&config.sudo_seed)
+}
+
+pub struct NodeKeypairs {
+    pub validator_key: KeyPair,
+    pub controller_key: KeyPair,
+    pub stash_key: KeyPair,
+}
+
+impl From<u32> for NodeKeypairs {
+    fn from(seed: u32) -> Self {
+        Self {
+            validator_key: keypair_from_string(&get_validator_seed(seed)[..]),
+            controller_key: keypair_from_string(&get_validators_controller_seed(seed)[..]),
+            stash_key: keypair_from_string(&get_validators_stash_seed(seed)[..]),
+        }
+    }
+}
+
+pub fn get_validators_controller_seed(seed: u32) -> String {
+    format!("{}//Controller", get_validator_seed(seed))
+}
+
+pub fn get_validators_stash_seed(seed: u32) -> String {
+    format!("{}//stash", get_validator_seed(seed))
+}
+
+pub fn get_node_keypairs_from_seed(seed: u32) -> NodeKeypairs {
+    NodeKeypairs::from(seed)
 }

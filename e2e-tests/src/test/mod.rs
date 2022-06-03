@@ -1,6 +1,6 @@
 pub use fee::fee_calculation;
 pub use finalization::finalization;
-pub use staking::{staking_era_payouts, staking_new_validator};
+pub use staking::{disable_node, staking_era_payouts, staking_new_validator};
 pub use transfer::token_transfer;
 pub use treasury::{channeling_fee, treasury_access};
 pub use utility::batch_transactions;

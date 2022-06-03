@@ -58,6 +58,7 @@ pub fn change_members(
     );
     send_xt(sudo_connection, xt, Some("sudo_unchecked_weight"), status);
 }
+
 pub fn change_reserved_members(
     sudo_connection: &RootConnection,
     new_members: Vec<AccountId>,
@@ -90,6 +91,10 @@ pub fn set_keys(connection: &SignedConnection, new_keys: Keys, status: XtStatus)
     );
     send_xt(connection, xt, Some("set_keys"), status);
 }
+
+pub fn disable_node(connection: &SignedConnection) {}
+
+// pub fn get_keys(connection: &SignedConnection) -> Keys {}
 
 /// Get the number of the current session.
 pub fn get_current<C: AnyConnection>(connection: &C) -> u32 {

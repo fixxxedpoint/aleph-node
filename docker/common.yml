@@ -1,6 +1,7 @@
 services:
   AlephNodeService:
     image: aleph-node:latest
+    userns_mode: host
     network_mode: host
     environment:
       - PURGE_BEFORE_START=true
