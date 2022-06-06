@@ -92,10 +92,6 @@ pub fn set_keys(connection: &SignedConnection, new_keys: Keys, status: XtStatus)
     send_xt(connection, xt, Some("set_keys"), status);
 }
 
-pub fn disable_node(connection: &SignedConnection) {}
-
-// pub fn get_keys(connection: &SignedConnection) -> Keys {}
-
 /// Get the number of the current session.
 pub fn get_current<C: AnyConnection>(connection: &C) -> u32 {
     connection

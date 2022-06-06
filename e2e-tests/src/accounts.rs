@@ -44,10 +44,17 @@ pub struct NodeKeys {
 
 impl From<u32> for NodeKeys {
     fn from(seed: u32) -> Self {
+        let validator_seed = get_validator_seed(seed);
+        NodeKeys::from(validator_seed)
+    }
+}
+
+impl From<String> for NodeKeys {
+    fn from(seed: String) -> Self {
         Self {
-            validator_key: keypair_from_string(&get_validator_seed(seed)[..]),
-            controller_key: keypair_from_string(&get_validators_controller_seed(seed)[..]),
-            stash_key: keypair_from_string(&get_validators_stash_seed(seed)[..]),
+            validator_key: keypair_from_string(&seed[..]),
+            controller_key: keypair_from_string(&get_validators_controller_seed(seed.clone())[..]),
+            stash_key: keypair_from_string(&get_validators_stash_seed(seed.clone())[..]),
         }
     }
 }
@@ -60,6 +67,6 @@ fn get_validators_stash_seed(seed: String) -> String {
     format!("{}//stash", seed)
 }
 
-fn get_node_keypairs_from_seed(seed: u32) -> NodeKeys {
-    NodeKeys::from(seed)
-}
+// fn get_node_keypairs_from_seed(seed: u32) -> NodeKeys {
+//     NodeKeys::from(seed)
+// }

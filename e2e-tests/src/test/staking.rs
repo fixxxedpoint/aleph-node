@@ -19,7 +19,7 @@ use primitives::{
 };
 
 use crate::{
-    accounts::{accounts_seeds_to_keys, get_sudo_key, get_validators_seeds, NodeKeys},
+    accounts::{accounts_seeds_to_keys, get_sudo_key, get_validators_seeds},
     config::Config,
 };
 

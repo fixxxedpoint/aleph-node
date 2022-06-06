@@ -1,18 +1,12 @@
-use std::error::Error;
-
 use log::info;
 
-use crate::{
-    accounts::{get_sudo_key, NodeKeys},
-    config::create_root_connection,
-    transfer::setup_for_transfer,
-};
+use crate::{config::create_root_connection, transfer::setup_for_transfer};
 use sp_core::Pair;
 use substrate_api_client::{compose_call, compose_extrinsic, GenericAddress, XtStatus};
 
 use aleph_client::{
-    get_current_session, set_keys, wait_for_session, AnyConnection, KeyPair, RootConnection,
-    SessionKeys, SignedConnection,
+    get_current_session, rotate_keys, set_keys, wait_for_session, AnyConnection, SessionKeys,
+    SignedConnection,
 };
 use codec::Compact;
 
@@ -59,7 +53,7 @@ pub const ZERO_SESSION_KEYS: SessionKeys = SessionKeys {
 /// Changes keys of the first node described by the `validator_seeds` list to some `zero` values,
 /// making it impossible to create new legal blocks.
 pub fn disable_validator(config: &Config) -> anyhow::Result<()> {
-    let root_connection = create_root_connection();
+    let root_connection = create_root_connection(config);
 
     let validators_controller = config.node_keys().controller_key;
 
@@ -76,12 +70,12 @@ pub fn disable_validator(config: &Config) -> anyhow::Result<()> {
 /// Rotates the keys of the first node described by the `validator_seeds` list,
 /// making it able to rejoin the `consensus`.
 pub fn enable_validator(config: &Config) -> anyhow::Result<()> {
-    let root_connection = create_root_connection();
+    let root_connection = create_root_connection(config);
 
     let validators_controller = config.node_keys().controller_key;
 
     let validator_keys = rotate_keys(&root_connection).expect("Failed to retrieve keys from chain");
-    let controller_connection = SignedConnection::new(node, validators_controller);
+    let controller_connection = SignedConnection::new(&config.node, validators_controller);
     set_keys(&controller_connection, validator_keys, XtStatus::InBlock);
 
     // wait until our node is forced to use new keys, i.e. current session + 2
