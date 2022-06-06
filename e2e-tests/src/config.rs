@@ -1,4 +1,7 @@
+use aleph_client::RootConnection;
 use clap::Parser;
+
+use crate::accounts::{get_validators_seeds, NodeKeys};
 
 #[derive(Debug, Parser, Clone)]
 #[clap(version = "1.0")]
@@ -23,4 +26,17 @@ pub struct Config {
     /// seed value of sudo account
     #[clap(long, default_value = "//Alice")]
     pub sudo_seed: String,
+}
+
+impl Config {
+    pub fn node_keys(self: &Self) -> NodeKeys {
+        get_validators_seeds(self)
+            .first()
+            .expect("we should have a seed for at least one validator")
+    }
+}
+
+pub fn create_root_connection() -> RootConnection {
+    let sudo_keypair = get_sudo_key(config);
+    RootConnection::new(&config.node, sudo_keypair)
 }

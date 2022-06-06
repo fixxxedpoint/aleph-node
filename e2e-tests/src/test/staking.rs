@@ -19,7 +19,7 @@ use primitives::{
 };
 
 use crate::{
-    accounts::{accounts_seeds_to_keys, get_sudo_key, get_validators_seeds, NodeKeypairs},
+    accounts::{accounts_seeds_to_keys, get_sudo_key, get_validators_seeds, NodeKeys},
     config::Config,
 };
 
@@ -211,6 +211,5 @@ pub fn staking_new_validator(config: &Config) -> anyhow::Result<()> {
 }
 
 pub fn disable_node(config: &Config) -> anyhow::Result<()> {
-    let node_keypairs = NodeKeypairs::from(0);
-    disable_validator(config, &node_keypairs)
+    disable_validator(config)
 }
