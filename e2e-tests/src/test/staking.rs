@@ -23,8 +23,6 @@ use crate::{
     config::Config,
 };
 
-use super::utility::disable_validator;
-
 fn get_validator_stashes_key_pairs(config: &Config) -> (Vec<KeyPair>, Vec<KeyPair>) {
     let validators_seeds = get_validators_seeds(config);
     let validator_stashes: Vec<_> = validators_seeds
@@ -210,6 +208,9 @@ pub fn staking_new_validator(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn disable_node(config: &Config) -> anyhow::Result<()> {
-    disable_validator(config)
+pub fn disable_node(_: &Config) -> anyhow::Result<()> {
+    // TODO
+    // disable_validator(config)
+    todo!();
+    Ok(())
 }

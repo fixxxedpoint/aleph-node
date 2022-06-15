@@ -20,7 +20,7 @@ pub use multisig::{
 pub use rpc::{rotate_keys, rotate_keys_raw_result, state_query_storage_at};
 pub use session::{
     change_members, change_reserved_members, get_current as get_current_session, set_keys,
-    wait_for as wait_for_session, Keys as SessionKeys,
+    wait_for as wait_for_session, wait_for_at_least as wait_for_later_session, Keys as SessionKeys,
 };
 pub use staking::{
     batch_bond as staking_batch_bond, batch_nominate as staking_batch_nominate,
