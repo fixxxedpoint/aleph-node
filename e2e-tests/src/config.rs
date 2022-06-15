@@ -31,9 +31,9 @@ pub struct Config {
 impl Config {
     pub fn node_keys(self: &Self) -> NodeKeys {
         let validator_seed = get_validators_seeds(self)
-            .first()
-            .expect("we should have a seed for at least one validator")
-            .clone();
+            .into_iter()
+            .next()
+            .expect("we should have a seed for at least one validator");
         NodeKeys::from(validator_seed)
     }
 

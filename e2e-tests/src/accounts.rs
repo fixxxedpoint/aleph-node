@@ -6,10 +6,6 @@ fn get_validator_seed(seed: u32) -> String {
     format!("//{}", seed)
 }
 
-// fn get_validator_seeds(config: &Config) -> IntoIterator<Item = String> {
-//     (0..config
-// }
-
 // this should be extracted to common code
 pub fn get_validators_seeds(config: &Config) -> Vec<String> {
     match config.validators_seeds {
