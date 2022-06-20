@@ -17,7 +17,7 @@ use substrate_api_client::{AccountId, XtStatus};
 
 use log::info;
 
-const ERAS: u32 = 10;
+const ERAS: u32 = 20;
 
 fn get_reserved_members(config: &Config) -> Vec<KeyPair> {
     get_validators_keys(config)[0..2].to_vec()
@@ -109,6 +109,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         XtStatus::InBlock,
     );
 
+    // TODO to chyba jest zle - reserved wcale nie dostaja 100% - sa tak samo traktowani jak pozostali
+    // to non-commitee dostaja 100%
     let reserved_members_performance: Vec<(AccountId, Perquintill)> = reserved_members
         .clone()
         .into_iter()
@@ -130,16 +132,23 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     // If during era 0 we request a controller to be a validator, it becomes one
     // for era 1, and payouts can be collected once era 1 ends,
     // so we want to start the test from era 2.
-    wait_for_full_era_completion(&connection)?;
-    let session = get_current_session(&connection);
+    // TODO
+    // wait_for_full_era_completion(&connection)?;
+    // let session = get_current_session(&connection);
+    let mut session = 8 * sessions_per_era;
+
+    // panic!("boo");
 
     while session < ERAS * sessions_per_era {
-        let session = get_current_session(&connection);
+        // let session = get_current_session(&connection);
+        // TODO
+        // let first_session_block_hash;
         let era = session / sessions_per_era;
 
         info!("[+] Era: {} | session: {}", era, session);
         info!("Sessions per era: {}", sessions_per_era);
 
+        // TODO to powinno wolane dla konkretnego bloku
         let members_per_session: u32 = connection
             .as_connection()
             .get_storage_value("Elections", "MembersPerSession", None)
@@ -182,6 +191,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             blocks_to_produce_per_session
         );
 
+        // TODO to jest pierwszy blok nastepnej sesji?
         let end_of_session_block = (session + 1) * session_period;
         info!("Waiting for block: {}", end_of_session_block);
         wait_for_finalized_block(&connection, end_of_session_block)?;
@@ -198,6 +208,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             });
         info!("End-of-session block hash: {}.", end_of_session_block_hash);
 
+        // TODO czy to jest ostatni blok w naszej sesji?
         let before_end_of_session_block_hash = connection
             .as_connection()
             .get_block_hash(Some(end_of_session_block - 1))
@@ -210,6 +221,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             });
 
         // get points stored by the Staking pallet
+        // TODO sprawdzic co zwroci jak podasz before_end_of_session
+        // TODO co sie stanie gdy end_of_session_block_hash jest blokiem z nastepnej ery?
         let era_reward_points =
             get_era_reward_points(&connection, era, Some(end_of_session_block_hash));
         let validator_reward_points_current_era = era_reward_points.individual;
@@ -221,6 +234,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                 .map(|(account_id, reward_points)| {
                     // on era change, there is no previous session within the era,
                     // no subtraction needed
+                    // TODO to powinno dobrze handlowac pierwsza sesje w erze, ale nie wiem czy ostatnia sesje w erze
                     let reward_points_current = match session % sessions_per_era {
                         0 => reward_points,
                         _ => {
@@ -243,6 +257,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                 )
             });
 
+        // TODO tu sie zaczyna liczenie wysokosci rewardow
+        // TODO czy ten exposure jest wyciagany dla dobrego bloku? Co jesli to jest ostatnia sesja ery?
         let validator_exposures: Vec<(AccountId, u128)> = reserved_members
             .iter()
             .chain(non_reserved_members.iter())
@@ -264,6 +280,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                         account_id, individual_exposure.who, individual_exposure.value
                     )
                 });
+                // TODO tu powinno byc total
                 (account_id, exposure.own)
             })
             .collect();
@@ -279,6 +296,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             .into_iter()
             .map(|(account_id, exposure)| {
                 // TODO use PerSomething type here (rounding to nearest integer)
+                // TODO mozliwe ze po mul tego przez max_rewards dostaniemy rozne wartosci
                 let scaling_factor = Perquintill::from_rational(exposure, total_exposure);
                 // let scaling_factor = exposure as f64 / total_exposure as f64;
                 info!(
@@ -289,6 +307,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             })
             .collect();
 
+        // TODO to powinno leciec po wszysktich, nie tylko po non-reserved
         let non_reserved_for_session_performance: Vec<(AccountId, Perquintill)> =
             non_reserved_for_session
                 .into_iter()
@@ -328,6 +347,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         //         performance.insert(account_id, perf);
         //     });
 
+        // TODO niech to bedzie troche bardziej verbose, uzyj jakiejs mapy
         let adjusted_reward_points: Vec<(AccountId, u32)> = reward_scaling_factors
             .iter()
             .cloned()
@@ -350,9 +370,16 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             })
             .collect();
 
+        assert_eq!(
+            validator_reward_points_current_session,
+            adjusted_reward_points.into_iter().collect()
+        );
+
         validator_reward_points_previous_session = validator_reward_points_current_era;
 
         // TODO compare adjusted_reward_points with validator_reward_points_current_session
+        session += 1;
+        panic!("ajsiodjaoisjd");
     }
 
     let block_number = connection
@@ -395,7 +422,8 @@ fn node_performance(
     let performance =
         Perquintill::from_rational(block_count as u64, blocks_to_produce_per_session as u64);
     info!("Validator {}, performance {:?}", account_id, performance);
-    let lenient_performance = match performance > LENIENT_THRESHOLD {
+    // TODO zamienilem > na >=
+    let lenient_performance = match performance >= LENIENT_THRESHOLD {
         true => Perquintill::one(),
         false => performance,
     };
