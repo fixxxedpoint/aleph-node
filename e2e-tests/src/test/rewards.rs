@@ -209,6 +209,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                 );
             });
 
+        // get points stored by the Staking pallet
         let era_reward_points =
             get_era_reward_points(&connection, era, Some(end_of_session_block_hash));
         let validator_reward_points_current_era = era_reward_points.individual;
@@ -243,9 +244,9 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             });
 
         let validator_exposures: Vec<(AccountId, u128)> = reserved_members
-            .clone()
-            .into_iter()
-            .chain(non_reserved_members.clone().into_iter())
+            .iter()
+            .chain(non_reserved_members.iter())
+            .cloned()
             .map(|account_id| {
                 let exposure: Exposure<AccountId, u128> = get_exposure(
                     &connection,
@@ -288,42 +289,22 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             })
             .collect();
 
-        let non_reserved_for_session_performance: Vec<(AccountId, Perquintill)> = non_reserved_for_session.into_iter().map(|account_id| {
-            let block_count: u32 = connection
-                .as_connection()
-                .get_storage_map(
-                    "Elections",
-                    "SessionValidatorBlockCount",
-                    account_id.clone(),
-                    Some(before_end_of_session_block_hash),
-                )
-                .expect("Failed to decode SessionValidatorBlockCount extrinsic!")
-                .unwrap_or_else(|| {
-                    panic!(
-                        "Failed to obtain SessionValidatorBlockCount for session {}, validator {}, EOS block hash {}.",
-                        session, account_id, before_end_of_session_block_hash
+        let non_reserved_for_session_performance: Vec<(AccountId, Perquintill)> =
+            non_reserved_for_session
+                .into_iter()
+                .map(|account_id| {
+                    (
+                        account_id.clone(),
+                        node_performance(
+                            &connection,
+                            account_id,
+                            session,
+                            before_end_of_session_block_hash,
+                            blocks_to_produce_per_session,
+                        ),
                     )
-                });
-            info!(
-                "Block count for validator {} is {:?}, block hash is {}.",
-                account_id, block_count, before_end_of_session_block_hash
-            );
-
-            let performance = Perquintill::from_rational(block_count as u64, blocks_to_produce_per_session as u64);
-            // let performance = (block_count as f64 / blocks_to_produce_per_session as f64).min(1.);
-            info!("Validator {}, performance {}", account_id, performance);
-
-            let lenient_performance =
-                match Perquintill::from_percent(performance as u64) > LENIENT_THRESHOLD {
-                    true => Perquintill::one(),
-                    false => Perquintill::from_percent(performance as u64),
-                };
-            info!(
-                "Validator {}, lenient performance {}",
-                account_id, lenient_performance
-            );
-            (account_id, lenient_performance)
-        }).collect();
+                })
+                .collect();
 
         let non_reserved_bench_performance: Vec<(AccountId, Perquintill)> = non_reserved_bench
             .clone()
@@ -331,28 +312,36 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             .map(|account_id| (account_id, Perquintill::one()))
             .collect();
 
-        let mut performance = BTreeMap::new();
-        reserved_members_performance
-            .clone()
-            .into_iter()
-            .chain(non_reserved_for_session_performance.clone().into_iter())
-            .chain(non_reserved_bench_performance.clone().into_iter())
-            .for_each(|(account_id, perf)| {
-                performance.insert(account_id, perf);
-            });
+        // let mut performance = BTreeMap::new();
+        let performance: BTreeMap<_, _> = reserved_members_performance
+            .iter()
+            .chain(non_reserved_for_session_performance.iter())
+            .chain(non_reserved_bench_performance.iter())
+            .cloned()
+            .collect();
+        // reserved_members_performance
+        //     .clone()
+        //     .into_iter()
+        //     .chain(non_reserved_for_session_performance.clone().into_iter())
+        //     .chain(non_reserved_bench_performance.clone().into_iter())
+        //     .for_each(|(account_id, perf)| {
+        //         performance.insert(account_id, perf);
+        //     });
 
         let adjusted_reward_points: Vec<(AccountId, u32)> = reward_scaling_factors
-            .into_iter()
+            .iter()
+            .cloned()
             .zip(
                 reserved_members_performance
                     .iter()
-                    .chain(non_reserved_for_session_performance.iter()),
+                    .chain(non_reserved_for_session_performance.iter())
+                    .cloned(),
             )
             .map(|((account_id, scaling_factor), (_, performance))| {
                 // TODO check
-                panic!("check this equation");
-                let scaled_points = (scaling_factor * performance * MAX_REWARD as f64
-                    / sessions_per_era as f64) as u32;
+                // panic!("check this equation");
+                let scaled_points = (scaling_factor * performance * u64::from(MAX_REWARD)
+                    / u64::from(sessions_per_era)) as u32;
                 info!(
                     "Validator {}, adjusted reward points {}",
                     account_id, scaled_points
@@ -362,6 +351,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             .collect();
 
         validator_reward_points_previous_session = validator_reward_points_current_era;
+
+        // TODO compare adjusted_reward_points with validator_reward_points_current_session
     }
 
     let block_number = connection
@@ -373,4 +364,44 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     wait_for_finalized_block(&connection, block_number)?;
 
     Ok(())
+}
+
+fn node_performance(
+    connection: &SignedConnection,
+    account_id: AccountId,
+    session: u32,
+    before_end_of_session_block_hash: H256,
+    blocks_to_produce_per_session: u32,
+) -> Perquintill {
+    let block_count: u32 = connection
+        .as_connection()
+        .get_storage_map(
+            "Elections",
+            "SessionValidatorBlockCount",
+            account_id.clone(),
+            Some(before_end_of_session_block_hash),
+        )
+        .expect("Failed to decode SessionValidatorBlockCount extrinsic!")
+        .unwrap_or_else(|| {
+            panic!(
+                "Failed to obtain SessionValidatorBlockCount for session {}, validator {}, EOS block hash {}.",
+                session, account_id, before_end_of_session_block_hash
+            )
+        });
+    info!(
+        "Block count for validator {} is {:?}, block hash is {}.",
+        account_id, block_count, before_end_of_session_block_hash
+    );
+    let performance =
+        Perquintill::from_rational(block_count as u64, blocks_to_produce_per_session as u64);
+    info!("Validator {}, performance {:?}", account_id, performance);
+    let lenient_performance = match performance > LENIENT_THRESHOLD {
+        true => Perquintill::one(),
+        false => performance,
+    };
+    info!(
+        "Validator {}, lenient performance {:?}",
+        account_id, lenient_performance
+    );
+    lenient_performance
 }
