@@ -109,10 +109,10 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         XtStatus::InBlock,
     );
 
-    let reserved_members_performance: Vec<(AccountId, f64)> = reserved_members
+    let reserved_members_performance: Vec<(AccountId, Perquintill)> = reserved_members
         .clone()
         .into_iter()
-        .map(|account_id| (account_id, 1.))
+        .map(|account_id| (account_id, Perquintill::one()))
         .collect();
 
     let mut validator_reward_points_previous_session = BTreeMap::new();
@@ -274,10 +274,12 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
 
         info!("Total exposure {}", total_exposure);
 
-        let reward_scaling_factors: Vec<(AccountId, f64)> = validator_exposures
+        let reward_scaling_factors: Vec<(AccountId, Perquintill)> = validator_exposures
             .into_iter()
             .map(|(account_id, exposure)| {
-                let scaling_factor = exposure as f64 / total_exposure as f64;
+                // TODO use PerSomething type here (rounding to nearest integer)
+                let scaling_factor = Perquintill::from_rational(exposure, total_exposure);
+                // let scaling_factor = exposure as f64 / total_exposure as f64;
                 info!(
                     "Validator {}, scaling factor {:?}.",
                     account_id, scaling_factor
@@ -286,7 +288,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             })
             .collect();
 
-        let non_reserved_for_session_performance: Vec<(AccountId, f64)> = non_reserved_for_session.into_iter().map(|account_id| {
+        let non_reserved_for_session_performance: Vec<(AccountId, Perquintill)> = non_reserved_for_session.into_iter().map(|account_id| {
             let block_count: u32 = connection
                 .as_connection()
                 .get_storage_map(
@@ -307,13 +309,14 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                 account_id, block_count, before_end_of_session_block_hash
             );
 
-            let performance = (block_count as f64 / blocks_to_produce_per_session as f64).min(1.);
+            let performance = Perquintill::from_rational(block_count as u64, blocks_to_produce_per_session as u64);
+            // let performance = (block_count as f64 / blocks_to_produce_per_session as f64).min(1.);
             info!("Validator {}, performance {}", account_id, performance);
 
             let lenient_performance =
                 match Perquintill::from_percent(performance as u64) > LENIENT_THRESHOLD {
-                    true => 1.,
-                    false => performance as f64,
+                    true => Perquintill::one(),
+                    false => Perquintill::from_percent(performance as u64),
                 };
             info!(
                 "Validator {}, lenient performance {}",
@@ -322,10 +325,10 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             (account_id, lenient_performance)
         }).collect();
 
-        let non_reserved_bench_performance: Vec<(AccountId, f64)> = non_reserved_bench
+        let non_reserved_bench_performance: Vec<(AccountId, Perquintill)> = non_reserved_bench
             .clone()
             .into_iter()
-            .map(|account_id| (account_id, 1.))
+            .map(|account_id| (account_id, Perquintill::one()))
             .collect();
 
         let mut performance = BTreeMap::new();
@@ -346,6 +349,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                     .chain(non_reserved_for_session_performance.iter()),
             )
             .map(|((account_id, scaling_factor), (_, performance))| {
+                // TODO check
+                panic!("check this equation");
                 let scaled_points = (scaling_factor * performance * MAX_REWARD as f64
                     / sessions_per_era as f64) as u32;
                 info!(
