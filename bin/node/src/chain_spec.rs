@@ -319,7 +319,9 @@ fn configure_chain_spec_fields(
             (
                 validator.account_id.clone(),
                 controller,
-                (validator_idx + 1) as u128 * MIN_VALIDATOR_BOND,
+                // TODO
+                // (validator_idx + 1) as u128 * MIN_VALIDATOR_BOND,
+                5 * MIN_VALIDATOR_BOND,
                 StakerStatus::Validator,
             )
         })

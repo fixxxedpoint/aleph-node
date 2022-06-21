@@ -17,7 +17,7 @@ use substrate_api_client::{AccountId, XtStatus};
 
 use log::info;
 
-const ERAS: u32 = 20;
+const ERAS: u32 = 100;
 
 fn get_reserved_members(config: &Config) -> Vec<KeyPair> {
     get_validators_keys(config)[0..2].to_vec()
@@ -135,7 +135,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     // TODO
     // wait_for_full_era_completion(&connection)?;
     // let session = get_current_session(&connection);
-    let mut session = 8 * sessions_per_era;
+    let mut session = 25 * sessions_per_era;
 
     // panic!("boo");
 
@@ -308,6 +308,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             .collect();
 
         // TODO to powinno leciec po wszysktich, nie tylko po non-reserved
+        // TODO dodac reserved tutaj
         let non_reserved_for_session_performance: Vec<(AccountId, Perquintill)> =
             non_reserved_for_session
                 .into_iter()
@@ -332,7 +333,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             .collect();
 
         // let mut performance = BTreeMap::new();
-        let performance: BTreeMap<_, _> = reserved_members_performance
+        // let performance: BTreeMap<_, _> = reserved_members_performance
+        let performance: Vec<_> = reserved_members_performance
             .iter()
             .chain(non_reserved_for_session_performance.iter())
             .chain(non_reserved_bench_performance.iter())
@@ -351,12 +353,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         let adjusted_reward_points: Vec<(AccountId, u32)> = reward_scaling_factors
             .iter()
             .cloned()
-            .zip(
-                reserved_members_performance
-                    .iter()
-                    .chain(non_reserved_for_session_performance.iter())
-                    .cloned(),
-            )
+            .zip(performance.into_iter())
             .map(|((account_id, scaling_factor), (_, performance))| {
                 // TODO check
                 // panic!("check this equation");
@@ -369,6 +366,15 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                 (account_id, scaled_points)
             })
             .collect();
+
+        validator_reward_points_current_session
+            .iter()
+            .for_each(|(account_id, scaled_points)| {
+                info!(
+                    "from runtime - validator {}, adjusted reward points {}",
+                    account_id, scaled_points
+                );
+            });
 
         assert_eq!(
             validator_reward_points_current_session,
