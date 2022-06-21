@@ -110,11 +110,11 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
 
     // TODO to chyba jest zle - reserved wcale nie dostaja 100% - sa tak samo traktowani jak pozostali
     // to non-commitee dostaja 100%
-    let reserved_members_performance: Vec<(AccountId, Perquintill)> = reserved_members
-        .clone()
-        .into_iter()
-        .map(|account_id| (account_id, Perquintill::one()))
-        .collect();
+    // let reserved_members_performance: Vec<(AccountId, Perquintill)> = reserved_members
+    //     .clone()
+    //     .into_iter()
+    //     .map(|account_id| (account_id, Perquintill::one()))
+    //     .collect();
 
     let mut validator_reward_points_previous_session = BTreeMap::new();
 
@@ -134,7 +134,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     // TODO
     // wait_for_full_era_completion(&connection)?;
     // let session = get_current_session(&connection);
-    let mut session = 25 * sessions_per_era;
+    let mut session = 18 * sessions_per_era;
 
     // panic!("boo");
 
@@ -152,12 +152,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             .as_connection()
             .get_storage_value("Elections", "CommitteeSize", None)
             .expect("Failed to decode CommitteeSize extrinsic!")
-            .unwrap_or_else(|| {
-                panic!(
-                    "Failed to obtain CommitteeSize for session {}.",
-                    session
-                )
-            });
+            .unwrap_or_else(|| panic!("Failed to obtain CommitteeSize for session {}.", session));
 
         reserved_members
             .iter()
@@ -273,6 +268,10 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                     "Validator {} has own exposure {}.",
                     account_id, exposure.own
                 );
+                info!(
+                    "Validator {} has total exposure {}.",
+                    account_id, exposure.total
+                );
                 exposure.others.iter().for_each(|individual_exposure| {
                     info!(
                         "Validator {} has nominator {} exposure {}.",
@@ -280,7 +279,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                     )
                 });
                 // TODO tu powinno byc total
-                (account_id, exposure.own)
+                (account_id, exposure.total)
             })
             .collect();
 
@@ -299,6 +298,10 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
                 let scaling_factor = Perquintill::from_rational(exposure, total_exposure);
                 // let scaling_factor = exposure as f64 / total_exposure as f64;
                 info!(
+                    "Validator {}, scaling factor {} / {}.",
+                    account_id, exposure, total_exposure
+                );
+                info!(
                     "Validator {}, scaling factor {:?}.",
                     account_id, scaling_factor
                 );
@@ -308,22 +311,24 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
 
         // TODO to powinno leciec po wszysktich, nie tylko po non-reserved
         // TODO dodac reserved tutaj
-        let non_reserved_for_session_performance: Vec<(AccountId, Perquintill)> =
-            non_reserved_for_session
-                .into_iter()
-                .map(|account_id| {
-                    (
-                        account_id.clone(),
-                        node_performance(
-                            &connection,
-                            account_id,
-                            session,
-                            before_end_of_session_block_hash,
-                            blocks_to_produce_per_session,
-                        ),
-                    )
-                })
-                .collect();
+        let non_reserved_for_session_performance: Vec<(AccountId, Perquintill)> = reserved_members
+            .into_iter()
+            .chain(non_reserved_for_session.into_iter())
+            .into_iter()
+            .map(|account_id| {
+                (
+                    account_id.clone(),
+                    node_performance(
+                        &connection,
+                        account_id,
+                        session,
+                        before_end_of_session_block_hash,
+                        blocks_to_produce_per_session,
+                        sessions_per_era,
+                    ),
+                )
+            })
+            .collect();
 
         let non_reserved_bench_performance: Vec<(AccountId, Perquintill)> = non_reserved_bench
             .clone()
@@ -333,20 +338,20 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
 
         // let mut performance = BTreeMap::new();
         // let performance: BTreeMap<_, _> = reserved_members_performance
-        let performance: Vec<_> = reserved_members_performance
+        let performance: Vec<_> = non_reserved_for_session_performance
             .iter()
-            .chain(non_reserved_for_session_performance.iter())
             .chain(non_reserved_bench_performance.iter())
             .cloned()
             .collect();
-        // reserved_members_performance
-        //     .clone()
-        //     .into_iter()
-        //     .chain(non_reserved_for_session_performance.clone().into_iter())
-        //     .chain(non_reserved_bench_performance.clone().into_iter())
-        //     .for_each(|(account_id, perf)| {
-        //         performance.insert(account_id, perf);
-        //     });
+
+        reward_scaling_factors
+            .iter()
+            .for_each(|(account_id, scaling)| {
+                info!("reward_scaling_factors id {} {:?}", account_id, scaling);
+            });
+        performance.iter().for_each(|(account_id, perf)| {
+            info!("performance id {} {:?}", account_id, perf);
+        });
 
         // TODO niech to bedzie troche bardziej verbose, uzyj jakiejs mapy
         let adjusted_reward_points: Vec<(AccountId, u32)> = reward_scaling_factors
@@ -356,8 +361,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
             .map(|((account_id, scaling_factor), (_, performance))| {
                 // TODO check
                 // panic!("check this equation");
-                let scaled_points = (scaling_factor * performance * u64::from(MAX_REWARD)
-                    / u64::from(sessions_per_era)) as u32;
+                let scaled_points = (scaling_factor * (performance * u64::from(MAX_REWARD))) as u32;
                 info!(
                     "Validator {}, adjusted reward points {}",
                     account_id, scaled_points
@@ -404,6 +408,7 @@ fn node_performance(
     session: u32,
     before_end_of_session_block_hash: H256,
     blocks_to_produce_per_session: u32,
+    sessions_per_era: u32,
 ) -> Perquintill {
     let block_count: u32 = connection
         .as_connection()
@@ -436,5 +441,8 @@ fn node_performance(
         "Validator {}, lenient performance {:?}",
         account_id, lenient_performance
     );
-    lenient_performance
+    Perquintill::from_rational(
+        block_count as u64,
+        (blocks_to_produce_per_session * sessions_per_era) as u64,
+    )
 }
