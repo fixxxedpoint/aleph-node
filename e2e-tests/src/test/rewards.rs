@@ -134,7 +134,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     // TODO
     // wait_for_full_era_completion(&connection)?;
     // let session = get_current_session(&connection);
-    let mut session = 18 * sessions_per_era;
+    let mut session = 3 * sessions_per_era;
 
     // panic!("boo");
 
@@ -181,8 +181,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
 
         let blocks_to_produce_per_session = session_period / members_per_session;
         info!(
-            "Blocks to produce per session: {}",
-            blocks_to_produce_per_session
+            "Blocks to produce per session: {} - session period {}",
+            blocks_to_produce_per_session, session_period
         );
 
         // TODO to jest pierwszy blok nastepnej sesji?
@@ -433,16 +433,22 @@ fn node_performance(
         Perquintill::from_rational(block_count as u64, blocks_to_produce_per_session as u64);
     info!("Validator {}, performance {:?}", account_id, performance);
     // TODO zamienilem > na >=
-    let lenient_performance = match performance >= LENIENT_THRESHOLD {
-        true => Perquintill::one(),
-        false => performance,
-    };
+    let lenient_performance =
+        match performance >= LENIENT_THRESHOLD && blocks_to_produce_per_session >= block_count {
+            true => Perquintill::from_rational(1, sessions_per_era as u64),
+            false => Perquintill::from_rational(
+                block_count as u64,
+                blocks_to_produce_per_session as u64 * sessions_per_era as u64,
+            ),
+        };
     info!(
         "Validator {}, lenient performance {:?}",
         account_id, lenient_performance
     );
-    Perquintill::from_rational(
-        block_count as u64,
-        (blocks_to_produce_per_session * sessions_per_era) as u64,
-    )
+    info!(
+        "Validator {}, lenient performance 2 {} / {}",
+        account_id, block_count, blocks_to_produce_per_session
+    );
+    // Perquintill::from_rational(block_count as u64, blocks_to_produce_per_sessionas as u64)
+    lenient_performance
 }
