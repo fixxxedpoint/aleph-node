@@ -80,7 +80,7 @@ pub fn get_exposure<C: AnyConnection>(
         .unwrap_or_else(|| panic!("Failed to obtain ErasStakers for era {}.", era))
 }
 
-fn todo_setup() {
+pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     let reserved_members: Vec<_> = get_reserved_members(config)
         .iter()
         .map(|pair| AccountId::from(pair.public()))
@@ -101,8 +101,7 @@ fn todo_setup() {
         .for_each(|account_id| info!("Non-reserved member in committee: {}", account_id));
 
     let non_reserved_bench = non_reserved_members
-        .clone()
-        .into_iter()
+        .iter()
         .filter(|account_id| !non_reserved_for_session.contains(account_id))
         .collect::<Vec<_>>();
     non_reserved_bench
@@ -113,17 +112,24 @@ fn todo_setup() {
         (reserved_members.len() + non_reserved_for_session.len()) as u32,
         members_per_session
     );
+
+    let session = 1;
+    let era = 1;
+
+    test_points_and_payouts(
+        config,
+        session,
+        era,
+        reserved_members,
+        reserved_members
+            .into_iter()
+            .chain(non_reserved_for_session.into_iter()),
+        non_reserved_bench,
+        epsilon,
+    )
 }
 
-struct ElectionConfig {
-    reserved: impl IntoIterator<AccountId>,
-    non_reserved: impl IntoIterator<AccountId>,
-    non_reserved_bench: impl IntoIterator<AccountId>,
-    era: u32,
-    session: u32,
-}
-
-pub fn points_and_payouts(
+pub fn test_points_and_payouts(
     config: &Config,
     session: u32,
     era: u32,
@@ -155,38 +161,11 @@ pub fn points_and_payouts(
     info!("Waiting for block: {}", end_of_session_block);
     wait_for_finalized_block(&connection, end_of_session_block)?;
 
-    let beggining_of_session_block_hash = connection
-        .as_connection()
-        .get_block_hash(Some(beggining_of_session_block))
-        .expect("API call should have succeeded.")
-        .unwrap_or_else(|| {
-            panic!(
-                "Failed to obtain block hash for block {}.",
-                beggining_of_session_block
-            );
-        });
-    let end_of_session_block_hash = connection
-        .as_connection()
-        .get_block_hash(Some(end_of_session_block))
-        .expect("API call should have succeeded.")
-        .unwrap_or_else(|| {
-            panic!(
-                "Failed to obtain block hash for block {}.",
-                end_of_session_block
-            );
-        });
+    let beggining_of_session_block_hash = get_block_hash(&connection, beggining_of_session_block);
+    let end_of_session_block_hash = get_block_hash(&connection, end_of_session_block);
     info!("End-of-session block hash: {}.", end_of_session_block_hash);
 
-    let before_end_of_session_block_hash = connection
-        .as_connection()
-        .get_block_hash(Some(end_of_session_block - 1))
-        .expect("API call should have succeeded.")
-        .unwrap_or_else(|| {
-            panic!(
-                "Failed to obtain block hash for block {}.",
-                end_of_session_block
-            );
-        });
+    let before_end_of_session_block_hash = get_block_hash(&connection, end_of_session_block - 1);
 
     let members_per_session: u32 = connection
         .as_connection()
@@ -222,26 +201,13 @@ pub fn points_and_payouts(
                     .get(&account_id)
                     .unwrap_or(&0);
                 let reward_points_current = reward_points - reward_points_previous_session;
-                (account_id, reward_points_current)
+
+                info!(
+                    "In session {} validator {} accumulated {}.",
+                    session, account_id, reward_points
+                )(account_id, reward_points_current)
             })
             .collect();
-
-    validator_reward_points_current_session
-        .iter()
-        .for_each(|(account_id, reward_points)| {
-            info!(
-                "In session {} validator {} accumulated {}.",
-                session, account_id, reward_points
-            )
-        });
-
-    let validator_exposures: Vec<(AccountId, u128)> = members
-        .iter()
-        .cloned()
-        .map(|account_id| {
-            download_exposure(&connection, era, account_id, end_of_session_block_hash)
-        })
-        .collect();
 
     let total_exposure: u128 = validator_exposures
         .iter()
@@ -250,14 +216,35 @@ pub fn points_and_payouts(
 
     info!("Total exposure {}", total_exposure);
 
-    let adjusted_reward_points: Vec<(AccountId, u32)> = members
-        .into_iter()
-        .chain(members_bench.into_iter())
-        .map(|account_id| {});
+    let members_performance = members.into_iter().map(|account_id| {
+        (
+            account_id.clone(),
+            get_node_performance(
+                &connection,
+                account_id,
+                session,
+                before_end_of_session_block_hash,
+                blocks_to_produce_per_session,
+                sessions_per_era,
+            ),
+        )
+    });
 
-    let reward_scaling_factors: Vec<(AccountId, Perquintill)> = validator_exposures
-        .into_iter()
-        .map(|(account_id, exposure)| {
+    let members_bench_performance = members_bench.into_iter().map(|account_id| {
+        (
+            account_id,
+            Perquintill::from_rational(1, sessions_per_era as u64),
+        )
+    });
+
+    let adjusted_reward_points: Vec<(AccountId, u128)> = members_performance
+        .iter()
+        .chain(members_bench_performance.iter())
+        .cloned()
+        .map(|account_id, performance| {
+            let exposure =
+                download_exposure(&connection, era, account_id, end_of_session_block_hash);
+
             let scaling_factor = Perquintill::from_rational(exposure, total_exposure);
             info!(
                 "Validator {}, scaling factor {} / {}.",
@@ -267,71 +254,19 @@ pub fn points_and_payouts(
                 "Validator {}, scaling factor {:?}.",
                 account_id, scaling_factor
             );
-            (account_id, scaling_factor)
+
+            let scaled_points = (scaling_factor * (performance * u64::from(MAX_REWARD))) as u32;
+            info!(
+                "Validator {}, adjusted reward points {}",
+                account_id, scaled_points
+            );
+            (account_id, scaled_points)
         })
-        .collect();
-
-    let members_performance: Vec<(AccountId, Perquintill)> = members
-        .into_iter()
-        .map(|account_id| {
-            (
-                account_id.clone(),
-                node_performance(
-                    &connection,
-                    account_id,
-                    session,
-                    before_end_of_session_block_hash,
-                    blocks_to_produce_per_session,
-                    sessions_per_era,
-                ),
-            )
-        })
-        .collect();
-
-    let members_bench_performance: Vec<(AccountId, Perquintill)> = members_bench
-        .into_iter()
-        .map(|account_id| {
-            (
-                account_id,
-                Perquintill::from_rational(1, sessions_per_era as u64),
-            )
-        })
-        .collect();
-
-    let performance: Vec<_> = members_performance
-        .into_iter()
-        .chain(members_bench_performance.into_iter())
-        .collect();
-
-    reward_scaling_factors
-        .iter()
-        .for_each(|(account_id, scaling)| {
-            info!("reward_scaling_factors id {} {:?}", account_id, scaling);
-        });
-    performance.iter().for_each(|(account_id, perf)| {
-        info!("performance id {} {:?}", account_id, perf);
-    });
-
-    let adjusted_reward_points: Vec<(AccountId, u32)> = reward_scaling_factors
-        .into_iter()
-        .zip(performance.into_iter())
-        .map(
-            |((account_id, scaling_factor), (perf_account_id, performance))| {
-                assert_eq!(account_id, perf_account_id);
-
-                let scaled_points = (scaling_factor * (performance * u64::from(MAX_REWARD))) as u32;
-                info!(
-                    "Validator {}, adjusted reward points {}",
-                    account_id, scaled_points
-                );
-                (account_id, scaled_points)
-            },
-        )
         .collect();
 
     assert_eq!(
         validator_reward_points_current_session,
-        adjusted_reward_points.into_iter().collect()
+        adjusted_reward_points
     );
     check_rewards(
         validator_reward_points_current_era,
@@ -348,14 +283,12 @@ fn check_rewards(
     Ok(())
 }
 
-fn get_member_reward_points(total_exposure: u128) {}
-
 fn download_exposure(
     connection: &SignedConnection,
     era: u32,
     account_id: AccountId,
     end_of_session_block_hash: H256,
-) -> (AccountId, u128) {
+) -> u128 {
     let exposure: Exposure<AccountId, u128> = get_exposure(
         connection,
         era,
@@ -376,10 +309,10 @@ fn download_exposure(
             account_id, individual_exposure.who, individual_exposure.value
         )
     });
-    (account_id, exposure.total)
+    exposure.total
 }
 
-fn node_performance(
+fn get_node_performance(
     connection: &SignedConnection,
     account_id: AccountId,
     session: u32,
@@ -428,4 +361,14 @@ fn node_performance(
     );
     // Perquintill::from_rational(block_count as u64, blocks_to_produce_per_sessionas as u64)
     lenient_performance
+}
+
+fn get_block_hash(connection: &SignedConnection, block_number: u32) {
+    connection
+        .as_connection()
+        .get_block_hash(Some(block_number))
+        .expect("API call should have succeeded.")
+        .unwrap_or_else(|| {
+            panic!("Failed to obtain block hash for block {}.", block_number);
+        })
 }
