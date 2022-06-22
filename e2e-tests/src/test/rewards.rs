@@ -134,7 +134,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     // TODO
     // wait_for_full_era_completion(&connection)?;
     // let session = get_current_session(&connection);
-    let mut session = 3 * sessions_per_era;
+    let mut session = 4 * sessions_per_era;
 
     // panic!("boo");
 
@@ -333,7 +333,12 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         let non_reserved_bench_performance: Vec<(AccountId, Perquintill)> = non_reserved_bench
             .clone()
             .into_iter()
-            .map(|account_id| (account_id, Perquintill::one()))
+            .map(|account_id| {
+                (
+                    account_id,
+                    Perquintill::from_rational(1, sessions_per_era as u64),
+                )
+            })
             .collect();
 
         // let mut performance = BTreeMap::new();
