@@ -280,6 +280,21 @@ fn check_rewards(
     retrieved_reward_points: BTreeMap<AccountId, u32>,
     epsilon: f64,
 ) -> anyhow::Result<()> {
+    let computed_sum = validator_reward_points.iter().unzip().1.sum();
+    let retrieved_sum = retrieved_reward_points.iter().unzip().1.sum();
+
+    for (account, reward) in validator_reward_points {
+        let retrieved_reward = retrieved_reward_points.get(&account).expect(&format!(
+            "missing account={} in retrieved collection of reward points",
+            account
+        ));
+
+        let reward_ratio = reward as f64 / computed_sum as f64;
+        let retrieved_ratio = retrieved_reward as f64 / retrieved_sum as f64;
+
+        assert!((reward_ratio - retrieved_ratio).abs() <= epsilon);
+    }
+
     Ok(())
 }
 
