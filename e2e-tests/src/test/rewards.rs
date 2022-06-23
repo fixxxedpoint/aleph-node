@@ -81,6 +81,19 @@ pub fn get_exposure<C: AnyConnection>(
 }
 
 pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
+    let node = &config.node;
+    let accounts = get_validators_keys(config);
+    let sender = accounts.first().expect("Using default accounts").to_owned();
+    let connection = SignedConnection::new(node, sender);
+
+    let sessions_per_era: u32 = connection
+        .as_connection()
+        .get_constant("Staking", "SessionsPerEra")
+        .expect("Failed to decode SessionsPerEra extrinsic!");
+
+    let session = 4 * sessions_per_era;
+    let era = session / sessions_per_era;
+
     let reserved_members: Vec<_> = get_reserved_members(config)
         .iter()
         .map(|pair| AccountId::from(pair.public()))
@@ -101,26 +114,31 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         .for_each(|account_id| info!("Non-reserved member in committee: {}", account_id));
 
     let non_reserved_bench = non_reserved_members
-        .iter()
+        .into_iter()
         .filter(|account_id| !non_reserved_for_session.contains(account_id))
         .collect::<Vec<_>>();
     non_reserved_bench
         .iter()
         .for_each(|account_id| info!("Non-reserved member on bench: {}", account_id));
 
+    // TODO use a specified block
+    let members_per_session: u32 = connection
+        .as_connection()
+        .get_storage_value("Elections", "CommitteeSize", None)
+        .expect("Failed to decode CommitteeSize extrinsic!")
+        .unwrap_or_else(|| panic!("Failed to obtain CommitteeSize for session {}.", session));
+
     assert_eq!(
         (reserved_members.len() + non_reserved_for_session.len()) as u32,
         members_per_session
     );
 
-    let session = 1;
-    let era = 1;
+    let epsilon = 0.01;
 
     test_points_and_payouts(
         config,
         session,
         era,
-        reserved_members,
         reserved_members
             .into_iter()
             .chain(non_reserved_for_session.into_iter()),
@@ -133,7 +151,6 @@ pub fn test_points_and_payouts(
     config: &Config,
     session: u32,
     era: u32,
-    reserved_members: impl IntoIterator<Item = AccountId>,
     members: impl IntoIterator<Item = AccountId>,
     members_bench: impl IntoIterator<Item = AccountId>,
     epsilon: f64,
@@ -156,7 +173,7 @@ pub fn test_points_and_payouts(
     info!("[+] Era: {} | session: {}", era, session);
     info!("Sessions per era: {}", sessions_per_era);
 
-    let beggining_of_session_block = session * sessior_period;
+    let beggining_of_session_block = session * session_period;
     let end_of_session_block = beggining_of_session_block + session_period;
     info!("Waiting for block: {}", end_of_session_block);
     wait_for_finalized_block(&connection, end_of_session_block)?;
@@ -205,16 +222,10 @@ pub fn test_points_and_payouts(
                 info!(
                     "In session {} validator {} accumulated {}.",
                     session, account_id, reward_points
-                )(account_id, reward_points_current)
+                );
+                (account_id, reward_points_current)
             })
             .collect();
-
-    let total_exposure: u128 = validator_exposures
-        .iter()
-        .map(|(_, exposure)| exposure)
-        .sum();
-
-    info!("Total exposure {}", total_exposure);
 
     let members_performance = members.into_iter().map(|account_id| {
         (
@@ -237,13 +248,29 @@ pub fn test_points_and_payouts(
         )
     });
 
-    let adjusted_reward_points: Vec<(AccountId, u128)> = members_performance
-        .iter()
-        .chain(members_bench_performance.iter())
-        .cloned()
-        .map(|account_id, performance| {
+    // let all_members = members_performance.iter().chain(members_bench_performance.iter()).cloned();
+    let mut total_exposure = 0;
+    let validator_exposures: Vec<(AccountId, Perquintill, u128)> = members_performance
+        .chain(members_bench_performance)
+        .map(|(account_id, performance)| {
+            let exposure = get_exposure(
+                &connection,
+                era,
+                &account_id,
+                Some(end_of_session_block_hash),
+            )
+            .total;
+            total_exposure += exposure;
+            (account_id, performance, exposure)
+        })
+        .collect();
+    info!("Total exposure {}", total_exposure);
+
+    let adjusted_reward_points = validator_exposures
+        .into_iter()
+        .map(|(account_id, performance, exposure)| {
             let exposure =
-                download_exposure(&connection, era, account_id, end_of_session_block_hash);
+                download_exposure(&connection, era, &account_id, end_of_session_block_hash);
 
             let scaling_factor = Perquintill::from_rational(exposure, total_exposure);
             info!(
@@ -264,10 +291,6 @@ pub fn test_points_and_payouts(
         })
         .collect();
 
-    assert_eq!(
-        validator_reward_points_current_session,
-        adjusted_reward_points
-    );
     check_rewards(
         validator_reward_points_current_era,
         adjusted_reward_points,
@@ -280,16 +303,22 @@ fn check_rewards(
     retrieved_reward_points: BTreeMap<AccountId, u32>,
     epsilon: f64,
 ) -> anyhow::Result<()> {
-    let computed_sum = validator_reward_points.iter().unzip().1.sum();
-    let retrieved_sum = retrieved_reward_points.iter().unzip().1.sum();
+    let our_sum: u32 = validator_reward_points
+        .iter()
+        .map(|(_, reward)| reward)
+        .sum();
+    let retrieved_sum: u32 = retrieved_reward_points
+        .iter()
+        .map(|(_, reward)| reward)
+        .sum();
 
     for (account, reward) in validator_reward_points {
-        let retrieved_reward = retrieved_reward_points.get(&account).expect(&format!(
+        let retrieved_reward = *retrieved_reward_points.get(&account).expect(&format!(
             "missing account={} in retrieved collection of reward points",
             account
         ));
 
-        let reward_ratio = reward as f64 / computed_sum as f64;
+        let reward_ratio = reward as f64 / our_sum as f64;
         let retrieved_ratio = retrieved_reward as f64 / retrieved_sum as f64;
 
         assert!((reward_ratio - retrieved_ratio).abs() <= epsilon);
@@ -301,15 +330,11 @@ fn check_rewards(
 fn download_exposure(
     connection: &SignedConnection,
     era: u32,
-    account_id: AccountId,
+    account_id: &AccountId,
     end_of_session_block_hash: H256,
 ) -> u128 {
-    let exposure: Exposure<AccountId, u128> = get_exposure(
-        connection,
-        era,
-        &account_id,
-        Some(end_of_session_block_hash),
-    );
+    let exposure: Exposure<AccountId, u128> =
+        get_exposure(connection, era, account_id, Some(end_of_session_block_hash));
     info!(
         "Validator {} has own exposure {}.",
         account_id, exposure.own
@@ -357,7 +382,7 @@ fn get_node_performance(
     let performance =
         Perquintill::from_rational(block_count as u64, blocks_to_produce_per_session as u64);
     info!("Validator {}, performance {:?}", account_id, performance);
-    // TODO zamienilem > na >=
+    // NOTE following value allows us to make performance of a node to be bigger than 1.0
     let lenient_performance =
         match performance >= LENIENT_THRESHOLD && blocks_to_produce_per_session >= block_count {
             true => Perquintill::from_rational(1, sessions_per_era as u64),
@@ -378,7 +403,7 @@ fn get_node_performance(
     lenient_performance
 }
 
-fn get_block_hash(connection: &SignedConnection, block_number: u32) {
+fn get_block_hash(connection: &SignedConnection, block_number: u32) -> H256 {
     connection
         .as_connection()
         .get_block_hash(Some(block_number))
