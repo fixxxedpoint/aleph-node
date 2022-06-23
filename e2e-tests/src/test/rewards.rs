@@ -3,9 +3,9 @@ use crate::{
     Config,
 };
 use aleph_client::{
-    change_validators, get_current_session, get_era_reward_points, wait_for_finalized_block,
-    wait_for_full_era_completion, AnyConnection, Header, KeyPair, RewardPoint, RootConnection,
-    SignedConnection,
+    change_validators, get_current_session, get_era_reward_points,
+    get_era_reward_points_or_default, wait_for_finalized_block, wait_for_full_era_completion,
+    AnyConnection, Header, KeyPair, RewardPoint, RootConnection, SignedConnection,
 };
 use pallet_staking::Exposure;
 use primitives::{LENIENT_THRESHOLD, MAX_REWARD};
@@ -91,7 +91,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         .get_constant("Staking", "SessionsPerEra")
         .expect("Failed to decode SessionsPerEra extrinsic!");
 
-    let session = 1 * sessions_per_era;
+    let session = 2 * sessions_per_era;
     let era = session / sessions_per_era;
 
     let reserved_members: Vec<_> = get_reserved_members(config)
@@ -121,7 +121,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         .iter()
         .for_each(|account_id| info!("Non-reserved member on bench: {}", account_id));
 
-    let epsilon = 0.01;
+    let epsilon = 0.05;
 
     test_points_and_payouts(
         config,
@@ -195,7 +195,8 @@ pub fn test_points_and_payouts(
         get_era_reward_points(&connection, era, Some(end_of_session_block_hash)).individual;
 
     let validator_reward_points_previous_session =
-        get_era_reward_points(&connection, era, Some(beggining_of_session_block_hash)).individual;
+        get_era_reward_points_or_default(&connection, era, Some(beggining_of_session_block_hash))
+            .individual;
 
     let validator_reward_points_current_session: BTreeMap<AccountId, RewardPoint> =
         validator_reward_points_current_era
@@ -272,8 +273,8 @@ pub fn test_points_and_payouts(
         .collect();
 
     check_rewards(
-        validator_reward_points_current_era,
         adjusted_reward_points,
+        validator_reward_points_current_era,
         epsilon,
     )
 }
@@ -298,9 +299,18 @@ fn check_rewards(
             account
         ));
 
+        info!(
+            "retrieved reward for {} is {} - calculated reward is {}",
+            account, retrieved_reward, reward
+        );
+
         let reward_ratio = reward as f64 / our_sum as f64;
         let retrieved_ratio = retrieved_reward as f64 / retrieved_sum as f64;
 
+        info!(
+            "reward_ratio: {}; retrieved_ratio: {}",
+            reward_ratio, retrieved_ratio
+        );
         assert!((reward_ratio - retrieved_ratio).abs() <= epsilon);
     }
 
