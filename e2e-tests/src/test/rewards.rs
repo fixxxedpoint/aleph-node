@@ -3,9 +3,9 @@ use crate::{
     Config,
 };
 use aleph_client::{
-    change_validators, get_current_session, get_era_reward_points,
-    get_era_reward_points_or_default, wait_for_finalized_block, wait_for_full_era_completion,
-    AnyConnection, Header, KeyPair, RewardPoint, RootConnection, SignedConnection,
+    change_validators, get_current_session, get_era_reward_points, get_era_reward_points_result,
+    wait_for_finalized_block, wait_for_full_era_completion, AnyConnection, EraRewardPoints, Header,
+    KeyPair, RewardPoint, RootConnection, SignedConnection,
 };
 use log::info;
 use pallet_staking::Exposure;
@@ -90,7 +90,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         .get_constant("Staking", "SessionsPerEra")
         .expect("Failed to decode SessionsPerEra extrinsic!");
 
-    let session = 2 * sessions_per_era;
+    let session = 2 * sessions_per_era + 1;
     let era = session / sessions_per_era;
 
     let reserved_members: Vec<_> = get_reserved_members(config)
@@ -162,9 +162,8 @@ pub fn test_points_and_payouts(
 
     let beggining_of_session_block_hash = get_block_hash(&connection, beggining_of_session_block);
     let end_of_session_block_hash = get_block_hash(&connection, end_of_session_block);
-    info!("End-of-session block hash: {}.", end_of_session_block_hash);
-
     let before_end_of_session_block_hash = get_block_hash(&connection, end_of_session_block - 1);
+    info!("End-of-session block hash: {}.", end_of_session_block_hash);
 
     let members_per_session: u32 = connection
         .as_connection()
@@ -189,7 +188,9 @@ pub fn test_points_and_payouts(
         get_era_reward_points(&connection, era, Some(end_of_session_block_hash)).individual;
 
     let validator_reward_points_previous_session =
-        get_era_reward_points_or_default(&connection, era, Some(beggining_of_session_block_hash))
+        get_era_reward_points_result(&connection, era, Some(beggining_of_session_block_hash))
+            .expect("should be able to retrieve EraRewardPoints")
+            .unwrap_or(EraRewardPoints::default())
             .individual;
 
     let validator_reward_points_current_session: BTreeMap<AccountId, RewardPoint> =
@@ -210,7 +211,7 @@ pub fn test_points_and_payouts(
             })
             .collect();
 
-    let members_performance = members.into_iter().map(|account_id| {
+    let members_uptime = members.into_iter().map(|account_id| {
         (
             account_id.clone(),
             get_node_performance(
@@ -224,14 +225,13 @@ pub fn test_points_and_payouts(
         )
     });
 
-    let members_bench_performance = members_bench
+    let members_bench_uptime = members_bench
         .into_iter()
         .map(|account_id| (account_id, 1.0));
 
-    // let all_members = members_performance.iter().chain(members_bench_performance.iter()).cloned();
     let mut total_exposure = 0;
-    let validator_exposures: Vec<(AccountId, f64, u128)> = members_performance
-        .chain(members_bench_performance)
+    let uptime_and_exposure: Vec<(AccountId, f64, u128)> = members_uptime
+        .chain(members_bench_uptime)
         .map(|(account_id, performance)| {
             let exposure =
                 download_exposure(&connection, era, &account_id, end_of_session_block_hash);
@@ -241,20 +241,20 @@ pub fn test_points_and_payouts(
         .collect();
     info!("Total exposure {}", total_exposure);
 
-    let adjusted_reward_points = validator_exposures
+    let adjusted_reward_points = uptime_and_exposure
         .into_iter()
         .map(|(account_id, performance, exposure)| {
-            let scaling_factor = exposure as f64 / total_exposure as f64;
+            let exposure_scaling = exposure as f64 / total_exposure as f64;
             info!(
                 "Validator {}, scaling factor {} / {}.",
                 account_id, exposure, total_exposure
             );
             info!(
                 "Validator {}, scaling factor {:?}.",
-                account_id, scaling_factor
+                account_id, exposure_scaling
             );
 
-            let scaled_points = (scaling_factor * (performance * f64::from(MAX_REWARD))) as u32;
+            let scaled_points = (exposure_scaling * (performance * f64::from(MAX_REWARD))) as u32;
             // let scaled_points = scaling_factor * performance;
             info!(
                 "Validator {}, adjusted reward points {}",

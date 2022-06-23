@@ -308,7 +308,7 @@ pub type RewardPoint = u32;
 /// Reward points of an era. Used to split era total payout between validators.
 ///
 /// This points will be used to reward validators and their respective nominators.
-#[derive(Clone, Decode)]
+#[derive(Clone, Decode, Default)]
 pub struct EraRewardPoints {
     /// Total number of points. Equals the sum of reward points for each validator.
     pub total: RewardPoint,
@@ -326,4 +326,14 @@ pub fn get_era_reward_points<C: AnyConnection>(
         .get_storage_map("Staking", "ErasRewardPoints", era, block_hash)
         .expect("Failed to obtain ErasRewardPoints.")
         .unwrap_or_else(|| panic!("Failed to obtain EraRewardPoints for era {}.", era))
+}
+
+pub fn get_era_reward_points_result<C: AnyConnection>(
+    connection: &C,
+    era: u32,
+    block_hash: Option<H256>,
+) -> ApiResult<Option<EraRewardPoints>> {
+    connection
+        .as_connection()
+        .get_storage_map("Staking", "ErasRewardPoints", era, block_hash)
 }
