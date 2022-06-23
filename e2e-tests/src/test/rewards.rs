@@ -7,14 +7,13 @@ use aleph_client::{
     get_era_reward_points_or_default, wait_for_finalized_block, wait_for_full_era_completion,
     AnyConnection, Header, KeyPair, RewardPoint, RootConnection, SignedConnection,
 };
+use log::info;
 use pallet_staking::Exposure;
 use primitives::{LENIENT_THRESHOLD, MAX_REWARD};
 use sp_core::{Pair, H256};
+use sp_runtime::Perquintill;
 use std::collections::BTreeMap;
 use substrate_api_client::{AccountId, XtStatus};
-
-use frame_election_provider_support::sp_arithmetic::Perquintill;
-use log::info;
 
 const ERAS: u32 = 100;
 
@@ -124,7 +123,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     let epsilon = 0.05;
 
     test_points_and_payouts(
-        config,
+        connection,
         session,
         era,
         reserved_members
@@ -136,18 +135,13 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
 }
 
 pub fn test_points_and_payouts(
-    config: &Config,
+    connection: SignedConnection,
     session: u32,
     era: u32,
     members: impl IntoIterator<Item = AccountId>,
     members_bench: impl IntoIterator<Item = AccountId>,
     epsilon: f64,
 ) -> anyhow::Result<()> {
-    let node = &config.node;
-    let accounts = get_validators_keys(config);
-    let sender = accounts.first().expect("Using default accounts").to_owned();
-    let connection = SignedConnection::new(node, sender);
-
     let session_period: u32 = connection
         .as_connection()
         .get_constant("Elections", "SessionPeriod")
@@ -230,16 +224,13 @@ pub fn test_points_and_payouts(
         )
     });
 
-    let members_bench_performance = members_bench.into_iter().map(|account_id| {
-        (
-            account_id,
-            Perquintill::from_rational(1, sessions_per_era as u64),
-        )
-    });
+    let members_bench_performance = members_bench
+        .into_iter()
+        .map(|account_id| (account_id, 1.0));
 
     // let all_members = members_performance.iter().chain(members_bench_performance.iter()).cloned();
     let mut total_exposure = 0;
-    let validator_exposures: Vec<(AccountId, Perquintill, u128)> = members_performance
+    let validator_exposures: Vec<(AccountId, f64, u128)> = members_performance
         .chain(members_bench_performance)
         .map(|(account_id, performance)| {
             let exposure =
@@ -253,7 +244,7 @@ pub fn test_points_and_payouts(
     let adjusted_reward_points = validator_exposures
         .into_iter()
         .map(|(account_id, performance, exposure)| {
-            let scaling_factor = Perquintill::from_rational(exposure, total_exposure);
+            let scaling_factor = exposure as f64 / total_exposure as f64;
             info!(
                 "Validator {}, scaling factor {} / {}.",
                 account_id, exposure, total_exposure
@@ -263,7 +254,8 @@ pub fn test_points_and_payouts(
                 account_id, scaling_factor
             );
 
-            let scaled_points = (scaling_factor * (performance * u64::from(MAX_REWARD))) as u32;
+            let scaled_points = (scaling_factor * (performance * f64::from(MAX_REWARD))) as u32;
+            // let scaled_points = scaling_factor * performance;
             info!(
                 "Validator {}, adjusted reward points {}",
                 account_id, scaled_points
@@ -349,7 +341,7 @@ fn get_node_performance(
     before_end_of_session_block_hash: H256,
     blocks_to_produce_per_session: u32,
     sessions_per_era: u32,
-) -> Perquintill {
+) -> f64 {
     let block_count: u32 = connection
         .as_connection()
         .get_storage_map(
@@ -369,18 +361,15 @@ fn get_node_performance(
         "Block count for validator {} is {:?}, block hash is {}.",
         account_id, block_count, before_end_of_session_block_hash
     );
-    let performance =
-        Perquintill::from_rational(block_count as u64, blocks_to_produce_per_session as u64);
+    let performance = block_count as f64 / blocks_to_produce_per_session as f64;
     info!("Validator {}, performance {:?}", account_id, performance);
     // NOTE following value allows us to make performance of a node to be bigger than 1.0
-    let lenient_performance =
-        match performance >= LENIENT_THRESHOLD && blocks_to_produce_per_session >= block_count {
-            true => Perquintill::from_rational(1, sessions_per_era as u64),
-            false => Perquintill::from_rational(
-                block_count as u64,
-                blocks_to_produce_per_session as u64 * sessions_per_era as u64,
-            ),
-        };
+    let lenient_performance = match Perquintill::from_float(performance) >= LENIENT_THRESHOLD
+        && blocks_to_produce_per_session >= block_count
+    {
+        true => 1.0,
+        false => performance,
+    };
     info!(
         "Validator {}, lenient performance {:?}",
         account_id, lenient_performance
@@ -389,7 +378,6 @@ fn get_node_performance(
         "Validator {}, lenient performance 2 {} / {}",
         account_id, block_count, blocks_to_produce_per_session
     );
-    // Perquintill::from_rational(block_count as u64, blocks_to_produce_per_sessionas as u64)
     lenient_performance
 }
 
