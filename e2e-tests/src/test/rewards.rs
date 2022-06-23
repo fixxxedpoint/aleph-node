@@ -91,7 +91,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         .get_constant("Staking", "SessionsPerEra")
         .expect("Failed to decode SessionsPerEra extrinsic!");
 
-    let session = 4 * sessions_per_era;
+    let session = 1 * sessions_per_era;
     let era = session / sessions_per_era;
 
     let reserved_members: Vec<_> = get_reserved_members(config)
@@ -120,18 +120,6 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     non_reserved_bench
         .iter()
         .for_each(|account_id| info!("Non-reserved member on bench: {}", account_id));
-
-    // TODO use a specified block
-    let members_per_session: u32 = connection
-        .as_connection()
-        .get_storage_value("Elections", "CommitteeSize", None)
-        .expect("Failed to decode CommitteeSize extrinsic!")
-        .unwrap_or_else(|| panic!("Failed to obtain CommitteeSize for session {}.", session));
-
-    assert_eq!(
-        (reserved_members.len() + non_reserved_for_session.len()) as u32,
-        members_per_session
-    );
 
     let epsilon = 0.01;
 
@@ -189,7 +177,7 @@ pub fn test_points_and_payouts(
         .get_storage_value(
             "Elections",
             "CommitteeSize",
-            Some(end_of_session_block_hash),
+            Some(beggining_of_session_block_hash),
         )
         .expect("Failed to decode CommitteeSize extrinsic!")
         .unwrap_or_else(|| panic!("Failed to obtain CommitteeSize for session {}.", session));
@@ -253,13 +241,8 @@ pub fn test_points_and_payouts(
     let validator_exposures: Vec<(AccountId, Perquintill, u128)> = members_performance
         .chain(members_bench_performance)
         .map(|(account_id, performance)| {
-            let exposure = get_exposure(
-                &connection,
-                era,
-                &account_id,
-                Some(end_of_session_block_hash),
-            )
-            .total;
+            let exposure =
+                download_exposure(&connection, era, &account_id, end_of_session_block_hash);
             total_exposure += exposure;
             (account_id, performance, exposure)
         })
@@ -269,9 +252,6 @@ pub fn test_points_and_payouts(
     let adjusted_reward_points = validator_exposures
         .into_iter()
         .map(|(account_id, performance, exposure)| {
-            let exposure =
-                download_exposure(&connection, era, &account_id, end_of_session_block_hash);
-
             let scaling_factor = Perquintill::from_rational(exposure, total_exposure);
             info!(
                 "Validator {}, scaling factor {} / {}.",
