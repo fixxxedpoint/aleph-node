@@ -36,6 +36,7 @@ pub fn possible_test_cases() -> PossibleTestCases {
             "staking_new_validator",
             test_staking_new_validator as TestCase,
         ),
+        ("TODO_disable_node", test_disable_node as TestCase),
         ("change_validators", test_change_validators as TestCase),
         ("fee_calculation", test_fee_calculation as TestCase),
         ("era_payout", test_era_payout as TestCase),

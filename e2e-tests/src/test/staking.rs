@@ -209,3 +209,10 @@ pub fn staking_new_validator(config: &Config) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+pub fn disable_node(_: &Config) -> anyhow::Result<()> {
+    // TODO
+    // disable_validator(config)
+    todo!();
+    Ok(())
+}

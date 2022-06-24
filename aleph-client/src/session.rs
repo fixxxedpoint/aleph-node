@@ -93,24 +93,38 @@ pub fn get_current<C: AnyConnection>(connection: &C) -> u32 {
         .unwrap_or(0)
 }
 
-pub fn wait_for<C: AnyConnection>(
+pub fn wait_for_predicate<C: AnyConnection, P: Fn(u32) -> bool>(
     connection: &C,
-    session_index: u32,
+    session_predicate: P,
 ) -> anyhow::Result<BlockNumber> {
-    info!(target: "aleph-client", "Waiting for session {}", session_index);
+    info!(target: "aleph-client", "Waiting for session");
 
     #[derive(Debug, Decode, Clone)]
     struct NewSessionEvent {
         session_index: u32,
     }
-    wait_for_event(
+    let result = wait_for_event(
         connection,
         ("Session", "NewSession"),
         |e: NewSessionEvent| {
             info!(target: "aleph-client", "New session {}", e.session_index);
 
-            e.session_index == session_index
+            session_predicate(e.session_index)
         },
     )?;
-    Ok(session_index)
+    Ok(result.session_index)
+}
+
+pub fn wait_for<C: AnyConnection>(
+    connection: &C,
+    session_index: u32,
+) -> anyhow::Result<BlockNumber> {
+    wait_for_predicate(connection, |session_ix| session_ix == session_index)
+}
+
+pub fn wait_for_at_least<C: AnyConnection>(
+    connection: &C,
+    session_index: u32,
+) -> anyhow::Result<BlockNumber> {
+    wait_for_predicate(connection, |session_ix| session_ix >= session_index)
 }
