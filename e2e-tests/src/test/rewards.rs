@@ -3,8 +3,9 @@ use crate::{
     Config,
 };
 use aleph_client::{
-    get_era_reward_points, get_era_reward_points_result, wait_for_finalized_block, AnyConnection,
-    EraRewardPoints, KeyPair, RewardPoint, SignedConnection,
+    get_current_session, get_era_reward_points, get_era_reward_points_result, get_session,
+    wait_for_finalized_block, wait_for_next_era, AnyConnection, EraRewardPoints, KeyPair,
+    RewardPoint, SignedConnection,
 };
 use log::info;
 use pallet_staking::Exposure;
@@ -13,6 +14,8 @@ use sp_core::{Pair, H256};
 use sp_runtime::Perquintill;
 use std::collections::BTreeMap;
 use substrate_api_client::AccountId;
+
+use super::utility::disable_validator;
 
 fn get_reserved_members(config: &Config) -> Vec<KeyPair> {
     get_validators_keys(config)[0..2].to_vec()
@@ -96,7 +99,63 @@ fn get_sessions_per_era<C: AnyConnection>(connection: &C) -> u32 {
 //     );
 // }
 
-pub fn test_disable_node(config: &Config) {}
+pub fn test_disable_node(config: &Config) {
+    let root_connection: RootConnection =
+        SignedConnection::new(&config.node, get_sudo_key(config)).into();
+    let current_era = wait_to_second_era(&root_connection);
+    wait_for_next_era(&root_connection)?;
+    let current_era = current_era + 1;
+
+    let controller_connection = config.node_keys().controller_key;
+
+    disable_validator(controller_connection);
+    let next_era_block = wait_for_next_era(&root_connection);
+    let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
+
+    let current_session = get_session(&controller_connection, Some(next_era_block_hash));
+
+    let next_era_block = wait_for_next_era(&root_connection);
+    let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
+
+    let era_end_session = get_session(&controller_connection, Some(next_era_block_hash));
+
+    let reserved_members: Vec<_> = get_reserved_members(config)
+        .iter()
+        .map(|pair| AccountId::from(pair.public()))
+        .collect();
+    let non_reserved_members: Vec<_> = get_non_reserved_members(config)
+        .iter()
+        .map(|pair| AccountId::from(pair.public()))
+        .collect();
+    let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
+    let non_reserved_bench = non_reserved_members
+        .into_iter()
+        .filter(|account_id| !non_reserved_for_session.contains(account_id))
+        .collect::<Vec<_>>();
+
+    let members = reserved_members
+        .into_iter()
+        .chain(non_reserved_for_session)
+        // we just disabled the first node (TODO ehhh, really?)
+        .skip(1);
+    let members_bench = non_reserved_bench;
+
+    let max_difference = 0.001;
+    for session in (current_session..era_end_session) {
+        test_points_and_payouts(
+            &controller_connection,
+            session,
+            era,
+            members,
+            members_bench,
+            max_difference,
+        )?
+    }
+}
+
+// fn get_sessions_for_era<C: AnyConnection>(connection: &C, era: u32) -> Range<u32> {}
+
+// fn points_and_payouts_for_era(config: &Config, era: u32) -> anyhow::Result<()> {}
 
 pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     let node = &config.node;
@@ -139,7 +198,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     let epsilon = 0.05;
 
     test_points_and_payouts(
-        connection,
+        &connection,
         session,
         era,
         reserved_members.into_iter().chain(non_reserved_for_session),
@@ -149,7 +208,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
 }
 
 pub fn test_points_and_payouts(
-    connection: SignedConnection,
+    connection: &SignedConnection,
     session: u32,
     era: u32,
     members: impl IntoIterator<Item = AccountId>,

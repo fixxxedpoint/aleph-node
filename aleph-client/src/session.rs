@@ -3,7 +3,7 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use log::info;
-use sp_core::Pair;
+use sp_core::{Pair, H256};
 use substrate_api_client::{
     compose_call, compose_extrinsic, AccountId, ExtrinsicParams, FromHexString, XtStatus,
 };
@@ -86,9 +86,13 @@ pub fn set_keys(connection: &SignedConnection, new_keys: Keys, status: XtStatus)
 
 /// Get the number of the current session.
 pub fn get_current<C: AnyConnection>(connection: &C) -> u32 {
+    get_session(connection, None)
+}
+
+pub fn get_session<C: AnyConnection>(connection: &C, block_hash: Option<H256>) -> u32 {
     connection
         .as_connection()
-        .get_storage_value("Session", "CurrentIndex", None)
+        .get_storage_value("Session", "CurrentIndex", block_hash)
         .unwrap()
         .unwrap_or(0)
 }

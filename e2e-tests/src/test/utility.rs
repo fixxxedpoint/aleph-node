@@ -1,18 +1,14 @@
+use crate::{config::Config, transfer::setup_for_transfer};
+use aleph_client::{
+    get_current_session, rotate_keys, set_keys, wait_for_at_least_session,
+    wait_for_finalized_block, AnyConnection, SessionKeys, SignedConnection,
+};
+use codec::Compact;
 use log::info;
-
-use crate::transfer::setup_for_transfer;
 use sp_core::Pair;
 use substrate_api_client::{
     compose_call, compose_extrinsic, ExtrinsicParams, GenericAddress, XtStatus,
 };
-
-use aleph_client::{
-    get_current_session, rotate_keys, set_keys, wait_for_finalized_block, AnyConnection,
-    SessionKeys, SignedConnection,
-};
-use codec::Compact;
-
-use crate::config::Config;
 
 pub fn batch_transactions(config: &Config) -> anyhow::Result<()> {
     const NUMBER_OF_TRANSACTIONS: usize = 100;
@@ -58,7 +54,7 @@ pub fn disable_validator(controller_connection: SignedConnection) -> anyhow::Res
     set_keys(&controller_connection, ZERO_SESSION_KEYS, XtStatus::InBlock);
     // wait until our node is forced to use new keys, i.e. current session + 2
     let current_session = get_current_session(&controller_connection);
-    wait_for_finalized_block(&controller_connection, current_session + 2)?;
+    wait_for_at_least_session(&controller_connection, current_session + 2)?;
 
     Ok(())
 }
@@ -72,7 +68,7 @@ pub fn enable_validator(controller_connection: SignedConnection) -> anyhow::Resu
 
     // wait until our node is forced to use new keys, i.e. current session + 2
     let current_session = get_current_session(&controller_connection);
-    wait_for_finalized_block(&controller_connection, current_session + 2)?;
+    wait_for_at_least_session(&controller_connection, current_session + 2)?;
 
     Ok(())
 }

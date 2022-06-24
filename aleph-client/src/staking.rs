@@ -98,13 +98,7 @@ pub fn force_new_era(connection: &RootConnection, status: XtStatus) {
 }
 
 pub fn get_current_era<C: AnyConnection>(connection: &C) -> u32 {
-    let current_era = connection
-        .as_connection()
-        .get_storage_value("Staking", "ActiveEra", None)
-        .expect("Failed to decode ActiveEra extrinsic!")
-        .expect("ActiveEra is empty in the storage!");
-    info!(target: "aleph-client", "Current era is {}", current_era);
-    current_era
+    get_era(connection, None)
 }
 
 pub fn wait_for_full_era_completion<C: AnyConnection>(
@@ -131,6 +125,16 @@ fn wait_for_era_completion<C: AnyConnection>(
     let first_session_in_next_era = next_era_index * sessions_per_era;
     wait_for_session(connection, first_session_in_next_era)?;
     Ok(next_era_index)
+}
+
+fn get_era<C: AnyConnection>(connection: &C, block: Option<H256>) -> u32 {
+    let current_era = connection
+        .as_connection()
+        .get_storage_value("Staking", "ActiveEra", block)
+        .expect("Failed to decode ActiveEra extrinsic!")
+        .expect("ActiveEra is empty in the storage!");
+    info!(target: "aleph-client", "Current era is {}", current_era);
+    current_era
 }
 
 pub fn payout_stakers(
