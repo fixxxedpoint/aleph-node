@@ -6,7 +6,10 @@ use substrate_api_client::{
     compose_call, compose_extrinsic, ExtrinsicParams, GenericAddress, XtStatus,
 };
 
-use aleph_client::AnyConnection;
+use aleph_client::{
+    get_current_session, rotate_keys, set_keys, wait_for_finalized_block, AnyConnection,
+    SessionKeys, SignedConnection,
+};
 use codec::Compact;
 
 use crate::config::Config;
@@ -40,6 +43,36 @@ pub fn batch_transactions(config: &Config) -> anyhow::Result<()> {
         "[+] A batch of {} transactions was included in finalized {} block.",
         NUMBER_OF_TRANSACTIONS, finalized_block_hash
     );
+
+    Ok(())
+}
+
+pub const ZERO_SESSION_KEYS: SessionKeys = SessionKeys {
+    aura: [0; 32],
+    aleph: [0; 32],
+};
+
+/// Changes keys of the first node described by the `validator_seeds` list to some `zero` values,
+/// making it impossible to create new legal blocks.
+pub fn disable_validator(controller_connection: SignedConnection) -> anyhow::Result<()> {
+    set_keys(&controller_connection, ZERO_SESSION_KEYS, XtStatus::InBlock);
+    // wait until our node is forced to use new keys, i.e. current session + 2
+    let current_session = get_current_session(&controller_connection);
+    wait_for_finalized_block(&controller_connection, current_session + 2)?;
+
+    Ok(())
+}
+
+/// Rotates the keys of the first node described by the `validator_seeds` list,
+/// making it able to rejoin the `consensus`.
+pub fn enable_validator(controller_connection: SignedConnection) -> anyhow::Result<()> {
+    let validator_keys =
+        rotate_keys(&controller_connection).expect("Failed to retrieve keys from chain");
+    set_keys(&controller_connection, validator_keys, XtStatus::InBlock);
+
+    // wait until our node is forced to use new keys, i.e. current session + 2
+    let current_session = get_current_session(&controller_connection);
+    wait_for_finalized_block(&controller_connection, current_session + 2)?;
 
     Ok(())
 }
