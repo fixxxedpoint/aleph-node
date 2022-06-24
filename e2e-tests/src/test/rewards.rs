@@ -8,7 +8,7 @@ use aleph_client::{
 };
 use log::info;
 use pallet_staking::Exposure;
-use primitives::{LENIENT_THRESHOLD, MAX_REWARD};
+use primitives::LENIENT_THRESHOLD;
 use sp_core::{Pair, H256};
 use sp_runtime::Perquintill;
 use std::collections::BTreeMap;
@@ -96,6 +96,8 @@ fn get_sessions_per_era<C: AnyConnection>(connection: &C) -> u32 {
 //     );
 // }
 
+pub fn test_disable_node(config: &Config) {}
+
 pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     let node = &config.node;
     let accounts = get_validators_keys(config);
@@ -140,9 +142,7 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         connection,
         session,
         era,
-        reserved_members
-            .into_iter()
-            .chain(non_reserved_for_session.into_iter()),
+        reserved_members.into_iter().chain(non_reserved_for_session),
         non_reserved_bench,
         epsilon,
     )
@@ -154,7 +154,7 @@ pub fn test_points_and_payouts(
     era: u32,
     members: impl IntoIterator<Item = AccountId>,
     members_bench: impl IntoIterator<Item = AccountId>,
-    epsilon: f64,
+    max_relative_difference: f64,
 ) -> anyhow::Result<()> {
     let session_period = get_session_period(&connection);
 
@@ -271,7 +271,7 @@ pub fn test_points_and_payouts(
     check_rewards(
         adjusted_reward_points,
         validator_reward_points_current_session,
-        epsilon,
+        max_relative_difference,
     )
 }
 
@@ -285,7 +285,7 @@ fn get_session_period<C: AnyConnection>(connection: &C) -> u32 {
 fn check_rewards(
     validator_reward_points: BTreeMap<AccountId, f64>,
     retrieved_reward_points: BTreeMap<AccountId, u32>,
-    epsilon: f64,
+    max_relative_difference: f64,
 ) -> anyhow::Result<()> {
     let our_sum: f64 = validator_reward_points
         .iter()
@@ -307,14 +307,14 @@ fn check_rewards(
             account, retrieved_reward, reward
         );
 
-        let reward_ratio = reward as f64 / our_sum;
+        let reward_ratio = reward / our_sum;
         let retrieved_ratio = retrieved_reward as f64 / retrieved_sum as f64;
 
         info!(
             "reward_ratio: {}; retrieved_ratio: {}",
             reward_ratio, retrieved_ratio
         );
-        assert!((reward_ratio - retrieved_ratio).abs() <= epsilon);
+        assert!((reward_ratio - retrieved_ratio).abs() <= max_relative_difference);
     }
 
     Ok(())
