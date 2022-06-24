@@ -1,11 +1,10 @@
 use crate::{
-    accounts::{accounts_seeds_to_keys, get_sudo_key, get_validators_keys, get_validators_seeds},
+    accounts::{accounts_seeds_to_keys, get_validators_keys, get_validators_seeds},
     Config,
 };
 use aleph_client::{
-    change_validators, get_current_session, get_era_reward_points, get_era_reward_points_result,
-    wait_for_finalized_block, wait_for_full_era_completion, AnyConnection, EraRewardPoints, Header,
-    KeyPair, RewardPoint, RootConnection, SignedConnection,
+    get_era_reward_points, get_era_reward_points_result, wait_for_finalized_block, AnyConnection,
+    EraRewardPoints, KeyPair, RewardPoint, SignedConnection,
 };
 use log::info;
 use pallet_staking::Exposure;
@@ -13,9 +12,7 @@ use primitives::{LENIENT_THRESHOLD, MAX_REWARD};
 use sp_core::{Pair, H256};
 use sp_runtime::Perquintill;
 use std::collections::BTreeMap;
-use substrate_api_client::{AccountId, XtStatus};
-
-const ERAS: u32 = 100;
+use substrate_api_client::AccountId;
 
 fn get_reserved_members(config: &Config) -> Vec<KeyPair> {
     get_validators_keys(config)[0..2].to_vec()
@@ -50,8 +47,8 @@ fn get_non_reserved_members_for_session(config: &Config, session: u32) -> Vec<Ac
 }
 
 fn get_authorities_for_session<C: AnyConnection>(connection: &C, session: u32) -> Vec<AccountId> {
-    const SESSION_PERIOD: u32 = 30;
-    let first_block = SESSION_PERIOD * session;
+    let session_period = get_session_period(connection);
+    let first_block = session_period * session;
 
     let block = connection
         .as_connection()
@@ -79,16 +76,33 @@ pub fn get_exposure<C: AnyConnection>(
         .unwrap_or_else(|| panic!("Failed to obtain ErasStakers for era {}.", era))
 }
 
+fn get_sessions_per_era<C: AnyConnection>(connection: &C) -> u32 {
+    connection
+        .as_connection()
+        .get_constant("Staking", "SessionsPerEra")
+        .expect("Failed to decode SessionsPerEra extrinsic!")
+}
+
+// pub fn get_members_for_era<C: AnyConnection>(connection: &C, era: u32) {
+//     let sessions_per_era = get_sessions_per_era(connection);
+//     let session_period = get_session_period(connection);
+//     let beggining_of_era_block = era * sessions_per_era * session_period;
+//     let beggining_of_era_block_hash = get_block_hash(connection, beggining_of_era_block);
+
+//     let validators: EraValidators<AccountId> = connection.as_connection().get_storage_value(
+//         "Elections",
+//         "CurrentEraValidators",
+//         Some(beggining_of_era_block_hash),
+//     );
+// }
+
 pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     let node = &config.node;
     let accounts = get_validators_keys(config);
     let sender = accounts.first().expect("Using default accounts").to_owned();
     let connection = SignedConnection::new(node, sender);
 
-    let sessions_per_era: u32 = connection
-        .as_connection()
-        .get_constant("Staking", "SessionsPerEra")
-        .expect("Failed to decode SessionsPerEra extrinsic!");
+    let sessions_per_era: u32 = get_sessions_per_era(&connection);
 
     let session = 2 * sessions_per_era + 1;
     let era = session / sessions_per_era;
@@ -142,18 +156,9 @@ pub fn test_points_and_payouts(
     members_bench: impl IntoIterator<Item = AccountId>,
     epsilon: f64,
 ) -> anyhow::Result<()> {
-    let session_period: u32 = connection
-        .as_connection()
-        .get_constant("Elections", "SessionPeriod")
-        .expect("Failed to decode SessionPeriod extrinsic!");
-
-    let sessions_per_era: u32 = connection
-        .as_connection()
-        .get_constant("Staking", "SessionsPerEra")
-        .expect("Failed to decode SessionsPerEra extrinsic!");
+    let session_period = get_session_period(&connection);
 
     info!("[+] Era: {} | session: {}", era, session);
-    info!("Sessions per era: {}", sessions_per_era);
 
     let beggining_of_session_block = session * session_period;
     let end_of_session_block = beggining_of_session_block + session_period;
@@ -220,7 +225,6 @@ pub fn test_points_and_payouts(
                 session,
                 before_end_of_session_block_hash,
                 blocks_to_produce_per_session,
-                sessions_per_era,
             ),
         )
     });
@@ -254,8 +258,8 @@ pub fn test_points_and_payouts(
                 account_id, exposure_scaling
             );
 
-            let scaled_points = (exposure_scaling * (performance * f64::from(MAX_REWARD))) as u32;
-            // let scaled_points = scaling_factor * performance;
+            // let scaled_points = (exposure_scaling * (performance * f64::from(MAX_REWARD))) as u32;
+            let scaled_points = exposure_scaling * performance;
             info!(
                 "Validator {}, adjusted reward points {}",
                 account_id, scaled_points
@@ -266,17 +270,24 @@ pub fn test_points_and_payouts(
 
     check_rewards(
         adjusted_reward_points,
-        validator_reward_points_current_era,
+        validator_reward_points_current_session,
         epsilon,
     )
 }
 
+fn get_session_period<C: AnyConnection>(connection: &C) -> u32 {
+    connection
+        .as_connection()
+        .get_constant("Elections", "SessionPeriod")
+        .expect("Failed to decode SessionPeriod extrinsic!")
+}
+
 fn check_rewards(
-    validator_reward_points: BTreeMap<AccountId, u32>,
+    validator_reward_points: BTreeMap<AccountId, f64>,
     retrieved_reward_points: BTreeMap<AccountId, u32>,
     epsilon: f64,
 ) -> anyhow::Result<()> {
-    let our_sum: u32 = validator_reward_points
+    let our_sum: f64 = validator_reward_points
         .iter()
         .map(|(_, reward)| reward)
         .sum();
@@ -296,7 +307,7 @@ fn check_rewards(
             account, retrieved_reward, reward
         );
 
-        let reward_ratio = reward as f64 / our_sum as f64;
+        let reward_ratio = reward as f64 / our_sum;
         let retrieved_ratio = retrieved_reward as f64 / retrieved_sum as f64;
 
         info!(
@@ -340,7 +351,6 @@ fn get_node_performance(
     session: u32,
     before_end_of_session_block_hash: H256,
     blocks_to_produce_per_session: u32,
-    sessions_per_era: u32,
 ) -> f64 {
     let block_count: u32 = connection
         .as_connection()
@@ -381,7 +391,7 @@ fn get_node_performance(
     lenient_performance
 }
 
-fn get_block_hash(connection: &SignedConnection, block_number: u32) -> H256 {
+fn get_block_hash<C: AnyConnection>(connection: &C, block_number: u32) -> H256 {
     connection
         .as_connection()
         .get_block_hash(Some(block_number))
