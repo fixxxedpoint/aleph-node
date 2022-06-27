@@ -7,8 +7,9 @@ use crate::{
         fee_calculation as test_fee_calculation, finalization as test_finalization,
         points_and_payouts as test_points_and_payouts,
         staking_era_payouts as test_staking_era_payouts,
-        staking_new_validator as test_staking_new_validator, token_transfer as test_token_transfer,
-        treasury_access as test_treasury_access, validators_rotate as test_validators_rotate,
+        staking_new_validator as test_staking_new_validator, test_disable_node,
+        token_transfer as test_token_transfer, treasury_access as test_treasury_access,
+        validators_rotate as test_validators_rotate,
     },
 };
 
@@ -36,7 +37,7 @@ pub fn possible_test_cases() -> PossibleTestCases {
             "staking_new_validator",
             test_staking_new_validator as TestCase,
         ),
-        ("TODO_disable_node", test_disable_node as TestCase),
+        ("reward_points_disable_node", test_disable_node as TestCase),
         ("change_validators", test_change_validators as TestCase),
         ("fee_calculation", test_fee_calculation as TestCase),
         ("era_payout", test_era_payout as TestCase),

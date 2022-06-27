@@ -1,7 +1,7 @@
 pub use era_payout::era_payouts_calculated_correctly;
 pub use fee::fee_calculation;
 pub use finalization::finalization;
-pub use rewards::points_and_payouts;
+pub use rewards::{points_and_payouts, test_disable_node};
 pub use staking::{staking_era_payouts, staking_new_validator};
 pub use transfer::token_transfer;
 pub use treasury::{channeling_fee_and_tip, treasury_access};

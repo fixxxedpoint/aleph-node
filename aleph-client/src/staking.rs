@@ -3,7 +3,7 @@ use frame_support::BoundedVec;
 use log::info;
 use pallet_staking::{MaxUnlockingChunks, RewardDestination, UnlockChunk, ValidatorPrefs};
 use rayon::prelude::*;
-use sp_core::Pair;
+use sp_core::{Pair, H256};
 use sp_runtime::Perbill;
 use substrate_api_client::{
     compose_call, compose_extrinsic, AccountId, Balance, ExtrinsicParams, GenericAddress, XtStatus,
@@ -101,23 +101,21 @@ pub fn get_current_era<C: AnyConnection>(connection: &C) -> u32 {
     get_era(connection, None)
 }
 
-pub fn wait_for_full_era_completion<C: AnyConnection>(
-    connection: &C,
-) -> anyhow::Result<BlockNumber> {
+pub fn wait_for_full_era_completion<C: AnyConnection>(connection: &C) -> anyhow::Result<u32> {
     // staking works in such a way, that when we request a controller to be a validator in era N,
     // then the changes are applied in the era N+1 (so the new validator is receiving points in N+1),
     // so that we need N+1 to finish in order to claim the reward in era N+2 for the N+1 era
     wait_for_era_completion(connection, get_current_era(connection) + 2)
 }
 
-pub fn wait_for_next_era<C: AnyConnection>(connection: &C) -> anyhow::Result<BlockNumber> {
+pub fn wait_for_next_era<C: AnyConnection>(connection: &C) -> anyhow::Result<u32> {
     wait_for_era_completion(connection, get_current_era(connection) + 1)
 }
 
 fn wait_for_era_completion<C: AnyConnection>(
     connection: &C,
     next_era_index: u32,
-) -> anyhow::Result<BlockNumber> {
+) -> anyhow::Result<u32> {
     let sessions_per_era: u32 = connection
         .as_connection()
         .get_constant("Staking", "SessionsPerEra")
@@ -127,7 +125,14 @@ fn wait_for_era_completion<C: AnyConnection>(
     Ok(next_era_index)
 }
 
-fn get_era<C: AnyConnection>(connection: &C, block: Option<H256>) -> u32 {
+pub fn get_sessions_per_era<C: AnyConnection>(connection: &C) -> u32 {
+    connection
+        .as_connection()
+        .get_constant("Staking", "SessionsPerEra")
+        .expect("Failed to decode SessionsPerEra extrinsic!")
+}
+
+pub fn get_era<C: AnyConnection>(connection: &C, block: Option<H256>) -> u32 {
     let current_era = connection
         .as_connection()
         .get_storage_value("Staking", "ActiveEra", block)

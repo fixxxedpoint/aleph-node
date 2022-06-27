@@ -1,11 +1,12 @@
 use crate::{
-    accounts::{accounts_seeds_to_keys, get_validators_keys, get_validators_seeds},
+    accounts::{accounts_seeds_to_keys, get_sudo_key, get_validators_keys, get_validators_seeds},
     Config,
 };
 use aleph_client::{
-    get_current_session, get_era_reward_points, get_era_reward_points_result, get_session,
-    wait_for_finalized_block, wait_for_next_era, AnyConnection, EraRewardPoints, KeyPair,
-    RewardPoint, SignedConnection,
+    change_validators, get_current_session, get_era, get_era_reward_points,
+    get_era_reward_points_result, get_session, get_sessions_per_era, wait_for_finalized_block,
+    wait_for_full_era_completion, wait_for_next_era, AnyConnection, EraRewardPoints, KeyPair,
+    RewardPoint, RootConnection, SignedConnection,
 };
 use log::info;
 use pallet_staking::Exposure;
@@ -13,7 +14,7 @@ use primitives::LENIENT_THRESHOLD;
 use sp_core::{Pair, H256};
 use sp_runtime::Perquintill;
 use std::collections::BTreeMap;
-use substrate_api_client::AccountId;
+use substrate_api_client::{AccountId, XtStatus};
 
 use super::utility::disable_validator;
 
@@ -79,13 +80,6 @@ pub fn get_exposure<C: AnyConnection>(
         .unwrap_or_else(|| panic!("Failed to obtain ErasStakers for era {}.", era))
 }
 
-fn get_sessions_per_era<C: AnyConnection>(connection: &C) -> u32 {
-    connection
-        .as_connection()
-        .get_constant("Staking", "SessionsPerEra")
-        .expect("Failed to decode SessionsPerEra extrinsic!")
-}
-
 // pub fn get_members_for_era<C: AnyConnection>(connection: &C, era: u32) {
 //     let sessions_per_era = get_sessions_per_era(connection);
 //     let session_period = get_session_period(connection);
@@ -99,25 +93,12 @@ fn get_sessions_per_era<C: AnyConnection>(connection: &C) -> u32 {
 //     );
 // }
 
-pub fn test_disable_node(config: &Config) {
+pub fn test_disable_node(config: &Config) -> anyhow::Result<()> {
     let root_connection: RootConnection =
         SignedConnection::new(&config.node, get_sudo_key(config)).into();
-    let current_era = wait_to_second_era(&root_connection);
-    wait_for_next_era(&root_connection)?;
-    let current_era = current_era + 1;
-
-    let controller_connection = config.node_keys().controller_key;
-
-    disable_validator(controller_connection);
-    let next_era_block = wait_for_next_era(&root_connection);
-    let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
-
-    let current_session = get_session(&controller_connection, Some(next_era_block_hash));
-
-    let next_era_block = wait_for_next_era(&root_connection);
-    let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
-
-    let era_end_session = get_session(&controller_connection, Some(next_era_block_hash));
+    // let current_era = wait_for_second_era(&root_connection);
+    // wait_for_next_era(&root_connection)?;
+    // let current_era = current_era + 1;
 
     let reserved_members: Vec<_> = get_reserved_members(config)
         .iter()
@@ -127,30 +108,71 @@ pub fn test_disable_node(config: &Config) {
         .iter()
         .map(|pair| AccountId::from(pair.public()))
         .collect();
-    let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
-    let non_reserved_bench = non_reserved_members
-        .into_iter()
-        .filter(|account_id| !non_reserved_for_session.contains(account_id))
-        .collect::<Vec<_>>();
 
-    let members = reserved_members
-        .into_iter()
-        .chain(non_reserved_for_session)
-        // we just disabled the first node (TODO ehhh, really?)
-        .skip(1);
-    let members_bench = non_reserved_bench;
+    let controller_connection =
+        SignedConnection::new(&config.node, config.node_keys().controller_key);
+
+    change_validators(
+        &root_connection,
+        Some(reserved_members.clone()),
+        Some(non_reserved_members.clone()),
+        Some(4),
+        XtStatus::Finalized,
+    );
+
+    disable_validator(&controller_connection);
+
+    let session_period = get_session_period(&root_connection);
+    let sessions_per_era = get_sessions_per_era(&root_connection);
+    // If during era 0 we request a controller to be a validator, it becomes one
+    // for era 1, and payouts can be collected once era 1 ends,
+    // so we want to start the test from era 2.
+    // TODO these calculations are ugly and can't be used for the ForceNewEra tests
+    let next_era_index = wait_for_full_era_completion(&root_connection)
+        .expect("should be able to see era completion");
+    let next_era_block = next_era_index * session_period * sessions_per_era;
+    let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
+    let era = get_era(&root_connection, Some(next_era_block_hash));
+
+    let current_session = get_session(&controller_connection, Some(next_era_block_hash));
+
+    let next_era_block = next_era_block + sessions_per_era * session_period;
+    wait_for_finalized_block(&root_connection, next_era_block).expect("next era should start");
+    let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
+
+    let era_end_session = get_session(&controller_connection, Some(next_era_block_hash));
 
     let max_difference = 0.001;
     for session in (current_session..era_end_session) {
-        test_points_and_payouts(
+        let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
+        let non_reserved_bench = non_reserved_members
+            .iter()
+            .filter(|account_id| !non_reserved_for_session.contains(*account_id))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        // TODO we just disabled the first node (TODO ehhh, really?)
+        let members: Vec<AccountId> = reserved_members
+            .iter()
+            .skip(1)
+            .chain(non_reserved_for_session.iter())
+            .cloned()
+            .collect();
+        let members_bench = non_reserved_bench;
+
+        let test_result = test_points_and_payouts(
             &controller_connection,
             session,
             era,
             members,
             members_bench,
             max_difference,
-        )?
+        );
+        if test_result.is_err() {
+            return test_result;
+        }
     }
+    Ok(())
 }
 
 // fn get_sessions_for_era<C: AnyConnection>(connection: &C, era: u32) -> Range<u32> {}
@@ -215,18 +237,18 @@ pub fn test_points_and_payouts(
     members_bench: impl IntoIterator<Item = AccountId>,
     max_relative_difference: f64,
 ) -> anyhow::Result<()> {
-    let session_period = get_session_period(&connection);
+    let session_period = get_session_period(connection);
 
     info!("[+] Era: {} | session: {}", era, session);
 
     let beggining_of_session_block = session * session_period;
     let end_of_session_block = beggining_of_session_block + session_period;
     info!("Waiting for block: {}", end_of_session_block);
-    wait_for_finalized_block(&connection, end_of_session_block)?;
+    wait_for_finalized_block(connection, end_of_session_block)?;
 
-    let beggining_of_session_block_hash = get_block_hash(&connection, beggining_of_session_block);
-    let end_of_session_block_hash = get_block_hash(&connection, end_of_session_block);
-    let before_end_of_session_block_hash = get_block_hash(&connection, end_of_session_block - 1);
+    let beggining_of_session_block_hash = get_block_hash(connection, beggining_of_session_block);
+    let end_of_session_block_hash = get_block_hash(connection, end_of_session_block);
+    let before_end_of_session_block_hash = get_block_hash(connection, end_of_session_block - 1);
     info!("End-of-session block hash: {}.", end_of_session_block_hash);
 
     let members_per_session: u32 = connection
@@ -249,10 +271,10 @@ pub fn test_points_and_payouts(
 
     // get points stored by the Staking pallet
     let validator_reward_points_current_era =
-        get_era_reward_points(&connection, era, Some(end_of_session_block_hash)).individual;
+        get_era_reward_points(connection, era, Some(end_of_session_block_hash)).individual;
 
     let validator_reward_points_previous_session =
-        get_era_reward_points_result(&connection, era, Some(beggining_of_session_block_hash))
+        get_era_reward_points_result(connection, era, Some(beggining_of_session_block_hash))
             .expect("should be able to retrieve EraRewardPoints")
             .unwrap_or(EraRewardPoints::default())
             .individual;

@@ -45,30 +45,30 @@ pub fn batch_transactions(config: &Config) -> anyhow::Result<()> {
 
 /// Changes keys of the first node described by the `validator_seeds` list to some `zero` values,
 /// making it impossible to create new legal blocks.
-pub fn disable_validator(controller_connection: SignedConnection) -> anyhow::Result<()> {
+pub fn disable_validator(controller_connection: &SignedConnection) -> anyhow::Result<()> {
     const ZERO_SESSION_KEYS: SessionKeys = SessionKeys {
         aura: [0; 32],
         aleph: [0; 32],
     };
 
-    set_keys(&controller_connection, ZERO_SESSION_KEYS, XtStatus::InBlock);
+    set_keys(controller_connection, ZERO_SESSION_KEYS, XtStatus::InBlock);
     // wait until our node is forced to use new keys, i.e. current session + 2
-    let current_session = get_current_session(&controller_connection);
-    wait_for_at_least_session(&controller_connection, current_session + 2)?;
+    let current_session = get_current_session(controller_connection);
+    wait_for_at_least_session(controller_connection, current_session + 2)?;
 
     Ok(())
 }
 
 /// Rotates the keys of the first node described by the `validator_seeds` list,
 /// making it able to rejoin the `consensus`.
-pub fn enable_validator(controller_connection: SignedConnection) -> anyhow::Result<()> {
+pub fn enable_validator(controller_connection: &SignedConnection) -> anyhow::Result<()> {
     let validator_keys =
-        rotate_keys(&controller_connection).expect("Failed to retrieve keys from chain");
-    set_keys(&controller_connection, validator_keys, XtStatus::InBlock);
+        rotate_keys(controller_connection).expect("Failed to retrieve keys from chain");
+    set_keys(controller_connection, validator_keys, XtStatus::InBlock);
 
     // wait until our node is forced to use new keys, i.e. current session + 2
-    let current_session = get_current_session(&controller_connection);
-    wait_for_at_least_session(&controller_connection, current_session + 2)?;
+    let current_session = get_current_session(controller_connection);
+    wait_for_at_least_session(controller_connection, current_session + 2)?;
 
     Ok(())
 }
