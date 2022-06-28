@@ -3,8 +3,8 @@ use crate::{
     Config,
 };
 use aleph_client::{
-    change_validators, get_era, get_era_reward_points, get_era_reward_points_result, get_session,
-    get_sessions_per_era, wait_for_finalized_block, wait_for_full_era_completion, AnyConnection,
+    change_validators, get_era_reward_points, get_era_reward_points_result, get_session,
+    get_sessions_per_era, wait_for_finalized_block, wait_for_next_era, AnyConnection,
     EraRewardPoints, KeyPair, RewardPoint, RootConnection, SignedConnection,
 };
 use log::info;
@@ -49,23 +49,6 @@ fn get_non_reserved_members_for_session(config: &Config, session: u32) -> Vec<Ac
         .collect()
 }
 
-fn get_authorities_for_session<C: AnyConnection>(connection: &C, session: u32) -> Vec<AccountId> {
-    let session_period = get_session_period(connection);
-    let first_block = session_period * session;
-
-    let block = connection
-        .as_connection()
-        .get_block_hash(Some(first_block))
-        .expect("Api call should succeed")
-        .expect("Session already started so the first block should be present");
-
-    connection
-        .as_connection()
-        .get_storage_value("Session", "Validators", Some(block))
-        .expect("Api call should succeed")
-        .expect("Authorities should always be present")
-}
-
 pub fn get_exposure<C: AnyConnection>(
     connection: &C,
     era: u32,
@@ -79,25 +62,25 @@ pub fn get_exposure<C: AnyConnection>(
         .unwrap_or_else(|| panic!("Failed to obtain ErasStakers for era {}.", era))
 }
 
-// pub fn get_members_for_era<C: AnyConnection>(connection: &C, era: u32) {
-//     let sessions_per_era = get_sessions_per_era(connection);
-//     let session_period = get_session_period(connection);
-//     let beggining_of_era_block = era * sessions_per_era * session_period;
-//     let beggining_of_era_block_hash = get_block_hash(connection, beggining_of_era_block);
-
-//     let validators: EraValidators<AccountId> = connection.as_connection().get_storage_value(
-//         "Elections",
-//         "CurrentEraValidators",
-//         Some(beggining_of_era_block_hash),
-//     );
-// }
+fn get_block_hash<C: AnyConnection>(connection: &C, block_number: u32) -> H256 {
+    connection
+        .as_connection()
+        .get_block_hash(Some(block_number))
+        .expect("API call should have succeeded.")
+        .unwrap_or_else(|| {
+            panic!("Failed to obtain block hash for block {}.", block_number);
+        })
+}
 
 pub fn test_disable_node(config: &Config) -> anyhow::Result<()> {
+    const MAX_DIFFERENCE: f64 = 0.05;
+    const VALIDATORS_PER_SESSION: u32 = 4;
+
     let root_connection: RootConnection =
         SignedConnection::new(&config.node, get_sudo_key(config)).into();
-    // let current_era = wait_for_second_era(&root_connection);
-    // wait_for_next_era(&root_connection)?;
-    // let current_era = current_era + 1;
+
+    let session_period = get_session_period(&root_connection);
+    let sessions_per_era = get_sessions_per_era(&root_connection);
 
     let reserved_members: Vec<_> = get_reserved_members(config)
         .iter()
@@ -108,40 +91,34 @@ pub fn test_disable_node(config: &Config) -> anyhow::Result<()> {
         .map(|pair| AccountId::from(pair.public()))
         .collect();
 
-    let controller_connection =
-        SignedConnection::new(&config.node, config.node_keys().controller_key);
-
     change_validators(
         &root_connection,
         Some(reserved_members.clone()),
         Some(non_reserved_members.clone()),
-        Some(4),
+        Some(VALIDATORS_PER_SESSION),
         XtStatus::Finalized,
     );
 
+    let controller_connection =
+        SignedConnection::new(&config.node, config.node_keys().controller_key);
+
     disable_validator(&controller_connection)?;
 
-    let session_period = get_session_period(&root_connection);
-    let sessions_per_era = get_sessions_per_era(&root_connection);
-    // If during era 0 we request a controller to be a validator, it becomes one
-    // for era 1, and payouts can be collected once era 1 ends,
-    // so we want to start the test from era 2.
-    // TODO these calculations are ugly and can't be used for the ForceNewEra tests
-    let next_era_index = wait_for_full_era_completion(&root_connection)
-        .expect("should be able to see era completion");
-    let next_era_block = next_era_index * session_period * sessions_per_era;
+    let era = wait_for_next_era(&root_connection)?;
+    let next_era_block = era * session_period * sessions_per_era;
     let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
-    let era = get_era(&root_connection, Some(next_era_block_hash));
 
     let current_session = get_session(&controller_connection, Some(next_era_block_hash));
 
     let next_era_block = next_era_block + sessions_per_era * session_period;
-    wait_for_finalized_block(&root_connection, next_era_block).expect("next era should start");
-    let next_era_block_hash = get_block_hash(&controller_connection, next_era_block);
+    wait_for_finalized_block(&root_connection, next_era_block)?;
+    let era_end_session = current_session + sessions_per_era;
 
-    let era_end_session = get_session(&controller_connection, Some(next_era_block_hash));
+    info!(
+        "checking rewards for sessions {}..{}",
+        current_session, era_end_session
+    );
 
-    let max_difference = 0.05;
     for session in current_session..era_end_session {
         let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
         let non_reserved_bench = non_reserved_members
@@ -150,33 +127,25 @@ pub fn test_disable_node(config: &Config) -> anyhow::Result<()> {
             .cloned()
             .collect::<Vec<_>>();
 
-        // TODO we just disabled the first node (TODO ehhh, really?)
         let members: Vec<AccountId> = reserved_members
             .iter()
-            .skip(1)
             .chain(non_reserved_for_session.iter())
             .cloned()
             .collect();
+        // let members = members.into_iter().skip(1);
         let members_bench = non_reserved_bench;
 
-        let test_result = test_points_and_payouts(
+        test_points_and_payouts(
             &controller_connection,
             session,
             era,
             members,
             members_bench,
-            max_difference,
-        );
-        if test_result.is_err() {
-            return test_result;
-        }
+            MAX_DIFFERENCE,
+        )?;
     }
     Ok(())
 }
-
-// fn get_sessions_for_era<C: AnyConnection>(connection: &C, era: u32) -> Range<u32> {}
-
-// fn points_and_payouts_for_era(config: &Config, era: u32) -> anyhow::Result<()> {}
 
 pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
     let node = &config.node;
@@ -202,19 +171,6 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         .iter()
         .map(|pair| AccountId::from(pair.public()))
         .collect();
-
-    // let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
-    // non_reserved_for_session
-    //     .iter()
-    //     .for_each(|account_id| info!("Non-reserved member in committee: {}", account_id));
-
-    // let non_reserved_bench = non_reserved_members
-    //     .into_iter()
-    //     .filter(|account_id| !non_reserved_for_session.contains(account_id))
-    //     .collect::<Vec<_>>();
-    // non_reserved_bench
-    //     .iter()
-    //     .for_each(|account_id| info!("Non-reserved member on bench: {}", account_id));
 
     let epsilon = 0.05;
 
@@ -441,12 +397,7 @@ fn get_node_performance(
             Some(before_end_of_session_block_hash),
         )
         .expect("Failed to decode SessionValidatorBlockCount extrinsic!")
-        .unwrap_or_else(|| {
-            panic!(
-                "Failed to obtain SessionValidatorBlockCount for session {}, validator {}, EOS block hash {}.",
-                session, account_id, before_end_of_session_block_hash
-            )
-        });
+        .unwrap_or(0);
     info!(
         "Block count for validator {} is {:?}, block hash is {}.",
         account_id, block_count, before_end_of_session_block_hash
@@ -469,14 +420,4 @@ fn get_node_performance(
         account_id, block_count, blocks_to_produce_per_session
     );
     lenient_performance
-}
-
-fn get_block_hash<C: AnyConnection>(connection: &C, block_number: u32) -> H256 {
-    connection
-        .as_connection()
-        .get_block_hash(Some(block_number))
-        .expect("API call should have succeeded.")
-        .unwrap_or_else(|| {
-            panic!("Failed to obtain block hash for block {}.", block_number);
-        })
 }
