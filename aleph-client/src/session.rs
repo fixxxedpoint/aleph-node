@@ -132,3 +132,10 @@ pub fn wait_for_at_least<C: AnyConnection>(
 ) -> anyhow::Result<BlockNumber> {
     wait_for_predicate(connection, |session_ix| session_ix >= session_index)
 }
+
+pub fn get_session_period<C: AnyConnection>(connection: &C) -> u32 {
+    connection
+        .as_connection()
+        .get_constant("Elections", "SessionPeriod")
+        .expect("Failed to decode SessionPeriod extrinsic!")
+}

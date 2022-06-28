@@ -1,7 +1,9 @@
 use codec::{Compact, Decode, Encode};
 use frame_support::BoundedVec;
 use log::info;
-use pallet_staking::{MaxUnlockingChunks, RewardDestination, UnlockChunk, ValidatorPrefs};
+use pallet_staking::{
+    Exposure, MaxUnlockingChunks, RewardDestination, UnlockChunk, ValidatorPrefs,
+};
 use rayon::prelude::*;
 use sp_core::{Pair, H256};
 use sp_runtime::Perbill;
@@ -309,4 +311,17 @@ pub fn get_payout_for_era<C: AnyConnection>(connection: &C, era: u32) -> u128 {
         .get_storage_map("Staking", "ErasValidatorReward", era, None)
         .expect("Failed to decode ErasValidatorReward")
         .expect("ErasValidatoReward is empty in the storage")
+}
+
+pub fn get_exposure<C: AnyConnection>(
+    connection: &C,
+    era: u32,
+    account_id: &AccountId,
+    block_hash: Option<H256>,
+) -> Exposure<AccountId, u128> {
+    connection
+        .as_connection()
+        .get_storage_double_map("Staking", "ErasStakers", era, account_id, block_hash)
+        .expect("Failed to decode ErasStakers extrinsic!")
+        .unwrap_or_else(|| panic!("Failed to obtain ErasStakers for era {}.", era))
 }
