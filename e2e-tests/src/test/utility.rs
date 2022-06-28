@@ -1,7 +1,7 @@
 use crate::{config::Config, transfer::setup_for_transfer};
 use aleph_client::{
-    get_current_session, rotate_keys, set_keys, wait_for_at_least_session,
-    wait_for_finalized_block, AnyConnection, SessionKeys, SignedConnection,
+    get_current_session, rotate_keys, set_keys, wait_for_at_least_session, AnyConnection,
+    SessionKeys, SignedConnection,
 };
 use codec::Compact;
 use log::info;

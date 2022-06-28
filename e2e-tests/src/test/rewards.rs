@@ -3,17 +3,16 @@ use crate::{
     Config,
 };
 use aleph_client::{
-    change_validators, get_current_session, get_era, get_era_reward_points,
-    get_era_reward_points_result, get_session, get_sessions_per_era, wait_for_finalized_block,
-    wait_for_full_era_completion, wait_for_next_era, AnyConnection, EraRewardPoints, KeyPair,
-    RewardPoint, RootConnection, SignedConnection,
+    change_validators, get_era, get_era_reward_points, get_era_reward_points_result, get_session,
+    get_sessions_per_era, wait_for_finalized_block, wait_for_full_era_completion, AnyConnection,
+    EraRewardPoints, KeyPair, RewardPoint, RootConnection, SignedConnection,
 };
 use log::info;
 use pallet_staking::Exposure;
 use primitives::LENIENT_THRESHOLD;
 use sp_core::{Pair, H256};
 use sp_runtime::Perquintill;
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, iter::empty};
 use substrate_api_client::{AccountId, XtStatus};
 
 use super::utility::disable_validator;
@@ -120,7 +119,7 @@ pub fn test_disable_node(config: &Config) -> anyhow::Result<()> {
         XtStatus::Finalized,
     );
 
-    disable_validator(&controller_connection);
+    disable_validator(&controller_connection)?;
 
     let session_period = get_session_period(&root_connection);
     let sessions_per_era = get_sessions_per_era(&root_connection);
@@ -142,8 +141,8 @@ pub fn test_disable_node(config: &Config) -> anyhow::Result<()> {
 
     let era_end_session = get_session(&controller_connection, Some(next_era_block_hash));
 
-    let max_difference = 0.001;
-    for session in (current_session..era_end_session) {
+    let max_difference = 0.05;
+    for session in current_session..era_end_session {
         let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
         let non_reserved_bench = non_reserved_members
             .iter()
@@ -204,18 +203,18 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         .map(|pair| AccountId::from(pair.public()))
         .collect();
 
-    let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
-    non_reserved_for_session
-        .iter()
-        .for_each(|account_id| info!("Non-reserved member in committee: {}", account_id));
+    // let non_reserved_for_session = get_non_reserved_members_for_session(config, session);
+    // non_reserved_for_session
+    //     .iter()
+    //     .for_each(|account_id| info!("Non-reserved member in committee: {}", account_id));
 
-    let non_reserved_bench = non_reserved_members
-        .into_iter()
-        .filter(|account_id| !non_reserved_for_session.contains(account_id))
-        .collect::<Vec<_>>();
-    non_reserved_bench
-        .iter()
-        .for_each(|account_id| info!("Non-reserved member on bench: {}", account_id));
+    // let non_reserved_bench = non_reserved_members
+    //     .into_iter()
+    //     .filter(|account_id| !non_reserved_for_session.contains(account_id))
+    //     .collect::<Vec<_>>();
+    // non_reserved_bench
+    //     .iter()
+    //     .for_each(|account_id| info!("Non-reserved member on bench: {}", account_id));
 
     let epsilon = 0.05;
 
@@ -223,8 +222,8 @@ pub fn points_and_payouts(config: &Config) -> anyhow::Result<()> {
         &connection,
         session,
         era,
-        reserved_members.into_iter().chain(non_reserved_for_session),
-        non_reserved_bench,
+        reserved_members.into_iter().chain(non_reserved_members),
+        empty(),
         epsilon,
     )
 }
@@ -392,8 +391,8 @@ fn check_rewards(
         let retrieved_ratio = retrieved_reward as f64 / retrieved_sum as f64;
 
         info!(
-            "reward_ratio: {}; retrieved_ratio: {}",
-            reward_ratio, retrieved_ratio
+            "{} reward_ratio: {}; retrieved_ratio: {}",
+            account, reward_ratio, retrieved_ratio
         );
         assert!((reward_ratio - retrieved_ratio).abs() <= max_relative_difference);
     }
