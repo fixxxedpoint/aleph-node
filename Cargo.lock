@@ -84,16 +84,17 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft"
-version = "0.13.0"
+version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "05c73a3ae2090e9a52da0b8943c44c98a595b434dbc626292e2d0885d14b0d50"
+checksum = "e5fa82aa2ac6309d397da32bc8b37dffcaba6dff499ac36c15fe162eaa2c8f90"
 dependencies = [
- "aleph-bft-rmc",
+ "aleph-bft-rmc 0.4.0",
  "aleph-bft-types",
  "async-trait",
  "derivative",
  "futures 0.3.21",
  "futures-timer",
+ "itertools",
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.0",
@@ -114,12 +115,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "aleph-bft-crypto"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba414eaabb61c300a93267e7d07133a960fc417df394086da804b032ead6b715"
+dependencies = [
+ "async-trait",
+ "bit-vec",
+ "derive_more",
+ "log",
+ "parity-scale-codec",
+]
+
+[[package]]
 name = "aleph-bft-rmc"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "65a4b8bed5caa463c6eb3ca760676d7367988a802b1ea4f8383b3d668aac3f2c"
 dependencies = [
- "aleph-bft-crypto",
+ "aleph-bft-crypto 0.3.0",
+ "async-trait",
+ "futures 0.3.21",
+ "futures-timer",
+ "log",
+ "parity-scale-codec",
+]
+
+[[package]]
+name = "aleph-bft-rmc"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "14bb3b9c3729667084ae9c1257e785219e23e1d1ee246f73b18a9457aead6214"
+dependencies = [
+ "aleph-bft-crypto 0.4.0",
  "async-trait",
  "futures 0.3.21",
  "futures-timer",
@@ -129,11 +157,11 @@ dependencies = [
 
 [[package]]
 name = "aleph-bft-types"
-version = "0.3.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b201a6923a748250a58f9c0164027715d5a8821b770eb902feedb4538a81bb7"
+checksum = "bb9f5b8526b63c76102ef1b36400cf62381f6900585a8258511580af917dd580"
 dependencies = [
- "aleph-bft-crypto",
+ "aleph-bft-crypto 0.4.0",
  "async-trait",
  "futures 0.3.21",
  "parity-scale-codec",
@@ -1620,7 +1648,7 @@ name = "finality-aleph"
 version = "0.3.0"
 dependencies = [
  "aleph-bft",
- "aleph-bft-rmc",
+ "aleph-bft-rmc 0.3.0",
  "async-trait",
  "derive_more",
  "env_logger",
