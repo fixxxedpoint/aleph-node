@@ -1,7 +1,8 @@
+use pallet_elections::EraValidators;
 use sp_core::H256;
 use substrate_api_client::AccountId;
 
-use crate::AnyConnection;
+use crate::{AnyConnection, AnyConnectionExtra};
 
 pub fn get_committee_size<C: AnyConnection>(connection: &C, block_hash: Option<H256>) -> u32 {
     connection
@@ -29,5 +30,14 @@ pub fn get_validator_block_count<C: AnyConnection>(
             account_id,
             block_hash,
         )
+        .expect("Failed to decode SessionValidatorBlockCount extrinsic!")
+}
+
+pub fn get_validators<C: AnyConnectionExtra>(
+    connection: &C,
+    block_hash: H256,
+) -> EraValidators<AccountId> {
+    connection
+        .read_storage_value("Elections", "CurrentEraValidators", block_hash)
         .expect("Failed to decode SessionValidatorBlockCount extrinsic!")
 }

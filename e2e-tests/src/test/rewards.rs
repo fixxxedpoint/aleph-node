@@ -44,6 +44,12 @@ fn get_non_reserved_members_for_session(config: &Config, session: SessionIndex) 
     non_reserved.iter().map(account_from_keypair).collect()
 }
 
+fn get_member_accounts_2<C: AnyConnection>(
+    connection: &C,
+    block_hash: H256,
+) -> (Vec<AccountId>, Vec<AccountId>) {
+}
+
 fn get_member_accounts(config: &Config) -> (Vec<AccountId>, Vec<AccountId>) {
     (
         get_reserved_members(config)

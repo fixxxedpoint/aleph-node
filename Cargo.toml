@@ -7,12 +7,13 @@ members = [
     "pallets/aleph",
     "pallets/elections",
     "primitives",
+    "aleph-client",
 ]
 
 exclude = [
   "flooder",
   "e2e-tests",
-  "aleph-client",
+  # "aleph-client",
   "fork-off",
   "benches/payout-stakers",
   "bin/cliain",
