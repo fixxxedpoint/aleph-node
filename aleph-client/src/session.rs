@@ -147,7 +147,5 @@ pub fn get_session_validators<C: AnyConnection>(
     let session_period = get_session_period(connection);
     let block_number = session_period * session_index;
     let block_hash = get_block_hash(connection, block_number);
-    connection
-        .read_storage_value("Session", "Validators", block_hash)
-        .expect("Failed to decode SessionValidatorBlockCount extrinsic!")
+    connection.read_storage_value_from_block("Session", "Validators", Some(block_hash))
 }

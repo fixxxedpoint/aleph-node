@@ -15,7 +15,7 @@ pub use multisig::{
 pub use rpc::{rotate_keys, rotate_keys_raw_result, state_query_storage_at};
 pub use session::{
     change_next_era_reserved_validators, change_validators, get_current_session, get_session,
-    get_session_period, set_keys, wait_for as wait_for_session,
+    get_session_period, get_session_validators, set_keys, wait_for as wait_for_session,
     wait_for_at_least as wait_for_at_least_session, Keys as SessionKeys,
 };
 use sp_core::{sr25519, storage::StorageKey, Pair, H256};
@@ -93,15 +93,7 @@ pub trait AnyConnection: Clone + Send {
     /// objects are often passed to some macro like `compose_extrinsic!` and thus there is not
     /// enough information for type inferring required for `Into<Connection>`.
     fn as_connection(&self) -> Connection;
-}
 
-impl AnyConnection for Connection {
-    fn as_connection(&self) -> Connection {
-        self.clone()
-    }
-}
-
-pub trait AnyConnectionExtra: AnyConnection {
     /// Reads value from storage. Panics if it couldn't be read.
     fn read_storage_value<T: Decode>(&self, pallet: &'static str, key: &'static str) -> T {
         self.read_storage_value_or_else(pallet, key, || {
@@ -185,7 +177,7 @@ pub trait AnyConnectionExtra: AnyConnection {
     }
 
     /// Reads map from storage. Panics if it couldn't be read.
-    fn read_storage_map<T: Decode, M: Encode + Debug>(
+    fn read_storage_map<T: Decode + Clone, M: Encode + Debug + Copy>(
         &self,
         pallet: &'static str,
         key: &'static str,
@@ -193,13 +185,16 @@ pub trait AnyConnectionExtra: AnyConnection {
         block_hash: Option<Hash>,
     ) -> T {
         self.read_storage_map_or_else(pallet, key, map_key, block_hash, || {
-            panic!("Value is `None` or couldn't have been decoded", map_key)
+            panic!(
+                "Value is `None` or couldn't have been decoded: {:?}",
+                map_key
+            )
         })
     }
 
     /// Reads map from storage. In case map is `None` or couldn't have been decoded, result of
     /// `fallback` is returned.
-    fn read_storage_map_or_else<F: FnOnce() -> T, T: Decode, M: Debug>(
+    fn read_storage_map_or_else<F: FnOnce() -> T, T: Decode + Clone, M: Encode + Debug + Copy>(
         &self,
         pallet: &'static str,
         key: &'static str,
@@ -209,14 +204,18 @@ pub trait AnyConnectionExtra: AnyConnection {
     ) -> T {
         self.as_connection()
             .get_storage_map(pallet, key, map_key, block_hash)
-            .unwrap_or_else(|_| panic!("Key `{}::{}` should be present in storage", pallet, key))
-            .unwrap_or_else(|_| panic!("Key `{:?}` should be present in map", map_key))
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Key `{}::{}::{:?}` should be present in storage",
+                    pallet, key, map_key
+                )
+            })
             .unwrap_or_else(fallback)
     }
 
     /// Reads map from storage. In case value is `None` or couldn't have been decoded, the default
     /// value is returned.
-    fn read_storage_map_or_default<T: Decode + Default, M>(
+    fn read_storage_map_or_default<T: Decode + Default + Clone, M: Encode + Debug + Copy>(
         &self,
         pallet: &'static str,
         key: &'static str,
@@ -226,6 +225,14 @@ pub trait AnyConnectionExtra: AnyConnection {
         self.read_storage_map_or_else(pallet, key, map_key, block_hash, Default::default)
     }
 }
+
+impl AnyConnection for Connection {
+    fn as_connection(&self) -> Connection {
+        self.clone()
+    }
+}
+
+pub trait AnyConnectionExtra: AnyConnection {}
 
 /// A connection that is signed.
 #[derive(Clone)]

@@ -14,7 +14,7 @@ let
   rust = nixpkgs.rust.override {
     extensions = [ "rust-src" ];
   };
-  nativeBuildInputs = [rust nixpkgs.cacert] ++ project.nativeBuildInputs;
+  nativeBuildInputs = [rust nixpkgs.cacert nixpkgs.openssl] ++ project.nativeBuildInputs;
 in
 nixpkgs.mkShell.override { stdenv = env; }
   {

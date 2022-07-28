@@ -1,10 +1,12 @@
 use aleph_client::{
     account_from_keypair, change_validators, get_current_era, get_current_session,
-    get_era_validators, get_sessions_per_era, staking_force_new_era, wait_for_full_era_completion,
-    wait_for_next_era, wait_for_session, KeyPair, SignedConnection,
+    get_era_validators, get_session_validators, get_sessions_per_era, staking_force_new_era,
+    wait_for_full_era_completion, wait_for_next_era, wait_for_session, AnyConnection, KeyPair,
+    SignedConnection,
 };
 use log::info;
-use primitives::{staking::MIN_VALIDATOR_BOND, SessionIndex};
+use pallet_elections::CommitteeSeats;
+use primitives::{staking::MIN_VALIDATOR_BOND, EraIndex, SessionIndex};
 use substrate_api_client::{AccountId, XtStatus};
 
 use crate::{
@@ -16,29 +18,36 @@ use crate::{
     Config,
 };
 
+// Maximum difference between fractions of total reward that a validator gets.
+// Two values are compared: one calculated in tests and the other one based on data
+// retrieved from pallet Staking.
+const MAX_DIFFERENCE: f64 = 0.07;
+
 fn get_reserved_members<C: AnyConnection>(
     connection: &C,
     session_index: SessionIndex,
 ) -> Vec<AccountId> {
-    get_era_validators(connection, session_index).reserved
+    get_member_accounts(connection, session_index).0
 }
 
 fn get_non_reserved_members<C: AnyConnection>(
     connection: &C,
     session_index: SessionIndex,
 ) -> Vec<AccountId> {
-    get_era_validators(connection, session_index).non_reserved
+    get_member_accounts(connection, session_index).1
 }
 
 fn get_non_reserved_members_for_session(config: &Config, session: SessionIndex) -> Vec<AccountId> {
     let root_connection = config.create_root_connection();
-    let session_validators = get_session_validators(root_connection, session);
-    let (_, non_reserved) = get_member_accounts(&root_connection, session);
-    let free_seats = members.non_reserved + members.reserved - session_validators.len();
+    let session_validators = get_session_validators(&root_connection, session);
+    let (reserved_network, non_reserved_network) = get_member_accounts(&root_connection, session);
+    let free_seats =
+        non_reserved_network.len() + reserved_network.len() - session_validators.len() as usize;
+    let session = session as usize;
 
-    let mut non_reserved = vec![];
+    let mut non_reserved = Vec::new();
 
-    let non_reserved_nodes_order_from_runtime = members.non_reserved;
+    let non_reserved_nodes_order_from_runtime = non_reserved_network;
     let non_reserved_nodes_order_from_runtime_len = non_reserved_nodes_order_from_runtime.len();
 
     for i in (free_seats * session)..(free_seats * (session + 1)) {
@@ -49,65 +58,15 @@ fn get_non_reserved_members_for_session(config: &Config, session: SessionIndex) 
         );
     }
 
-    non_reserved.iter().map(account_from_keypair).collect()
+    non_reserved
 }
 
 fn get_member_accounts<C: AnyConnection>(
     connection: &C,
     session_index: SessionIndex,
 ) -> (Vec<AccountId>, Vec<AccountId>) {
-    (
-        get_reserved_members(connection, session_index)
-            .iter()
-            .map(account_from_keypair)
-            .collect(),
-        get_non_reserved_members(connection, session_index)
-            .iter()
-            .map(account_from_keypair)
-            .collect(),
-    )
-}
-
-fn validators_bond_extra_stakes(config: &Config, additional_stakes: Vec<Balance>) {
-    let node = &config.node;
-    let root_connection = config.create_root_connection();
-
-    let accounts_keys: Vec<NodeKeys> = get_validators_seeds(config)
-        .into_iter()
-        .map(|seed| seed.into())
-        .collect();
-
-    let controller_accounts: Vec<AccountId> = accounts_keys
-        .iter()
-        .map(|account_keys| account_from_keypair(&account_keys.controller))
-        .collect();
-
-    // funds to cover fees
-    balances_batch_transfer(&root_connection.as_signed(), controller_accounts, TOKEN);
-
-    accounts_keys.iter().zip(additional_stakes.iter()).for_each(
-        |(account_keys, additional_stake)| {
-            let validator_id = account_from_keypair(&account_keys.validator);
-
-            // Additional TOKEN to cover fees
-            balances_transfer(
-                &root_connection.as_signed(),
-                &validator_id,
-                *additional_stake + TOKEN,
-                XtStatus::Finalized,
-            );
-            let stash_connection = SignedConnection::new(node, account_keys.validator.clone());
-            let xt = stash_connection
-                .as_connection()
-                .staking_bond_extra(*additional_stake);
-            send_xt(
-                &stash_connection,
-                xt,
-                Some("bond_extra"),
-                XtStatus::Finalized,
-            );
-        },
-    );
+    let validators = get_era_validators(connection, session_index);
+    (validators.reserved, validators.non_reserved)
 }
 
 fn check_points_after_force_new_era(
@@ -157,8 +116,6 @@ fn check_points_after_force_new_era(
 }
 
 pub fn points_basic(config: &Config) -> anyhow::Result<()> {
-    const MAX_DIFFERENCE: f64 = 0.07;
-
     let node = &config.node;
     let accounts = get_validators_keys(config);
     let sender = accounts.first().expect("Using default accounts").to_owned();
@@ -169,15 +126,18 @@ pub fn points_basic(config: &Config) -> anyhow::Result<()> {
     let (reserved_members, non_reserved_members) =
         get_member_accounts(&root_connection, current_session);
 
-    // why not?
-    let members_count = reserved_members.len() + non_reserved_members.len();
-    let byzantine_threshold = (members_count - 1) / 3;
+    // // why not?
+    // let members_count = reserved_members.len() + non_reserved_members.len();
+    // let byzantine_threshold = (members_count - 1) / 3;
 
     change_validators(
         &root_connection,
         Some(reserved_members.clone()),
         Some(non_reserved_members.clone()),
-        Some(members_count - byzantine_threshold),
+        Some(CommitteeSeats {
+            reserved_seats: reserved_members.len().try_into().unwrap(),
+            non_reserved_seats: (non_reserved_members.len() - 1).try_into().unwrap(),
+        }),
         XtStatus::Finalized,
     );
 
@@ -217,7 +177,6 @@ pub fn points_basic(config: &Config) -> anyhow::Result<()> {
 /// Runs a chain, bonds extra stakes to validator accounts and checks that reward points
 /// are calculated correctly afterward.
 pub fn points_stake_change(config: &Config) -> anyhow::Result<()> {
-    const MAX_DIFFERENCE: f64 = 0.07;
     const VALIDATORS_PER_SESSION: u32 = 4;
 
     let node = &config.node;
@@ -234,7 +193,10 @@ pub fn points_stake_change(config: &Config) -> anyhow::Result<()> {
         &root_connection,
         Some(reserved_members.clone()),
         Some(non_reserved_members.clone()),
-        Some(VALIDATORS_PER_SESSION),
+        Some(CommitteeSeats {
+            reserved_seats: reserved_members.len().try_into().unwrap(),
+            non_reserved_seats: (non_reserved_members.len() - 1).try_into().unwrap(),
+        }),
         XtStatus::Finalized,
     );
 
@@ -417,10 +379,9 @@ pub fn change_stake_and_force_new_era(config: &Config) -> anyhow::Result<()> {
     let sender = accounts.first().expect("Using default accounts").to_owned();
     let connection = SignedConnection::new(node, sender);
 
-    let sudo = get_sudo_key(config);
-    let root_connection = RootConnection::new(node, sudo);
+    let root_connection = config.create_root_connection();
 
-    let (reserved_members, non_reserved_members) = get_member_accounts(config);
+    let (reserved_members, non_reserved_members) = get_member_accounts(&root_connection, 0);
 
     change_validators(
         &root_connection,

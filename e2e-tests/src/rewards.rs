@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use aleph_client::{
     account_from_keypair, balances_batch_transfer, balances_transfer, get_block_hash,
     get_committee_size, get_current_session, get_era_reward_points, get_exposure,
-    get_session_period, get_validator_block_count, rotate_keys, send_xt, set_keys,
-    wait_for_at_least_session, wait_for_finalized_block, AnyConnection, RewardPoint, SessionKeys,
-    SignedConnection,
+    get_session_period, get_session_validators, get_validator_block_count, rotate_keys, send_xt,
+    set_keys, wait_for_at_least_session, wait_for_finalized_block, AnyConnection, RewardPoint,
+    SessionKeys, SignedConnection,
 };
 use log::info;
 use pallet_elections::{CommitteeSeats, LENIENT_THRESHOLD};
@@ -166,8 +166,6 @@ pub fn check_points(
 
     let members_per_session = get_committee_size(connection, Some(beggining_of_session_block_hash));
 
-    let members_per_session = committee_seats.non_reserved_seats + committee_seats.reserved_seats;
-
     info!("Members per session: {}.", members_per_session);
 
     let blocks_to_produce_per_session = session_period / members_per_session;
@@ -286,31 +284,25 @@ pub fn validators_bond_extra_stakes(config: &Config, additional_stakes: Vec<Bala
     );
 }
 
-fn get_members_for_session<C: Connection>(
-    connection: &C,
-    session_index: SessionIndex,
-) -> (Vec<AccountId>, Vec<AccountId>) {
-    let validators = get_session_validators(connection, session_index);
-    let non_reserved = get_non_reserved_members_for_session_from_storage(connection, session_index);
-    (
-        validators
-            .into_iter()
-            .filter(|validator| !non_reserved.contains(validator))
-            .collect(),
-        non_reserved,
-    )
-}
+// fn get_members_for_session<C: AnyConnection>(
+//     connection: &C,
+//     session_index: SessionIndex,
+// ) -> (Vec<AccountId>, Vec<AccountId>) {
+//     let validators = get_session_validators(connection, session_index);
+//     let non_reserved = get_non_reserved_members_for_session_from_storage(connection, session_index);
+//     (
+//         validators
+//             .into_iter()
+//             .filter(|validator| !non_reserved.contains(validator))
+//             .collect(),
+//         non_reserved,
+//     )
+// }
 
-fn get_non_reserved_members_for_session_from_storage<C: AnyConnection>(
-    connection: &C,
-    session_index: SessionIndex,
-) -> Vec<AccountId> {
-    let validators = get_validators(connection, session_index);
-    // let members_for_session = get_members_for_session(connection, session_index);
-}
-
-fn get_member_accounts_2<C: AnyConnection>(
-    connection: &C,
-    block_hash: H256,
-) -> (Vec<AccountId>, Vec<AccountId>) {
-}
+// fn get_non_reserved_members_for_session_from_storage<C: AnyConnection>(
+//     connection: &C,
+//     session_index: SessionIndex,
+// ) -> Vec<AccountId> {
+//     let validators = get_validators(connection, session_index);
+//     // let members_for_session = get_members_for_session(connection, session_index);
+// }
