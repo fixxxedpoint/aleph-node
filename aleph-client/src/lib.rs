@@ -132,7 +132,12 @@ pub trait AnyConnectionExtra: AnyConnection {
     ) -> T {
         self.as_connection()
             .get_storage_value(pallet, key, None)
-            .unwrap_or_else(|_| panic!("Key `{}::{}` should be present in storage", pallet, key))
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Key `{}::{}` should be present in storage, error {:?}",
+                    pallet, key, e
+                )
+            })
             .unwrap_or_else(fallback)
     }
 

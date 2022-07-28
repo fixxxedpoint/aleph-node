@@ -8,7 +8,7 @@ use aleph_client::{
     SignedConnection,
 };
 use log::info;
-use pallet_elections::LENIENT_THRESHOLD;
+use pallet_elections::{CommitteeSeats, LENIENT_THRESHOLD};
 use pallet_staking::Exposure;
 use primitives::{Balance, EraIndex, SessionIndex, TOKEN};
 use sp_core::H256;
@@ -165,6 +165,8 @@ pub fn check_points(
     info!("End-of-session block hash: {}.", end_of_session_block_hash);
 
     let members_per_session = get_committee_size(connection, Some(beggining_of_session_block_hash));
+
+    let members_per_session = committee_seats.non_reserved_seats + committee_seats.reserved_seats;
 
     info!("Members per session: {}.", members_per_session);
 
