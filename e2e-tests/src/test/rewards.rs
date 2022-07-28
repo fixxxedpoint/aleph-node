@@ -1,7 +1,7 @@
 use aleph_client::{
     account_from_keypair, change_validators, get_current_era, get_current_session,
-    get_sessions_per_era, staking_force_new_era, wait_for_full_era_completion, wait_for_next_era,
-    wait_for_session, KeyPair, SignedConnection,
+    get_era_validators, get_sessions_per_era, staking_force_new_era, wait_for_full_era_completion,
+    wait_for_next_era, wait_for_session, KeyPair, SignedConnection,
 };
 use log::info;
 use primitives::{staking::MIN_VALIDATOR_BOND, SessionIndex};
@@ -16,24 +16,32 @@ use crate::{
     Config,
 };
 
-fn get_reserved_members(config: &Config) -> Vec<KeyPair> {
-    get_validators_keys(config)[0..2].to_vec()
+fn get_reserved_members<C: AnyConnection>(
+    connection: &C,
+    session_index: SessionIndex,
+) -> Vec<AccountId> {
+    get_era_validators(connection, session_index).reserved
 }
 
-fn get_non_reserved_members(config: &Config) -> Vec<KeyPair> {
-    get_validators_keys(config)[2..].to_vec()
+fn get_non_reserved_members<C: AnyConnection>(
+    connection: &C,
+    session_index: SessionIndex,
+) -> Vec<AccountId> {
+    get_era_validators(connection, session_index).non_reserved
 }
 
 fn get_non_reserved_members_for_session(config: &Config, session: SessionIndex) -> Vec<AccountId> {
-    // Test assumption
-    const FREE_SEATS: u32 = 2;
+    let root_connection = config.create_root_connection();
+    let session_validators = get_session_validators(root_connection, session);
+    let (_, non_reserved) = get_member_accounts(&root_connection, session);
+    let free_seats = members.non_reserved + members.reserved - session_validators.len();
 
     let mut non_reserved = vec![];
 
-    let non_reserved_nodes_order_from_runtime = get_non_reserved_members(config);
+    let non_reserved_nodes_order_from_runtime = members.non_reserved;
     let non_reserved_nodes_order_from_runtime_len = non_reserved_nodes_order_from_runtime.len();
 
-    for i in (FREE_SEATS * session)..(FREE_SEATS * (session + 1)) {
+    for i in (free_seats * session)..(free_seats * (session + 1)) {
         non_reserved.push(
             non_reserved_nodes_order_from_runtime
                 [i as usize % non_reserved_nodes_order_from_runtime_len]
@@ -44,19 +52,16 @@ fn get_non_reserved_members_for_session(config: &Config, session: SessionIndex) 
     non_reserved.iter().map(account_from_keypair).collect()
 }
 
-fn get_member_accounts_2<C: AnyConnection>(
+fn get_member_accounts<C: AnyConnection>(
     connection: &C,
-    block_hash: H256,
+    session_index: SessionIndex,
 ) -> (Vec<AccountId>, Vec<AccountId>) {
-}
-
-fn get_member_accounts(config: &Config) -> (Vec<AccountId>, Vec<AccountId>) {
     (
-        get_reserved_members(config)
+        get_reserved_members(connection, session_index)
             .iter()
             .map(account_from_keypair)
             .collect(),
-        get_non_reserved_members(config)
+        get_non_reserved_members(connection, session_index)
             .iter()
             .map(account_from_keypair)
             .collect(),
@@ -72,14 +77,20 @@ pub fn points_basic(config: &Config) -> anyhow::Result<()> {
     let sender = accounts.first().expect("Using default accounts").to_owned();
     let connection = SignedConnection::new(node, sender);
     let root_connection = config.create_root_connection();
+    let current_session = get_current_session(&root_connection);
 
-    let (reserved_members, non_reserved_members) = get_member_accounts(config);
+    let (reserved_members, non_reserved_members) =
+        get_member_accounts(&root_connection, current_session);
+
+    // why not?
+    let members_count = reserved_members.len() + non_reserved_members.len();
+    let byzantine_threshold = (members_count - 1) / 3;
 
     change_validators(
         &root_connection,
         Some(reserved_members.clone()),
         Some(non_reserved_members.clone()),
-        Some(4),
+        Some(members_count - byzantine_threshold),
         XtStatus::Finalized,
     );
 
@@ -127,8 +138,10 @@ pub fn points_stake_change(config: &Config) -> anyhow::Result<()> {
     let sender = accounts.first().expect("Using default accounts").to_owned();
     let connection = SignedConnection::new(node, sender);
     let root_connection = config.create_root_connection();
+    let current_session = get_current_session(&root_connection);
 
-    let (reserved_members, non_reserved_members) = get_member_accounts(config);
+    let (reserved_members, non_reserved_members) =
+        get_member_accounts(&root_connection, current_session);
 
     change_validators(
         &root_connection,
@@ -193,10 +206,8 @@ pub fn disable_node(config: &Config) -> anyhow::Result<()> {
     const VALIDATORS_PER_SESSION: u32 = 4;
 
     let root_connection = config.create_root_connection();
-
     let sessions_per_era = get_sessions_per_era(&root_connection);
-
-    let (reserved_members, non_reserved_members) = get_member_accounts(config);
+    let (reserved_members, non_reserved_members) = get_member_accounts(&root_connection, 0);
 
     change_validators(
         &root_connection,
@@ -264,14 +275,8 @@ pub fn force_new_era(config: &Config) -> anyhow::Result<()> {
     let connection = SignedConnection::new(node, sender);
     let root_connection = config.create_root_connection();
 
-    let reserved_members: Vec<_> = get_reserved_members(config)
-        .iter()
-        .map(account_from_keypair)
-        .collect();
-    let non_reserved_members: Vec<_> = get_non_reserved_members(config)
-        .iter()
-        .map(account_from_keypair)
-        .collect();
+    let reserved_members: Vec<_> = get_reserved_members(&root_connection, 0);
+    let non_reserved_members: Vec<_> = get_non_reserved_members(&root_connection, 0);
 
     change_validators(
         &root_connection,

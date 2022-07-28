@@ -5,7 +5,7 @@ pub use account::{get_free_balance, locks};
 pub use balances::total_issuance;
 use codec::{Decode, Encode};
 pub use debug::print_storages;
-pub use elections::{get_committee_size, get_validator_block_count};
+pub use elections::{get_committee_size, get_era_validators, get_validator_block_count};
 pub use fee::{get_next_fee_multiplier, get_tx_fee_info, FeeInfo};
 use log::{info, warn};
 pub use multisig::{
@@ -93,12 +93,33 @@ pub trait AnyConnection: Clone + Send {
     /// objects are often passed to some macro like `compose_extrinsic!` and thus there is not
     /// enough information for type inferring required for `Into<Connection>`.
     fn as_connection(&self) -> Connection;
+}
 
+impl AnyConnection for Connection {
+    fn as_connection(&self) -> Connection {
+        self.clone()
+    }
+}
+
+pub trait AnyConnectionExtra: AnyConnection {
     /// Reads value from storage. Panics if it couldn't be read.
     fn read_storage_value<T: Decode>(&self, pallet: &'static str, key: &'static str) -> T {
         self.read_storage_value_or_else(pallet, key, || {
             panic!("Value is `None` or couldn't have been decoded")
         })
+    }
+
+    /// Reads value from storage. Panics if it couldn't be read.
+    fn read_storage_value_from_block<T: Decode>(
+        &self,
+        pallet: &'static str,
+        key: &'static str,
+        block_hash: Option<H256>,
+    ) -> T {
+        self.as_connection()
+            .get_storage_value(pallet, key, block_hash)
+            .unwrap_or_else(|e| panic!("Unable to retrieve a storage value: {}", e))
+            .unwrap()
     }
 
     /// Reads value from storage. In case value is `None` or couldn't have been decoded, result of
@@ -167,10 +188,7 @@ pub trait AnyConnection: Clone + Send {
         block_hash: Option<Hash>,
     ) -> T {
         self.read_storage_map_or_else(pallet, key, map_key, block_hash, || {
-            panic!(
-                "Value is `None` or couldn't have been decoded",
-                map_key
-            )
+            panic!("Value is `None` or couldn't have been decoded", map_key)
         })
     }
 
@@ -201,12 +219,6 @@ pub trait AnyConnection: Clone + Send {
         block_hash: Option<Hash>,
     ) -> Option<T> {
         self.read_storage_map_or_else(pallet, key, map_key, block_hash, Default::default)
-    }
-}
-
-impl AnyConnection for Connection {
-    fn as_connection(&self) -> Connection {
-        self.clone()
     }
 }
 

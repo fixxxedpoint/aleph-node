@@ -283,3 +283,32 @@ pub fn validators_bond_extra_stakes(config: &Config, additional_stakes: Vec<Bala
         },
     );
 }
+
+fn get_members_for_session<C: Connection>(
+    connection: &C,
+    session_index: SessionIndex,
+) -> (Vec<AccountId>, Vec<AccountId>) {
+    let validators = get_session_validators(connection, session_index);
+    let non_reserved = get_non_reserved_members_for_session_from_storage(connection, session_index);
+    (
+        validators
+            .into_iter()
+            .filter(|validator| !non_reserved.contains(validator))
+            .collect(),
+        non_reserved,
+    )
+}
+
+fn get_non_reserved_members_for_session_from_storage<C: AnyConnection>(
+    connection: &C,
+    session_index: SessionIndex,
+) -> Vec<AccountId> {
+    let validators = get_validators(connection, session_index);
+    // let members_for_session = get_members_for_session(connection, session_index);
+}
+
+fn get_member_accounts_2<C: AnyConnection>(
+    connection: &C,
+    block_hash: H256,
+) -> (Vec<AccountId>, Vec<AccountId>) {
+}
