@@ -2,7 +2,7 @@ use aleph_client::{
     change_validators, get_current_era, get_current_session, get_era_validators,
     get_session_validators, get_sessions_per_era, staking_force_new_era,
     wait_for_full_era_completion, wait_for_next_era, wait_for_session, AnyConnection,
-    SignedConnection,
+    CommitteeSeats, SignedConnection,
 };
 use log::info;
 use pallet_elections::CommitteeSeats;
@@ -110,10 +110,6 @@ pub fn points_basic(config: &Config) -> anyhow::Result<()> {
 
     let (reserved_members, non_reserved_members) =
         get_member_accounts(&root_connection, current_session);
-
-    // // why not?
-    // let members_count = reserved_members.len() + non_reserved_members.len();
-    // let byzantine_threshold = (members_count - 1) / 3;
 
     change_validators(
         &root_connection,
