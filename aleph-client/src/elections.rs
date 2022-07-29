@@ -1,4 +1,4 @@
-use pallet_elections::{CommitteeSeats, EraValidators};
+pub use pallet_elections::{CommitteeSeats, EraValidators};
 use primitives::SessionIndex;
 use sp_core::H256;
 use substrate_api_client::AccountId;
