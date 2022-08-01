@@ -58,8 +58,10 @@ pub fn get_era_validators<C: AnyConnection>(
     connection: &C,
     session_index: SessionIndex,
 ) -> EraValidators<AccountId> {
+    // TODO debug
     let session_period = get_session_period(connection);
     let block_number = session_period * session_index;
+    // let block_number = session_period * session_index + 1;
     // let block_number = 10;
     let block_hash = get_block_hash(connection, block_number);
     print!(

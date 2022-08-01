@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use aleph_client::{
     account_from_keypair, balances_batch_transfer, balances_transfer, get_block_hash,
-    get_committee_seats, get_committee_size, get_current_session, get_era_reward_points,
-    get_exposure, get_session_period, get_validator_block_count, rotate_keys, send_xt, set_keys,
+    get_committee_seats, get_current_session, get_era_reward_points, get_exposure,
+    get_session_period, get_validator_block_count, rotate_keys, send_xt, set_keys,
     wait_for_at_least_session, wait_for_finalized_block, AnyConnection, RewardPoint, SessionKeys,
     SignedConnection,
 };
@@ -234,12 +234,13 @@ pub fn check_points(
     )
 }
 pub fn get_bench_members(
-    non_reserved_members: Vec<AccountId>,
+    non_reserved_members: &[AccountId],
     non_reserved_members_for_session: &[AccountId],
 ) -> Vec<AccountId> {
     non_reserved_members
         .into_iter()
         .filter(|account_id| !non_reserved_members_for_session.contains(account_id))
+        .cloned()
         .collect::<Vec<_>>()
 }
 
