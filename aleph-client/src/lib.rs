@@ -6,8 +6,8 @@ pub use balances::total_issuance;
 use codec::{Decode, Encode};
 pub use debug::print_storages;
 pub use elections::{
-    get_committee_seats, get_committee_size, get_era_validators, get_validator_block_count,
-    CommitteeSeats, EraValidators,
+    get_committee_seats, get_era_validators, get_validator_block_count, CommitteeSeats,
+    EraValidators,
 };
 pub use fee::{get_next_fee_multiplier, get_tx_fee_info, FeeInfo};
 use log::{info, warn};

@@ -1,7 +1,10 @@
+use std::collections::HashSet;
+
 use aleph_client::{
     change_validators, get_current_era, get_current_session, get_era_validators,
-    get_sessions_per_era, staking_force_new_era, wait_for_full_era_completion, wait_for_next_era,
-    wait_for_session, AnyConnection, CommitteeSeats, EraValidators, SignedConnection,
+    get_session_validators, get_sessions_per_era, staking_force_new_era,
+    wait_for_full_era_completion, wait_for_next_era, wait_for_session, AnyConnection,
+    CommitteeSeats, EraValidators, SignedConnection,
 };
 use log::info;
 use primitives::{staking::MIN_VALIDATOR_BOND, EraIndex, SessionIndex};
@@ -30,14 +33,14 @@ fn get_member_accounts<C: AnyConnection>(
 }
 
 fn get_non_reserved_members_for_session(
-    nodes_per_session: usize,
+    nodes_per_session: u32,
     era_validators: &EraValidators<AccountId>,
     session: SessionIndex,
 ) -> Vec<AccountId> {
     let non_reserved_nodes_order_from_runtime = &era_validators.non_reserved;
     let non_reserved_nodes_order_from_runtime_len = non_reserved_nodes_order_from_runtime.len();
     let free_seats = non_reserved_nodes_order_from_runtime_len + era_validators.reserved.len()
-        - nodes_per_session;
+        - usize::try_from(nodes_per_session).unwrap();
     let session = session as usize;
 
     let mut non_reserved = Vec::new();
@@ -59,7 +62,7 @@ fn check_points_after_force_new_era(
     start_era: EraIndex,
     reserved_members: &Vec<AccountId>,
     non_reserved_members: &Vec<AccountId>,
-    members_per_session: usize,
+    members_per_session: u32,
     max_relative_difference: f64,
 ) -> anyhow::Result<()> {
     let era_validators = EraValidators {
@@ -98,15 +101,14 @@ fn check_points_after_force_new_era(
             era_to_check,
             members_active,
             members_bench,
+            members_per_session,
             max_relative_difference,
         )?;
     }
     Ok(())
 }
 
-fn setup_validators(
-    config: &Config,
-) -> anyhow::Result<(EraValidators<AccountId>, usize, EraIndex)> {
+fn setup_validators(config: &Config) -> anyhow::Result<(EraValidators<AccountId>, u32, EraIndex)> {
     let root_connection = config.create_root_connection();
     let current_session = get_current_session(&root_connection);
 
@@ -123,6 +125,7 @@ fn setup_validators(
 
     let reserved_seats = reserved_members.len().try_into().unwrap();
     let non_reserved_seats = (non_reserved_members.len() - 1).try_into().unwrap();
+    let members_per_session = reserved_seats + non_reserved_seats;
 
     change_validators(
         &root_connection,
@@ -134,15 +137,47 @@ fn setup_validators(
         }),
         XtStatus::InBlock,
     );
+
     let era = wait_for_full_era_completion(&root_connection)?;
-    Ok((
-        EraValidators {
-            reserved: reserved_members,
-            non_reserved: non_reserved_members,
-        },
-        members_size,
-        era,
-    ))
+    let first_session_in_era = era * get_sessions_per_era(&root_connection);
+
+    let era_validators = EraValidators {
+        reserved: reserved_members,
+        non_reserved: non_reserved_members,
+    };
+    let non_reserved_members_for_session = get_non_reserved_members_for_session(
+        members_per_session,
+        &era_validators,
+        first_session_in_era,
+    );
+    let expected_members: HashSet<_> = era_validators
+        .reserved
+        .clone()
+        .into_iter()
+        .chain(non_reserved_members_for_session.into_iter())
+        .collect();
+
+    let (reserved, non_reserved) = get_member_accounts(&root_connection, first_session_in_era);
+    let network_members = HashSet::from_iter(
+        get_session_validators(&root_connection, first_session_in_era).into_iter(),
+    );
+    let network_era_validators = EraValidators {
+        reserved,
+        non_reserved,
+    };
+
+    assert_eq!(
+        u32::try_from(network_members.len()).unwrap(),
+        members_per_session,
+    );
+    assert_eq!(era_validators.reserved, network_era_validators.reserved);
+    assert_eq!(
+        era_validators.non_reserved,
+        network_era_validators.non_reserved
+    );
+    assert_eq!(expected_members, network_members);
+
+    Ok((era_validators, u32::try_from(members_size).unwrap(), era))
 }
 
 pub fn points_basic(config: &Config) -> anyhow::Result<()> {
@@ -180,6 +215,7 @@ pub fn points_basic(config: &Config) -> anyhow::Result<()> {
             era,
             members_active,
             members_bench,
+            committee_size,
             MAX_DIFFERENCE,
         )?
     }
@@ -238,6 +274,7 @@ pub fn points_stake_change(config: &Config) -> anyhow::Result<()> {
             era,
             members_active,
             members_bench,
+            committee_size,
             MAX_DIFFERENCE,
         )?
     }
@@ -290,6 +327,7 @@ pub fn disable_node(config: &Config) -> anyhow::Result<()> {
             era,
             members_active,
             members_bench,
+            committee_size,
             MAX_DIFFERENCE,
         )?;
     }

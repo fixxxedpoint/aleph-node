@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use aleph_client::{
     account_from_keypair, balances_batch_transfer, balances_transfer, get_block_hash,
-    get_committee_seats, get_current_session, get_era_reward_points, get_exposure,
-    get_session_period, get_validator_block_count, rotate_keys, send_xt, set_keys,
-    wait_for_at_least_session, wait_for_finalized_block, AnyConnection, RewardPoint, SessionKeys,
-    SignedConnection,
+    get_current_session, get_era_reward_points, get_exposure, get_session_period,
+    get_validator_block_count, rotate_keys, send_xt, set_keys, wait_for_at_least_session,
+    wait_for_finalized_block, AnyConnection, RewardPoint, SessionKeys, SignedConnection,
 };
 use log::info;
 use pallet_elections::LENIENT_THRESHOLD;
@@ -148,6 +147,7 @@ pub fn check_points(
     era: EraIndex,
     members: impl IntoIterator<Item = AccountId> + Clone,
     members_bench: impl IntoIterator<Item = AccountId> + Clone,
+    members_per_session: u32,
     max_relative_difference: f64,
 ) -> anyhow::Result<()> {
     let session_period = get_session_period(connection);
@@ -163,9 +163,6 @@ pub fn check_points(
     let end_of_session_block_hash = get_block_hash(connection, end_of_session_block);
     let before_end_of_session_block_hash = get_block_hash(connection, end_of_session_block - 1);
     info!("End-of-session block hash: {}.", end_of_session_block_hash);
-
-    let committee_seats = get_committee_seats(connection, Some(beggining_of_session_block_hash));
-    let members_per_session = committee_seats.reserved_seats + committee_seats.non_reserved_seats;
 
     info!("Members per session: {}.", members_per_session);
 
