@@ -1,4 +1,4 @@
-use std::{default::Default, fmt::Debug, thread::sleep, time::Duration};
+use std::{default::Default, thread::sleep, time::Duration};
 
 use ac_primitives::SubstrateDefaultSignedExtra;
 pub use account::{get_free_balance, locks};
@@ -110,7 +110,7 @@ pub trait AnyConnection: Clone + Send {
         pallet: &'static str,
         key: &'static str,
         block_hash: Option<H256>,
-    ) -> T {
+    ) -> Option<T> {
         self.as_connection()
             .get_storage_value(pallet, key, block_hash)
             .unwrap_or_else(|e| panic!("Unable to retrieve a storage value: {}", e))

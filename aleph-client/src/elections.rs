@@ -44,9 +44,7 @@ pub fn get_era_validators<C: AnyConnection>(
     let session_period = get_session_period(connection);
     let block_number = session_period * session_index;
     let block_hash = get_block_hash(connection, block_number);
-    print!(
-        "about to retrieve CurrentEraValidators from block {} - {}",
-        block_number, block_hash
-    );
-    connection.read_storage_value_from_block("Elections", "CurrentEraValidators", Some(block_hash))
+    connection
+        .read_storage_value_from_block("Elections", "CurrentEraValidators", Some(block_hash))
+        .expect("Elections/CurrentEraValidators should be set to some value")
 }
