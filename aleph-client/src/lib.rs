@@ -125,14 +125,7 @@ pub trait AnyConnection: Clone + Send {
         key: &'static str,
         fallback: F,
     ) -> T {
-        self.as_connection()
-            .get_storage_value(pallet, key, None)
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Key `{}::{}` should be present in storage, error {:?}",
-                    pallet, key, e
-                )
-            })
+        self.read_storage_value_from_block(pallet, key, None)
             .unwrap_or_else(fallback)
     }
 
@@ -178,55 +171,6 @@ pub trait AnyConnection: Clone + Send {
     ) -> T {
         self.read_constant_or_else(pallet, constant, Default::default)
     }
-
-    /// Reads map from storage. Panics if it couldn't be read.
-    fn read_storage_map<T: Decode + Clone, M: Encode + Debug + Copy>(
-        &self,
-        pallet: &'static str,
-        key: &'static str,
-        map_key: M,
-        block_hash: Option<Hash>,
-    ) -> T {
-        self.read_storage_map_or_else(pallet, key, map_key, block_hash, || {
-            panic!(
-                "Value is `None` or couldn't have been decoded: {:?}",
-                map_key
-            )
-        })
-    }
-
-    /// Reads map from storage. In case map is `None` or couldn't have been decoded, result of
-    /// `fallback` is returned.
-    fn read_storage_map_or_else<F: FnOnce() -> T, T: Decode + Clone, M: Encode + Debug + Copy>(
-        &self,
-        pallet: &'static str,
-        key: &'static str,
-        map_key: M,
-        block_hash: Option<Hash>,
-        fallback: F,
-    ) -> T {
-        self.as_connection()
-            .get_storage_map(pallet, key, map_key, block_hash)
-            .unwrap_or_else(|_| {
-                panic!(
-                    "Key `{}::{}::{:?}` should be present in storage",
-                    pallet, key, map_key
-                )
-            })
-            .unwrap_or_else(fallback)
-    }
-
-    /// Reads map from storage. In case value is `None` or couldn't have been decoded, the default
-    /// value is returned.
-    fn read_storage_map_or_default<T: Decode + Default + Clone, M: Encode + Debug + Copy>(
-        &self,
-        pallet: &'static str,
-        key: &'static str,
-        map_key: M,
-        block_hash: Option<Hash>,
-    ) -> Option<T> {
-        self.read_storage_map_or_else(pallet, key, map_key, block_hash, Default::default)
-    }
 }
 
 impl AnyConnection for Connection {
@@ -234,8 +178,6 @@ impl AnyConnection for Connection {
         self.clone()
     }
 }
-
-pub trait AnyConnectionExtra: AnyConnection {}
 
 /// A connection that is signed.
 #[derive(Clone)]

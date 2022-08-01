@@ -35,7 +35,7 @@ impl Config {
         let validator_seed = get_validators_seeds(self)
             .into_iter()
             .next()
-            .expect("We should have a seed for at least one validator");
+            .expect("we should have a seed for at least one validator");
         NodeKeys::from(validator_seed)
     }
 

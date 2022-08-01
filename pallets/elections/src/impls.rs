@@ -226,14 +226,13 @@ where
             _ => return,
         };
 
-        // TODO wyglada jakby olewalo ere 0
         // this will be populated once for the session `n+1` on the start of the session `n` where session
         // `n+1` starts a new era.
         Self::if_era_starts_do(active_era + 1, session, || {
             let elected_committee =
                 BTreeSet::from_iter(T::EraInfoProvider::elected_validators(active_era + 1));
 
-            let retain_elected = |vals: Vec<_>| {
+            let retain_elected = |vals: Vec<T::AccountId>| -> Vec<T::AccountId> {
                 vals.into_iter()
                     .filter(|v| elected_committee.contains(v))
                     .collect()
