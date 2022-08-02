@@ -10,9 +10,9 @@ use substrate_api_client::{AccountId, XtStatus};
 use crate::{
     accounts::get_validators_keys,
     rewards::{
-        check_points, get_bench_members, get_member_accounts, get_members_for_session,
-        get_non_reserved_members_for_session, reset_validator_keys, set_invalid_keys_for_validator,
-        setup_validators, validators_bond_extra_stakes,
+        check_points, get_era_from_session, get_member_accounts, get_members_for_session,
+        reset_validator_keys, set_invalid_keys_for_validator, setup_validators,
+        validators_bond_extra_stakes,
     },
     Config,
 };
@@ -20,7 +20,7 @@ use crate::{
 // Maximum difference between fractions of total reward that a validator gets.
 // Two values are compared: one calculated in tests and the other one based on data
 // retrieved from pallet Staking.
-const MAX_DIFFERENCE: f64 = 0.20;
+const MAX_DIFFERENCE: f64 = 0.07;
 
 fn check_points_after_force_new_era(
     connection: &SignedConnection,
@@ -49,23 +49,12 @@ fn check_points_after_force_new_era(
             era_to_check, session_to_check
         );
 
-        let non_reserved_members_for_session = get_non_reserved_members_for_session(
+        let (members_active, members_bench) = get_members_for_session(
+            connection,
             members_per_session,
             &era_validators,
             session_to_check,
         );
-        let members_bench =
-            get_bench_members(&non_reserved_members, &non_reserved_members_for_session);
-        let members_active = reserved_members
-            .clone()
-            .into_iter()
-            .chain(non_reserved_members_for_session);
-        // let (members_active, members_bench) = get_members_for_session(
-        //     connection,
-        //     members_per_session,
-        //     &era_validators,
-        //     session_to_check,
-        // );
 
         check_points(
             connection,
@@ -98,16 +87,10 @@ pub fn points_basic(config: &Config) -> anyhow::Result<()> {
     );
 
     for session in start_new_era_session..end_new_era_session {
-        let non_reserved_for_session =
-            get_non_reserved_members_for_session(committee_size, &era_validators, session);
-        let members_bench =
-            get_bench_members(&era_validators.non_reserved, &non_reserved_for_session);
-        let members_active = era_validators
-            .reserved
-            .clone()
-            .into_iter()
-            .chain(non_reserved_for_session)
-            .collect::<Vec<_>>();
+        let (members_active, members_bench) =
+            get_members_for_session(&connection, committee_size, &era_validators, session);
+
+        let era = get_era_from_session(&connection, session);
 
         check_points(
             &connection,
@@ -155,18 +138,8 @@ pub fn points_stake_change(config: &Config) -> anyhow::Result<()> {
     );
 
     for session in start_era_session..end_era_session {
-        let non_reserved_members_for_session =
-            get_non_reserved_members_for_session(committee_size, &era_validators, session);
-        let members_bench = get_bench_members(
-            &era_validators.non_reserved,
-            &non_reserved_members_for_session,
-        );
-        let members_active = era_validators
-            .reserved
-            .clone()
-            .into_iter()
-            .chain(non_reserved_members_for_session)
-            .collect::<Vec<_>>();
+        let (members_active, members_bench) =
+            get_members_for_session(&connection, committee_size, &era_validators, session);
 
         check_points(
             &connection,
@@ -211,16 +184,15 @@ pub fn disable_node(config: &Config) -> anyhow::Result<()> {
     );
 
     for session in start_session..end_session {
-        let non_reserved_members_for_session =
-            get_non_reserved_members_for_session(committee_size, &era_validators, session);
-        let members_bench =
-            get_bench_members(&non_reserved_members, &non_reserved_members_for_session);
-        let members_active = reserved_members
-            .iter()
-            .chain(non_reserved_members_for_session.iter())
-            .cloned();
+        let (members_active, members_bench) = get_members_for_session(
+            &controller_connection,
+            committee_size,
+            &era_validators,
+            session,
+        );
 
-        let era = session / sessions_per_era;
+        let era = get_era_from_session(&controller_connection, session);
+
         check_points(
             &controller_connection,
             session,

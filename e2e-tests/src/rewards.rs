@@ -2,11 +2,11 @@ use std::collections::{HashMap, HashSet};
 
 use aleph_client::{
     account_from_keypair, balances_batch_transfer, balances_transfer, change_validators,
-    get_block_hash, get_current_session, get_era_reward_points, get_era_validators, get_exposure,
-    get_session_period, get_session_validators, get_sessions_per_era, get_validator_block_count,
-    rotate_keys, send_xt, set_keys, wait_for_at_least_session, wait_for_finalized_block,
-    wait_for_full_era_completion, AnyConnection, CommitteeSeats, EraValidators, RewardPoint,
-    SessionKeys, SignedConnection,
+    get_block_hash, get_current_session, get_era, get_era_reward_points, get_era_validators,
+    get_exposure, get_session_period, get_session_validators, get_sessions_per_era,
+    get_validator_block_count, rotate_keys, send_xt, set_keys, wait_for_at_least_session,
+    wait_for_finalized_block, wait_for_full_era_completion, AnyConnection, CommitteeSeats,
+    EraValidators, RewardPoint, SessionKeys, SignedConnection,
 };
 use log::info;
 use pallet_elections::LENIENT_THRESHOLD;
@@ -310,11 +310,18 @@ pub fn get_non_reserved_members_for_session(
     non_reserved
 }
 
+pub fn get_era_from_session<C: AnyConnection>(connection: &C, session: SessionIndex) -> EraIndex {
+    let session_period = get_session_period(connection);
+    let block = session_period * session;
+    let block_hash = get_block_hash(connection, block);
+    get_era(connection, Some(block_hash))
+}
+
 pub fn get_members_for_session<C: AnyConnection>(
     connection: &C,
     members_per_session: u32,
     era_validators: &EraValidators<AccountId>,
-    session: SesssionIndex,
+    session: SessionIndex,
 ) -> (Vec<AccountId>, Vec<AccountId>) {
     let non_reserved_members_for_session =
         get_non_reserved_members_for_session(members_per_session, era_validators, session);
@@ -322,14 +329,17 @@ pub fn get_members_for_session<C: AnyConnection>(
         &era_validators.non_reserved,
         &non_reserved_members_for_session,
     );
-    let members_active = reserved_members
-        .clone()
-        .into_iter()
-        .chain(non_reserved_members_for_session);
+    let members_active: Vec<_> = era_validators
+        .reserved
+        .iter()
+        .cloned()
+        .chain(non_reserved_members_for_session)
+        .collect();
 
-    let members_active_set = HashSet::from_iter(members_active.iter().cloned());
-    let network_members =
-        HashSet::from_iter(get_session_validators(&connection, session).into_iter());
+    let members_active_set: HashSet<_> = members_active.iter().cloned().collect();
+    let network_members: HashSet<_> = get_session_validators(connection, session)
+        .into_iter()
+        .collect();
 
     assert_eq!(members_active_set, network_members);
 
@@ -404,5 +414,5 @@ pub fn setup_validators(
     assert_eq!(non_reserved, network_non_reserved);
     assert_eq!(expected_members, network_members);
 
-    Ok((era_validators, u32::try_from(members_size).unwrap(), era))
+    Ok((era_validators, members_per_session, era))
 }
