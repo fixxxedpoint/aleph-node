@@ -298,41 +298,54 @@ pub fn get_non_reserved_members_for_session(
     era_validators: &EraValidators<AccountId>,
     session: SessionIndex,
 ) -> Vec<AccountId> {
-    let non_reserved_nodes_order_from_runtime = &era_validators.non_reserved;
-    let non_reserved_nodes_order_from_runtime_len = non_reserved_nodes_order_from_runtime.len();
-    let free_seats = non_reserved_nodes_order_from_runtime_len + era_validators.reserved.len()
-        - usize::try_from(nodes_per_session).unwrap();
-    let session = session as usize;
+    let non_reserved_len = era_validators.non_reserved.len();
+    let free_seats = nodes_per_session - u32::try_from(era_validators.reserved.len()).unwrap();
 
     let mut non_reserved = Vec::new();
 
     for i in (free_seats * session)..(free_seats * (session + 1)) {
-        non_reserved.push(
-            non_reserved_nodes_order_from_runtime
-                [i as usize % non_reserved_nodes_order_from_runtime_len]
-                .clone(),
-        );
+        non_reserved.push(era_validators.non_reserved[i as usize % non_reserved_len].clone());
     }
 
     non_reserved
+}
+
+pub fn get_members_for_session<C: AnyConnection>(
+    connection: &C,
+    members_per_session: u32,
+    era_validators: &EraValidators<AccountId>,
+    session: SesssionIndex,
+) -> (Vec<AccountId>, Vec<AccountId>) {
+    let non_reserved_members_for_session =
+        get_non_reserved_members_for_session(members_per_session, era_validators, session);
+    let members_bench = get_bench_members(
+        &era_validators.non_reserved,
+        &non_reserved_members_for_session,
+    );
+    let members_active = reserved_members
+        .clone()
+        .into_iter()
+        .chain(non_reserved_members_for_session);
+
+    let members_active_set = HashSet::from_iter(members_active.iter().cloned());
+    let network_members =
+        HashSet::from_iter(get_session_validators(&connection, session).into_iter());
+
+    assert_eq!(members_active_set, network_members);
+
+    (members_active, members_bench)
 }
 
 pub fn setup_validators(
     config: &Config,
 ) -> anyhow::Result<(EraValidators<AccountId>, u32, EraIndex)> {
     let root_connection = config.create_root_connection();
-    let current_session = get_current_session(&root_connection);
 
-    let (mut reserved_members, mut non_reserved_members) =
-        get_member_accounts(&root_connection, current_session);
-
-    let members_size = reserved_members.len() + non_reserved_members.len();
-    let reserved_count = members_size / 2;
-    let mut all_members = reserved_members
-        .into_iter()
-        .chain(non_reserved_members.into_iter());
-    reserved_members = all_members.by_ref().take(reserved_count).collect();
-    non_reserved_members = all_members.collect();
+    let members = get_session_validators(&root_connection, 0);
+    let members_size = members.len();
+    let reserved_count = std::cmp::min(members_size / 2, 2);
+    let reserved_members = &members[0..reserved_count];
+    let non_reserved_members = &members[reserved_count..];
 
     let reserved_seats = reserved_members.len().try_into().unwrap();
     let non_reserved_seats = (non_reserved_members.len() - 1).try_into().unwrap();
@@ -340,8 +353,8 @@ pub fn setup_validators(
 
     change_validators(
         &root_connection,
-        Some(reserved_members.clone()),
-        Some(non_reserved_members.clone()),
+        Some(reserved_members.into()),
+        Some(non_reserved_members.into()),
         Some(CommitteeSeats {
             reserved_seats,
             non_reserved_seats,
@@ -353,39 +366,42 @@ pub fn setup_validators(
     let first_session_in_era = era * get_sessions_per_era(&root_connection);
 
     let era_validators = EraValidators {
-        reserved: reserved_members,
-        non_reserved: non_reserved_members,
+        reserved: reserved_members.to_vec(),
+        non_reserved: non_reserved_members.to_vec(),
     };
     let non_reserved_members_for_session = get_non_reserved_members_for_session(
         members_per_session,
         &era_validators,
         first_session_in_era,
     );
+    println!("reserved for session: {:?}", era_validators.reserved);
+    println!(
+        "non-reserved for session: {:?}",
+        non_reserved_members_for_session
+    );
     let expected_members: HashSet<_> = era_validators
         .reserved
-        .clone()
-        .into_iter()
+        .iter()
+        .cloned()
         .chain(non_reserved_members_for_session.into_iter())
         .collect();
 
-    let (reserved, non_reserved) = get_member_accounts(&root_connection, first_session_in_era);
+    let (network_reserved, network_non_reserved) =
+        get_member_accounts(&root_connection, first_session_in_era);
     let network_members = HashSet::from_iter(
         get_session_validators(&root_connection, first_session_in_era).into_iter(),
     );
-    let network_era_validators = EraValidators {
-        reserved,
-        non_reserved,
-    };
+    let reserved: HashSet<_> = era_validators.reserved.iter().cloned().collect();
+    let network_reserved: HashSet<_> = network_reserved.into_iter().collect();
+    let non_reserved: HashSet<_> = era_validators.non_reserved.iter().cloned().collect();
+    let network_non_reserved: HashSet<_> = network_non_reserved.into_iter().collect();
 
     assert_eq!(
         u32::try_from(network_members.len()).unwrap(),
         members_per_session,
     );
-    assert_eq!(era_validators.reserved, network_era_validators.reserved);
-    assert_eq!(
-        era_validators.non_reserved,
-        network_era_validators.non_reserved
-    );
+    assert_eq!(reserved, network_reserved);
+    assert_eq!(non_reserved, network_non_reserved);
     assert_eq!(expected_members, network_members);
 
     Ok((era_validators, u32::try_from(members_size).unwrap(), era))

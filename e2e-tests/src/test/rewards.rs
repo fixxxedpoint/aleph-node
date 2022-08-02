@@ -10,9 +10,9 @@ use substrate_api_client::{AccountId, XtStatus};
 use crate::{
     accounts::get_validators_keys,
     rewards::{
-        check_points, get_bench_members, get_member_accounts, get_non_reserved_members_for_session,
-        reset_validator_keys, set_invalid_keys_for_validator, setup_validators,
-        validators_bond_extra_stakes,
+        check_points, get_bench_members, get_member_accounts, get_members_for_session,
+        get_non_reserved_members_for_session, reset_validator_keys, set_invalid_keys_for_validator,
+        setup_validators, validators_bond_extra_stakes,
     },
     Config,
 };
@@ -20,7 +20,7 @@ use crate::{
 // Maximum difference between fractions of total reward that a validator gets.
 // Two values are compared: one calculated in tests and the other one based on data
 // retrieved from pallet Staking.
-const MAX_DIFFERENCE: f64 = 0.10;
+const MAX_DIFFERENCE: f64 = 0.20;
 
 fn check_points_after_force_new_era(
     connection: &SignedConnection,
@@ -60,6 +60,12 @@ fn check_points_after_force_new_era(
             .clone()
             .into_iter()
             .chain(non_reserved_members_for_session);
+        // let (members_active, members_bench) = get_members_for_session(
+        //     connection,
+        //     members_per_session,
+        //     &era_validators,
+        //     session_to_check,
+        // );
 
         check_points(
             connection,

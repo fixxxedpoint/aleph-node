@@ -14,8 +14,8 @@ use substrate_api_client::{
 };
 
 use crate::{
-    account_from_keypair, create_connection, locks, send_xt, wait_for_session, AnyConnection,
-    BlockNumber, KeyPair, RootConnection, SignedConnection,
+    account_from_keypair, create_connection, locks, send_xt, wait_for_at_least_session,
+    wait_for_session, AnyConnection, BlockNumber, KeyPair, RootConnection, SignedConnection,
 };
 
 pub fn bond(
@@ -112,7 +112,7 @@ pub fn wait_for_next_era<C: AnyConnection>(connection: &C) -> anyhow::Result<Era
     wait_for_era_completion(connection, get_current_era(connection) + 1)
 }
 
-fn wait_for_era_completion<C: AnyConnection>(
+pub fn wait_for_era_completion<C: AnyConnection>(
     connection: &C,
     next_era_index: EraIndex,
 ) -> anyhow::Result<EraIndex> {
@@ -120,6 +120,16 @@ fn wait_for_era_completion<C: AnyConnection>(
     let first_session_in_next_era = next_era_index * sessions_per_era;
     wait_for_session(connection, first_session_in_next_era)?;
     Ok(next_era_index)
+}
+
+pub fn wait_for_at_least_era<C: AnyConnection>(
+    connection: &C,
+    era: EraIndex,
+) -> anyhow::Result<()> {
+    let sessions_per_era: u32 = connection.read_constant("Staking", "SessionsPerEra");
+    let first_session_in_next_era = era * sessions_per_era;
+    wait_for_at_least_session(connection, first_session_in_next_era)?;
+    Ok(())
 }
 
 pub fn get_sessions_per_era<C: AnyConnection>(connection: &C) -> u32 {
