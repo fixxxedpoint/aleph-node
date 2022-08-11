@@ -7,7 +7,7 @@ use sp_runtime::traits::Block;
 use crate::{
     crypto::Keychain,
     data_io::{AlephData, OrderedDataInterpreter},
-    network::{AlephNetworkData, DataNetwork, NetworkWrapper},
+    network::{AlephNetworkData, DataNetwork, GuardedNetworkWrapper, NetworkWrapper},
     party::{backup::ABFTBackup, AuthoritySubtaskCommon, Task},
 };
 
@@ -20,7 +20,7 @@ pub fn task<
     subtask_common: AuthoritySubtaskCommon,
     multikeychain: Keychain,
     config: Config,
-    network: NetworkWrapper<AlephNetworkData<B>, ADN>,
+    network: GuardedNetworkWrapper<AlephNetworkData<B>, ADN>,
     data_provider: impl aleph_bft::DataProvider<AlephData<B>> + Send + 'static,
     ordered_data_interpreter: OrderedDataInterpreter<B, C>,
     backup: ABFTBackup,
@@ -36,6 +36,8 @@ pub fn task<
         let spawn_handle = spawn_handle.clone();
         async move {
             debug!(target: "aleph-party", "Running the member task for {:?}", session_id);
+            // let network_guard = std::sync::Arc::new(futures::lock::Mutex::new(network));
+            // let network = GuardedNetworkWrapper::new(network_guard.clone());
             aleph_bft::run_session(config, local_io, network, multikeychain, spawn_handle, exit)
                 .await;
             debug!(target: "aleph-party", "Member task stopped for {:?}", session_id);

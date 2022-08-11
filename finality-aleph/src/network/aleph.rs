@@ -47,3 +47,40 @@ impl<D: Data, DN: DataNetwork<D>> AlephNetwork<D> for NetworkWrapper<D, DN> {
         self.inner.next().await
     }
 }
+
+pub struct GuardedNetworkWrapper<D: Data, DN: DataNetwork<D>>(
+    std::sync::Arc<futures::lock::Mutex<NetworkWrapper<D, DN>>>,
+);
+
+impl<D: Data, DN: DataNetwork<D>> GuardedNetworkWrapper<D, DN> {
+    pub fn new(network: std::sync::Arc<futures::lock::Mutex<NetworkWrapper<D, DN>>>) -> Self {
+        // Self(std::sync::Arc::new(futures::lock::Mutex::new(network)))
+        Self(network)
+    }
+}
+
+#[async_trait::async_trait]
+impl<D: Data, DN: DataNetwork<D>> AlephNetwork<D> for GuardedNetworkWrapper<D, DN> {
+    fn send(&self, data: D, recipient: aleph_bft::Recipient) {
+        self.0.try_lock().unwrap().send(data, recipient);
+    }
+
+    async fn next_event(&mut self) -> Option<D> {
+        self.0.lock().await.next_event().await
+    }
+}
+
+// #[async_trait::async_trait]
+// impl<D: Data, DN: DataNetwork<D>, T: DerefMut<Target = NetworkWrapper<D, DN>>> AlephNetwork<D>
+//     for T
+// {
+//     fn send(&self, data: D, recipient: aleph_bft::Recipient) {
+//         if self.deref().inner.send(data, recipient).is_err() {
+//             warn!(target: "aleph-network", "Error sending an AlephBFT message to the network.");
+//         }
+//     }
+
+//     async fn next_event(&mut self) -> Option<D> {
+//         self.inner.next().await
+//     }
+// }

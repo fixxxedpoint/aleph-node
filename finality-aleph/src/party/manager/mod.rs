@@ -153,6 +153,10 @@ where
             unfiltered_aleph_network,
         );
 
+        let network_guard = std::sync::Arc::new(futures::lock::Mutex::new(aleph_network.into()));
+        let network = GuardedNetworkWrapper::new(network_guard.clone());
+        let network_copy = GuardedNetworkWrapper::new(network_guard.clone());
+
         Subtasks::new(
             exit_rx,
             member::task(
@@ -175,6 +179,7 @@ where
             ),
             chain_tracker::task(subtask_common.clone(), chain_tracker),
             data_store::task(subtask_common, data_store),
+            network_copy,
         )
     }
 }

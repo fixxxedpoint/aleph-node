@@ -656,3 +656,17 @@ where
         }
     }
 }
+
+impl<B, C, RB, Message, R> Drop for DataStore<B, C, RB, Message, R>
+where
+    B: BlockT,
+    C: HeaderBackend<B> + BlockchainEvents<B> + Send + Sync + 'static,
+    RB: RequestBlocks<B> + 'static,
+    Message:
+        AlephNetworkMessage<B> + std::fmt::Debug + Send + Sync + Clone + codec::Codec + 'static,
+    R: ReceiverComponent<Message>,
+{
+    fn drop(&mut self) {
+        debug!("Droping DataStore");
+    }
+}

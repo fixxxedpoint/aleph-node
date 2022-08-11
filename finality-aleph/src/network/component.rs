@@ -2,6 +2,7 @@ use std::{marker::PhantomData, sync::Arc};
 
 use aleph_bft::Recipient;
 use futures::{channel::mpsc, StreamExt};
+use log::debug;
 use tokio::sync::Mutex;
 
 use crate::network::{Data, DataNetwork, SendError};
@@ -63,6 +64,12 @@ impl<D: Data, R: Receiver<D>, S: Sender<D>> SimpleNetwork<D, R, S> {
             sender,
             _phantom: PhantomData,
         }
+    }
+}
+
+impl<D: Data, R: Receiver<D>, S: Sender<D>> Drop for SimpleNetwork<D, R, S> {
+    fn drop(&mut self) {
+        debug!("droping SimpleNetwork");
     }
 }
 

@@ -16,7 +16,7 @@ mod service;
 mod session;
 mod split;
 
-pub use aleph::{NetworkData as AlephNetworkData, NetworkWrapper};
+pub use aleph::{GuardedNetworkWrapper, NetworkData as AlephNetworkData, NetworkWrapper};
 pub use component::{
     Network as ComponentNetwork, Receiver as ReceiverComponent, Sender as SenderComponent,
     SimpleNetwork,

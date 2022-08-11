@@ -1,7 +1,8 @@
 use futures::channel::oneshot;
-use log::{debug, trace};
+use log::{debug, trace, warn};
 
 use crate::{
+    network::{Data, DataNetwork, GuardedNetworkWrapper},
     party::{Handle, Task as PureTask},
     NodeIndex, SpawnHandle,
 };
@@ -35,15 +36,16 @@ impl Task {
 }
 
 /// All the subtasks required to participate in a session as an authority.
-pub struct Subtasks {
+pub struct Subtasks<D: Data, DN: DataNetwork<D>> {
     exit: oneshot::Receiver<()>,
     member: PureTask,
     aggregator: PureTask,
     refresher: PureTask,
     data_store: PureTask,
+    network: GuardedNetworkWrapper<D, DN>,
 }
 
-impl Subtasks {
+impl<D: Data, DN: DataNetwork<D>> Subtasks<D, DN> {
     /// Create the subtask collection by passing in all the tasks.
     pub fn new(
         exit: oneshot::Receiver<()>,
@@ -51,6 +53,7 @@ impl Subtasks {
         aggregator: PureTask,
         refresher: PureTask,
         data_store: PureTask,
+        network: GuardedNetworkWrapper<D, DN>,
     ) -> Self {
         Subtasks {
             exit,
@@ -58,6 +61,7 @@ impl Subtasks {
             aggregator,
             refresher,
             data_store,
+            network,
         }
     }
 
@@ -79,10 +83,10 @@ impl Subtasks {
     pub async fn failed(mut self) -> bool {
         let result = tokio::select! {
             _ = &mut self.exit => false,
-            _ = self.member.stopped() => true,
-            _ = self.aggregator.stopped() => true,
-            _ = self.refresher.stopped() => true,
-            _ = self.data_store.stopped() => true,
+            _ = self.member.stopped() => { warn!("member died!!!"); true },
+            _ = self.aggregator.stopped() => { warn!("aggregator died!!!");true },
+            _ = self.refresher.stopped() => { warn!("refresher died!!!"); true },
+            _ = self.data_store.stopped() => { warn!("data_store died!!!"); true },
         };
         if result {
             debug!(target: "aleph-party", "Something died and it was unexpected");
