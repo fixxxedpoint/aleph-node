@@ -14,7 +14,7 @@ use crate::{
     crypto::{AuthorityPen, AuthorityVerifier, Keychain},
     data_io::{ChainTracker, DataStore, OrderedDataInterpreter},
     default_aleph_config, mpsc,
-    network::{split, ManagerError, RequestBlocks, SessionManager},
+    network::{split, GuardedNetworkWrapper, ManagerError, RequestBlocks, SessionManager},
     party::{backup::ABFTBackup, traits::NodeSessionManager},
     AuthorityId, JustificationNotification, Metrics, NodeIndex, SessionBoundaries, SessionId,
     SessionPeriod, SplitData, UnitCreationDelay,
@@ -27,7 +27,7 @@ mod data_store;
 mod member;
 mod task;
 
-pub use authority::{SubtaskCommon, Subtasks, Task as AuthorityTask};
+pub use authority::{FailingTask, SubtaskCommon, Subtasks, Task as AuthorityTask};
 pub use task::{Handle, Task};
 
 pub struct NodeSessionManagerImpl<C, SC, B, RB, BE>
@@ -94,7 +94,7 @@ where
         node_id: NodeIndex,
         exit_rx: oneshot::Receiver<()>,
         backup: ABFTBackup,
-    ) -> Subtasks {
+    ) -> impl FailingTask {
         debug!(target: "afa", "Authority task {:?}", session_id);
 
         let authority_verifier = AuthorityVerifier::new(authorities.to_vec());
@@ -144,7 +144,8 @@ where
             .await
             .expect("Failed to start validator session!");
 
-        let (unfiltered_aleph_network, rmc_network) = split(data_network);
+        let (unfiltered_aleph_network, rmc_network) =
+            split(data_network, "aleph_network", "rmc_network");
         let (data_store, aleph_network) = DataStore::new(
             session_boundaries.clone(),
             self.client.clone(),
@@ -163,7 +164,8 @@ where
                 subtask_common.clone(),
                 multikeychain.clone(),
                 consensus_config,
-                aleph_network.into(),
+                // aleph_network.into(),
+                network,
                 data_provider,
                 ordered_data_interpreter,
                 backup,

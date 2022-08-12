@@ -121,6 +121,7 @@ async fn run_aggregator<B, C, N>(
                     process_hash(hash, multisignature, &justifications_for_chain, &client);
                 } else {
                     debug!(target: "aleph-party", "The stream of multisigned hashes has ended. Terminating.");
+                    let _ = exit_rx.await;
                     return;
                 }
             }

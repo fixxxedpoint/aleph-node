@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use futures::channel::oneshot;
 use log::{debug, trace, warn};
 
@@ -36,16 +37,16 @@ impl Task {
 }
 
 /// All the subtasks required to participate in a session as an authority.
-pub struct Subtasks<D: Data, DN: DataNetwork<D>> {
+pub struct Subtasks<T> {
     exit: oneshot::Receiver<()>,
     member: PureTask,
     aggregator: PureTask,
     refresher: PureTask,
     data_store: PureTask,
-    network: GuardedNetworkWrapper<D, DN>,
+    network: T,
 }
 
-impl<D: Data, DN: DataNetwork<D>> Subtasks<D, DN> {
+impl<T> Subtasks<T> {
     /// Create the subtask collection by passing in all the tasks.
     pub fn new(
         exit: oneshot::Receiver<()>,
@@ -53,7 +54,7 @@ impl<D: Data, DN: DataNetwork<D>> Subtasks<D, DN> {
         aggregator: PureTask,
         refresher: PureTask,
         data_store: PureTask,
-        network: GuardedNetworkWrapper<D, DN>,
+        network: T,
     ) -> Self {
         Subtasks {
             exit,
@@ -71,12 +72,12 @@ impl<D: Data, DN: DataNetwork<D>> Subtasks<D, DN> {
         debug!(target: "aleph-party", "Started to stop all tasks");
         self.member.stop().await;
         trace!(target: "aleph-party", "Member stopped");
-        self.aggregator.stop().await;
-        trace!(target: "aleph-party", "Aggregator stopped");
         self.refresher.stop().await;
         trace!(target: "aleph-party", "Refresher stopped");
         self.data_store.stop().await;
         trace!(target: "aleph-party", "DataStore stopped");
+        self.aggregator.stop().await;
+        trace!(target: "aleph-party", "Aggregator stopped");
     }
 
     /// Blocks until the task is done and returns true if it quit unexpectedly.
@@ -94,6 +95,19 @@ impl<D: Data, DN: DataNetwork<D>> Subtasks<D, DN> {
         self.stop().await;
         debug!(target: "aleph-party", "Stopped all processes");
         result
+    }
+}
+
+#[async_trait]
+pub trait FailingTask {
+    async fn failed(mut self) -> bool;
+}
+
+#[async_trait]
+impl<T: Send> FailingTask for Subtasks<T> {
+    async fn failed(mut self) -> bool {
+        Subtasks::failed(self).await
+        // self.failed()
     }
 }
 

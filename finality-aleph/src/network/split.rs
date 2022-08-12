@@ -56,6 +56,7 @@ struct LeftReceiver<
     translated_receiver: mpsc::UnboundedReceiver<LeftData>,
     left_sender: mpsc::UnboundedSender<LeftData>,
     right_sender: mpsc::UnboundedSender<RightData>,
+    name: &'static str,
 }
 
 struct RightReceiver<
@@ -67,6 +68,7 @@ struct RightReceiver<
     translated_receiver: mpsc::UnboundedReceiver<RightData>,
     left_sender: mpsc::UnboundedSender<LeftData>,
     right_sender: mpsc::UnboundedSender<RightData>,
+    name: &'static str,
 }
 
 async fn forward_or_wait<
@@ -77,17 +79,18 @@ async fn forward_or_wait<
     receiver: &Arc<Mutex<R>>,
     left_sender: &mpsc::UnboundedSender<LeftData>,
     right_sender: &mpsc::UnboundedSender<RightData>,
+    name: String,
 ) -> bool {
     match receiver.lock().await.next().await {
         Some(Split::Left(data)) => {
             if left_sender.unbounded_send(data).is_err() {
-                warn!(target: "aleph-network", "Failed send despite controlling receiver, this shouldn't've happened.");
+                warn!(target: "aleph-network", "Failed send despite controlling receiver, this shouldn't've happened. left sender :: {}", name);
             }
             true
         }
         Some(Split::Right(data)) => {
             if right_sender.unbounded_send(data).is_err() {
-                warn!(target: "aleph-network", "Failed send despite controlling receiver, this shouldn't've happened.");
+                warn!(target: "aleph-network", "Failed send despite controlling receiver, this shouldn't've happened. right sender :: {}", name);
             }
             true
         }
@@ -110,7 +113,7 @@ impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, Right
                 data = self.translated_receiver.next() => {
                     return data;
                 },
-                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender) => {
+                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
                     if !should_go_on {
                         return None;
                     }
@@ -130,7 +133,7 @@ impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, Right
                 data = self.translated_receiver.next() => {
                     return data;
                 },
-                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender) => {
+                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
                     if !should_go_on {
                         return None;
                     }
@@ -148,6 +151,7 @@ struct LeftNetwork<
 > {
     sender: LeftSender<LeftData, RightData, S>,
     receiver: Arc<Mutex<LeftReceiver<LeftData, RightData, R>>>,
+    name: &'static str,
 }
 
 impl<
@@ -175,6 +179,7 @@ struct RightNetwork<
 > {
     sender: RightSender<LeftData, RightData, S>,
     receiver: Arc<Mutex<RightReceiver<LeftData, RightData, R>>>,
+    name: &'static str,
 }
 
 impl<
@@ -218,6 +223,8 @@ fn split_receiver<
     R: ReceiverComponent<Split<LeftData, RightData>>,
 >(
     receiver: Arc<Mutex<R>>,
+    left_name: &'static str,
+    right_name: &'static str,
 ) -> (
     LeftReceiver<LeftData, RightData, R>,
     RightReceiver<LeftData, RightData, R>,
@@ -230,12 +237,14 @@ fn split_receiver<
             translated_receiver: left_receiver,
             left_sender: left_sender.clone(),
             right_sender: right_sender.clone(),
+            name: left_name,
         },
         RightReceiver {
             receiver,
             translated_receiver: right_receiver,
             left_sender,
             right_sender,
+            name: right_name,
         },
     )
 }
@@ -251,20 +260,24 @@ fn split_receiver<
 /// signatures for justifications.
 pub fn split<LeftData: Data, RightData: Data, CN: ComponentNetwork<Split<LeftData, RightData>>>(
     network: CN,
+    left_name: &'static str,
+    right_name: &'static str,
 ) -> (
     impl ComponentNetwork<LeftData>,
     impl ComponentNetwork<RightData>,
 ) {
     let (left_sender, right_sender) = split_sender(network.sender());
-    let (left_receiver, right_receiver) = split_receiver(network.receiver());
+    let (left_receiver, right_receiver) = split_receiver(network.receiver(), left_name, right_name);
     (
         LeftNetwork {
             sender: left_sender,
             receiver: Arc::new(Mutex::new(left_receiver)),
+            name: left_name,
         },
         RightNetwork {
             sender: right_sender,
             receiver: Arc::new(Mutex::new(right_receiver)),
+            name: right_name,
         },
     )
 }
