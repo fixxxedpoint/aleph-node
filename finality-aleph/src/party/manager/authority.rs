@@ -1,9 +1,7 @@
-use async_trait::async_trait;
 use futures::channel::oneshot;
 use log::{debug, trace, warn};
 
 use crate::{
-    network::{Data, DataNetwork, GuardedNetworkWrapper},
     party::{Handle, Task as PureTask},
     NodeIndex, SpawnHandle,
 };
@@ -92,39 +90,6 @@ impl Subtasks {
         self.stop().await;
         debug!(target: "aleph-party", "Stopped all processes");
         result
-    }
-}
-
-pub struct HoldingSubtask<ST, D> {
-    subtask: ST,
-    _holder: D,
-}
-
-impl<ST, D> HoldingSubtask<ST, D> {
-    pub fn new(subtask: ST, holder: D) -> Self {
-        Self {
-            subtask,
-            _holder: holder,
-        }
-    }
-}
-
-#[async_trait]
-pub trait FailingTask {
-    async fn failed(mut self) -> bool;
-}
-
-#[async_trait]
-impl FailingTask for Subtasks {
-    async fn failed(mut self) -> bool {
-        Subtasks::failed(self).await
-    }
-}
-
-#[async_trait]
-impl<ST: FailingTask + Send, D: Send> FailingTask for HoldingSubtask<ST, D> {
-    async fn failed(mut self) -> bool {
-        self.subtask.failed().await
     }
 }
 

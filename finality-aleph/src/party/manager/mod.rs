@@ -14,7 +14,7 @@ use crate::{
     crypto::{AuthorityPen, AuthorityVerifier, Keychain},
     data_io::{ChainTracker, DataStore, OrderedDataInterpreter},
     default_aleph_config, mpsc,
-    network::{split, GuardedNetworkWrapper, ManagerError, RequestBlocks, SessionManager},
+    network::{split, ManagerError, RequestBlocks, SessionManager},
     party::{backup::ABFTBackup, traits::NodeSessionManager},
     AuthorityId, JustificationNotification, Metrics, NodeIndex, SessionBoundaries, SessionId,
     SessionPeriod, SplitData, UnitCreationDelay,
@@ -27,7 +27,7 @@ mod data_store;
 mod member;
 mod task;
 
-pub use authority::{FailingTask, SubtaskCommon, Subtasks, Task as AuthorityTask};
+pub use authority::{SubtaskCommon, Subtasks, Task as AuthorityTask};
 pub use task::{Handle, Task};
 
 pub struct NodeSessionManagerImpl<C, SC, B, RB, BE>
@@ -94,7 +94,7 @@ where
         node_id: NodeIndex,
         exit_rx: oneshot::Receiver<()>,
         backup: ABFTBackup,
-    ) -> impl FailingTask {
+    ) -> Subtasks {
         debug!(target: "afa", "Authority task {:?}", session_id);
 
         let authority_verifier = AuthorityVerifier::new(authorities.to_vec());
@@ -154,10 +154,6 @@ where
             unfiltered_aleph_network,
         );
 
-        // let network_guard = std::sync::Arc::new(futures::lock::Mutex::new(aleph_network.into()));
-        // let network = GuardedNetworkWrapper::new(network_guard.clone());
-        // let network_copy = GuardedNetworkWrapper::new(network_guard.clone());
-
         Subtasks::new(
             exit_rx,
             member::task(
@@ -165,7 +161,6 @@ where
                 multikeychain.clone(),
                 consensus_config,
                 aleph_network.into(),
-                // network,
                 data_provider,
                 ordered_data_interpreter,
                 backup,
@@ -181,7 +176,6 @@ where
             ),
             chain_tracker::task(subtask_common.clone(), chain_tracker),
             data_store::task(subtask_common, data_store),
-            // network_copy,
         )
     }
 }

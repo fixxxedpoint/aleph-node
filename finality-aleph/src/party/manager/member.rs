@@ -7,7 +7,7 @@ use sp_runtime::traits::Block;
 use crate::{
     crypto::Keychain,
     data_io::{AlephData, OrderedDataInterpreter},
-    network::{AlephNetworkData, DataNetwork, GuardedNetworkWrapper, NetworkWrapper},
+    network::{AlephNetworkData, DataNetwork, NetworkWrapper},
     party::{backup::ABFTBackup, AuthoritySubtaskCommon, Task},
 };
 
