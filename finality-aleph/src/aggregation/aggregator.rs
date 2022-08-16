@@ -143,6 +143,10 @@ impl<
         self.aggregator.notify_last_hash()
     }
 
+    pub fn last_hash_placed(&self) -> bool {
+        self.aggregator.last_hash_placed
+    }
+
     async fn wait_for_next_signature(&mut self) -> IOResult {
         loop {
             tokio::select! {

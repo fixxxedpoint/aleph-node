@@ -120,8 +120,11 @@ async fn run_aggregator<B, C, N>(
                 if let Some((hash, multisignature)) = multisigned_hash {
                     process_hash(hash, multisignature, &justifications_for_chain, &client);
                 } else {
-                    debug!(target: "aleph-party", "The stream of multisigned hashes has ended. Terminating.");
-                    let _ = exit_rx.await;
+                    if aggregator.last_hash_placed() {
+                        debug!(target: "aleph-party", "The stream of multisigned hashes has ended, reason: last hash placed. Terminating.");
+                        break;
+                    }
+                    debug!(target: "aleph-party", "The stream of multisigned hashes has ended. Emergency Termination.");
                     return;
                 }
             }

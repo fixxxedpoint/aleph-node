@@ -154,9 +154,9 @@ where
             unfiltered_aleph_network,
         );
 
-        let network_guard = std::sync::Arc::new(futures::lock::Mutex::new(aleph_network.into()));
-        let network = GuardedNetworkWrapper::new(network_guard.clone());
-        let network_copy = GuardedNetworkWrapper::new(network_guard.clone());
+        // let network_guard = std::sync::Arc::new(futures::lock::Mutex::new(aleph_network.into()));
+        // let network = GuardedNetworkWrapper::new(network_guard.clone());
+        // let network_copy = GuardedNetworkWrapper::new(network_guard.clone());
 
         Subtasks::new(
             exit_rx,
@@ -164,8 +164,8 @@ where
                 subtask_common.clone(),
                 multikeychain.clone(),
                 consensus_config,
-                // aleph_network.into(),
-                network,
+                aleph_network.into(),
+                // network,
                 data_provider,
                 ordered_data_interpreter,
                 backup,
