@@ -1,12 +1,9 @@
-// WARNING: A lot of the code below is duplicated and cannot be easily deduplicated within the Rust
-// typesystem (perhaps somewhat with macros?). Be very careful to change all the occurences if you
-// are modyfing this file.
 use std::{marker::PhantomData, sync::Arc};
 
 use aleph_bft::Recipient;
 use codec::{Decode, Encode};
 use futures::channel::mpsc;
-use log::{trace, warn};
+use log::{debug, trace};
 use tokio::sync::Mutex;
 
 use crate::network::{ComponentNetwork, Data, ReceiverComponent, SendError, SenderComponent};
@@ -18,24 +15,37 @@ pub enum Split<LeftData: Data, RightData: Data> {
     Right(RightData),
 }
 
-trait Convert<A, B> {
-    fn convert(a: A) -> B;
+trait Convert {
+    type From;
+    type To;
+
+    fn convert(from: Self::From) -> Self::To;
 }
 
 #[derive(Clone)]
-struct ToLeftConvert {}
+struct ToLeftSplitConvert<A, B> {
+    _phantom: PhantomData<(A, B)>,
+}
 
-impl<A: Data, B: Data> Convert<A, Split<A, B>> for ToLeftConvert {
-    fn convert(a: A) -> Split<A, B> {
-        Split::Left(a)
+impl<A: Data, B: Data> Convert for ToLeftSplitConvert<A, B> {
+    type From = A;
+    type To = Split<A, B>;
+
+    fn convert(from: Self::From) -> Self::To {
+        Split::Left(from)
     }
 }
 
 #[derive(Clone)]
-struct ToRightConvert {}
+struct ToRightSplitConvert<A, B> {
+    _phantom: PhantomData<(A, B)>,
+}
 
-impl<A: Data, B: Data> Convert<B, Split<A, B>> for ToRightConvert {
-    fn convert(b: B) -> Split<A, B> {
+impl<A: Data, B: Data> Convert for ToRightSplitConvert<A, B> {
+    type From = B;
+    type To = Split<A, B>;
+
+    fn convert(b: Self::From) -> Self::To {
         Split::Right(b)
     }
 }
@@ -45,104 +55,32 @@ struct GenericSender<
     LeftData: Data,
     RightData: Data,
     S: SenderComponent<Split<LeftData, RightData>>,
-    MyData: Data,
-    // Convert: Fn(MyData) -> Split<LeftData, RightData>,
-    Conv: Convert<MyData, Split<LeftData, RightData>>,
+    Conv: Convert,
 > {
     sender: S,
-    phantom: PhantomData<(LeftData, RightData, MyData, Conv)>,
+    phantom: PhantomData<(LeftData, RightData, Conv)>,
 }
 
 impl<
         LeftData: Data,
         RightData: Data,
         S: SenderComponent<Split<LeftData, RightData>>,
-        MyData: Data,
-        Conv: Convert<MyData, Split<LeftData, RightData>> + Clone + Send + Sync,
-    > SenderComponent<MyData> for GenericSender<LeftData, RightData, S, MyData, Conv>
+        Conv: Convert<To = Split<LeftData, RightData>> + Clone + Send + Sync,
+    > SenderComponent<Conv::From> for GenericSender<LeftData, RightData, S, Conv>
+where
+    <Conv as Convert>::From: Data,
+    <Conv as Convert>::To: Data,
 {
-    fn send(&self, data: MyData, recipient: Recipient) -> Result<(), SendError> {
+    fn send(&self, data: Conv::From, recipient: Recipient) -> Result<(), SendError> {
         self.sender.send(Conv::convert(data), recipient)
     }
 }
 
-type LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> =
-    GenericSender<LeftData, RightData, S, LeftData, ToLeftConvert>;
+type LeftSender<LeftData, RightData, S> =
+    GenericSender<LeftData, RightData, S, ToLeftSplitConvert<LeftData, RightData>>;
 
-type RightSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> =
-    GenericSender<LeftData, RightData, S, RightData, ToRightConvert>;
-
-// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-//     SenderComponent<LeftData> for GenericSender<LeftData, RightData, S, LeftData>
-// {
-//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
-//         self.sender.send(Split::Left(data), recipient)
-//     }
-// }
-
-// struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-// {}
-
-// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
-//     GenericSender<LeftData, RightData, S, LeftData>
-// {
-//     fn wrap_data(data: LeftData) -> Split<LeftData, RightData> {
-//         Split::Left(data)
-//     }
-// }
-
-// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
-//     GenericSender<LeftData, RightData, S, RightData>
-// {
-//     fn wrap_data(data: RightData) -> Split<LeftData, RightData> {
-//         Split::Right(data)
-//     }
-// }
-
-// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-//     SenderComponent<LeftData> for GenericSender<LeftData, RightData, S, LeftData>
-// {
-//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
-//         self.sender.send(Split::Left(data), recipient)
-//     }
-// }
-
-// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-//     SenderComponent<RightData> for GenericSender<LeftData, RightData, S, RightData>
-// {
-//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
-//         self.sender.send(Split::Right(data), recipient)
-//     }
-// }
-
-// #[derive(Clone)]
-// struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> {
-//     sender: S,
-//     phantom: PhantomData<(LeftData, RightData)>,
-// }
-
-// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-//     SenderComponent<LeftData> for LeftSender<LeftData, RightData, S>
-// {
-//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
-//         self.sender.send(Split::Left(data), recipient)
-//     }
-// }
-
-// #[derive(Clone)]
-// struct RightSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-// {
-//     sender: S,
-//     phantom: PhantomData<(LeftData, RightData)>,
-// }
-
-// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-//     SenderComponent<RightData> for RightSender<LeftData, RightData, S>
-// {
-//     fn send(&self, data: RightData, recipient: Recipient) -> Result<(), SendError> {
-//         self.sender.send(Split::Right(data), recipient)
-//     }
-// }
+type RightSender<LeftData, RightData, S> =
+    GenericSender<LeftData, RightData, S, ToRightSplitConvert<LeftData, RightData>>;
 
 struct GenericReceiver<
     LeftData: Data,
@@ -157,32 +95,22 @@ struct GenericReceiver<
     name: String,
 }
 
-// impl<
-//         LeftData: Data,
-//         RightData: Data,
-//         R: ReceiverComponent<Split<LeftData, RightData>>,
-//         TranslatedData: Data,
-//     > GenericReceiver<LeftData, RightData, R, TranslatedData>
-// {
-//     fn new(receiver: Arc<Mutex<R>>, left_sender: mpsc::UnboundedSender<LeftData) {
-//     }
-// }
-
 #[async_trait::async_trait]
 impl<
         LeftData: Data,
         RightData: Data,
         R: ReceiverComponent<Split<LeftData, RightData>>,
-        MyData: Data,
-    > ReceiverComponent<MyData> for GenericReceiver<LeftData, RightData, R, MyData>
+        TranslatedData: Data,
+    > ReceiverComponent<TranslatedData>
+    for GenericReceiver<LeftData, RightData, R, TranslatedData>
 {
-    async fn next(&mut self) -> Option<MyData> {
+    async fn next(&mut self) -> Option<TranslatedData> {
         loop {
             tokio::select! {
                 data = self.translated_receiver.next() => {
                     return data;
                 },
-                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
+                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, &self.name) => {
                     if !should_go_on {
                         return None;
                     }
@@ -192,41 +120,9 @@ impl<
     }
 }
 
-type LeftReceiver<
-    LeftData: Data,
-    RightData: Data,
-    R: ReceiverComponent<Split<LeftData, RightData>>,
-> = GenericReceiver<LeftData, RightData, R, LeftData>;
+type LeftReceiver<LeftData, RightData, R> = GenericReceiver<LeftData, RightData, R, LeftData>;
 
-type RightReceiver<
-    LeftData: Data,
-    RightData: Data,
-    R: ReceiverComponent<Split<LeftData, RightData>>,
-> = GenericReceiver<LeftData, RightData, R, RightData>;
-
-// struct LeftReceiver<
-//     LeftData: Data,
-//     RightData: Data,
-//     R: ReceiverComponent<Split<LeftData, RightData>>,
-// > {
-//     receiver: Arc<Mutex<R>>,
-//     translated_receiver: mpsc::UnboundedReceiver<LeftData>,
-//     left_sender: mpsc::UnboundedSender<LeftData>,
-//     right_sender: mpsc::UnboundedSender<RightData>,
-//     name: &'static str,
-// }
-
-// struct RightReceiver<
-//     LeftData: Data,
-//     RightData: Data,
-//     R: ReceiverComponent<Split<LeftData, RightData>>,
-// > {
-//     receiver: Arc<Mutex<R>>,
-//     translated_receiver: mpsc::UnboundedReceiver<RightData>,
-//     left_sender: mpsc::UnboundedSender<LeftData>,
-//     right_sender: mpsc::UnboundedSender<RightData>,
-//     name: &'static str,
-// }
+type RightReceiver<LeftData, RightData, R> = GenericReceiver<LeftData, RightData, R, RightData>;
 
 async fn forward_or_wait<
     LeftData: Data,
@@ -236,18 +132,18 @@ async fn forward_or_wait<
     receiver: &Arc<Mutex<R>>,
     left_sender: &mpsc::UnboundedSender<LeftData>,
     right_sender: &mpsc::UnboundedSender<RightData>,
-    name: String,
+    name: &String,
 ) -> bool {
     match receiver.lock().await.next().await {
         Some(Split::Left(data)) => {
             if left_sender.unbounded_send(data).is_err() {
-                warn!(target: "aleph-network", "Failed send despite controlling receiver, this shouldn't've happened. left sender :: {}", name);
+                debug!(target: "aleph-network", "Unable to send to LeftNetwork ({}) - already disabled", name);
             }
             true
         }
         Some(Split::Right(data)) => {
             if right_sender.unbounded_send(data).is_err() {
-                warn!(target: "aleph-network", "Failed send despite controlling receiver, this shouldn't've happened. right sender :: {}", name);
+                debug!(target: "aleph-network", "Unable to send to LeftNetwork ({}) - already disabled", name);
             }
             true
         }
@@ -259,46 +155,6 @@ async fn forward_or_wait<
         }
     }
 }
-
-// #[async_trait::async_trait]
-// impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, RightData>>>
-//     ReceiverComponent<LeftData> for LeftReceiver<LeftData, RightData, R>
-// {
-//     async fn next(&mut self) -> Option<LeftData> {
-//         loop {
-//             tokio::select! {
-//                 data = self.translated_receiver.next() => {
-//                     return data;
-//                 },
-//                 should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
-//                     if !should_go_on {
-//                         return None;
-//                     }
-//                 },
-//             }
-//         }
-//     }
-// }
-
-// #[async_trait::async_trait]
-// impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, RightData>>>
-//     ReceiverComponent<RightData> for RightReceiver<LeftData, RightData, R>
-// {
-//     async fn next(&mut self) -> Option<RightData> {
-//         loop {
-//             tokio::select! {
-//                 data = self.translated_receiver.next() => {
-//                     return data;
-//                 },
-//                 should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
-//                     if !should_go_on {
-//                         return None;
-//                     }
-//                 },
-//             }
-//         }
-//     }
-// }
 
 struct LeftNetwork<
     LeftData: Data,
