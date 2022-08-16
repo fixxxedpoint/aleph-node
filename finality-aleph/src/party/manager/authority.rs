@@ -62,17 +62,19 @@ impl Subtasks {
     }
 
     async fn stop(self) {
-        // both member and aggregator are implicitly using forwarder,
-        // so we should force them to exit first to avoid any panics, i.e. `send on closed channel`
         debug!(target: "aleph-party", "Started to stop all tasks");
-        self.member.stop().await;
-        trace!(target: "aleph-party", "Member stopped");
-        self.refresher.stop().await;
-        trace!(target: "aleph-party", "Refresher stopped");
+        // we should stop data_store first, since it will drop its network's endpoint on its Task's drop
+        // otherwise, if stop aggregator first, it still can send something to it (after it is dropped)
         self.data_store.stop().await;
         trace!(target: "aleph-party", "DataStore stopped");
+        // both member and aggregator are implicitly using forwarder,
+        // so we should force them to exit early to avoid any panics, i.e. `send on closed channel`
+        self.member.stop().await;
+        trace!(target: "aleph-party", "Member stopped");
         self.aggregator.stop().await;
         trace!(target: "aleph-party", "Aggregator stopped");
+        self.refresher.stop().await;
+        trace!(target: "aleph-party", "Refresher stopped");
     }
 
     /// Blocks until the task is done and returns true if it quit unexpectedly.

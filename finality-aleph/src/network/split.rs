@@ -138,12 +138,14 @@ async fn forward_or_wait<
         Some(Split::Left(data)) => {
             if left_sender.unbounded_send(data).is_err() {
                 debug!(target: "aleph-network", "Unable to send to LeftNetwork ({}) - already disabled", name);
+                panic!("hey");
             }
             true
         }
         Some(Split::Right(data)) => {
             if right_sender.unbounded_send(data).is_err() {
                 debug!(target: "aleph-network", "Unable to send to LeftNetwork ({}) - already disabled", name);
+                panic!("hey.2");
             }
             true
         }
@@ -171,6 +173,19 @@ impl<
         RightData: Data,
         S: SenderComponent<Split<LeftData, RightData>>,
         R: ReceiverComponent<Split<LeftData, RightData>>,
+    > Drop for LeftNetwork<LeftData, RightData, S, R>
+{
+    fn drop(&mut self) {
+        debug!("dropping LeftNetwork - aleph?");
+        panic!("no ciekawe")
+    }
+}
+
+impl<
+        LeftData: Data,
+        RightData: Data,
+        S: SenderComponent<Split<LeftData, RightData>>,
+        R: ReceiverComponent<Split<LeftData, RightData>>,
     > ComponentNetwork<LeftData> for LeftNetwork<LeftData, RightData, S, R>
 {
     type S = LeftSender<LeftData, RightData, S>;
@@ -191,6 +206,18 @@ struct RightNetwork<
 > {
     sender: RightSender<LeftData, RightData, S>,
     receiver: Arc<Mutex<RightReceiver<LeftData, RightData, R>>>,
+}
+
+impl<
+        LeftData: Data,
+        RightData: Data,
+        S: SenderComponent<Split<LeftData, RightData>>,
+        R: ReceiverComponent<Split<LeftData, RightData>>,
+    > Drop for RightNetwork<LeftData, RightData, S, R>
+{
+    fn drop(&mut self) {
+        debug!("dropping RightNetwork - rmc?");
+    }
 }
 
 impl<

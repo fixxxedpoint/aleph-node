@@ -78,7 +78,7 @@ fn process_hash<B, C>(
 }
 
 async fn run_aggregator<B, C, N>(
-    mut aggregator: AggregatorIO<
+    aggregator: &mut AggregatorIO<
         B::Hash,
         RmcNetworkData<B>,
         N,
@@ -106,7 +106,7 @@ async fn run_aggregator<B, C, N>(
             maybe_block = blocks_from_interpreter.next() => {
                 if let Some(block) = maybe_block {
                     process_new_block_data(
-                        &mut aggregator,
+                        aggregator,
                         block,
                         session_boundaries,
                         &metrics
@@ -173,7 +173,7 @@ where
                 scheduler,
             );
             let aggregator = BlockSignatureAggregator::new(metrics.clone());
-            let aggregator_io = AggregatorIO::new(
+            let mut aggregator_io = AggregatorIO::new(
                 messages_for_rmc,
                 messages_from_rmc,
                 rmc_network,
@@ -182,7 +182,7 @@ where
             );
             debug!(target: "aleph-party", "Running the aggregator task for {:?}", session_id);
             run_aggregator(
-                aggregator_io,
+                &mut aggregator_io,
                 io,
                 client,
                 &session_boundaries,
