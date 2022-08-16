@@ -23,81 +23,126 @@ trait Convert<A, B> {
 }
 
 #[derive(Clone)]
+struct ToLeftConvert {}
+
+impl<A: Data, B: Data> Convert<A, Split<A, B>> for ToLeftConvert {
+    fn convert(a: A) -> Split<A, B> {
+        Split::Left(a)
+    }
+}
+
+#[derive(Clone)]
+struct ToRightConvert {}
+
+impl<A: Data, B: Data> Convert<B, Split<A, B>> for ToRightConvert {
+    fn convert(b: B) -> Split<A, B> {
+        Split::Right(b)
+    }
+}
+
+#[derive(Clone)]
 struct GenericSender<
     LeftData: Data,
     RightData: Data,
     S: SenderComponent<Split<LeftData, RightData>>,
-    MyData,
+    MyData: Data,
     // Convert: Fn(MyData) -> Split<LeftData, RightData>,
-    Convert: Convert<MyData, Split<LeftData, RightData>>,
+    Conv: Convert<MyData, Split<LeftData, RightData>>,
 > {
     sender: S,
-    phantom: PhantomData<(LeftData, RightData, MyData, Convert)>,
+    phantom: PhantomData<(LeftData, RightData, MyData, Conv)>,
 }
 
-struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-{}
-
-impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
-    GenericSender<LeftData, RightData, S, LeftData>
+impl<
+        LeftData: Data,
+        RightData: Data,
+        S: SenderComponent<Split<LeftData, RightData>>,
+        MyData: Data,
+        Conv: Convert<MyData, Split<LeftData, RightData>> + Clone + Send + Sync,
+    > SenderComponent<MyData> for GenericSender<LeftData, RightData, S, MyData, Conv>
 {
-    fn wrap_data(data: LeftData) -> Split<LeftData, RightData> {
-        Split::Left(data)
+    fn send(&self, data: MyData, recipient: Recipient) -> Result<(), SendError> {
+        self.sender.send(Conv::convert(data), recipient)
     }
 }
 
-impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
-    GenericSender<LeftData, RightData, S, RightData>
-{
-    fn wrap_data(data: RightData) -> Split<LeftData, RightData> {
-        Split::Right(data)
-    }
-}
+type LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> =
+    GenericSender<LeftData, RightData, S, LeftData, ToLeftConvert>;
 
-impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-    SenderComponent<LeftData> for GenericSender<LeftData, RightData, S, LeftData>
-{
-    fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
-        self.sender.send(Split::Left(data), recipient)
-    }
-}
+type RightSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> =
+    GenericSender<LeftData, RightData, S, RightData, ToRightConvert>;
 
-impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-    SenderComponent<RightData> for GenericSender<LeftData, RightData, S, RightData>
-{
-    fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
-        self.sender.send(Split::Right(data), recipient)
-    }
-}
+// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+//     SenderComponent<LeftData> for GenericSender<LeftData, RightData, S, LeftData>
+// {
+//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
+//         self.sender.send(Split::Left(data), recipient)
+//     }
+// }
 
-#[derive(Clone)]
-struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> {
-    sender: S,
-    phantom: PhantomData<(LeftData, RightData)>,
-}
+// struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+// {}
 
-impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-    SenderComponent<LeftData> for LeftSender<LeftData, RightData, S>
-{
-    fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
-        self.sender.send(Split::Left(data), recipient)
-    }
-}
+// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
+//     GenericSender<LeftData, RightData, S, LeftData>
+// {
+//     fn wrap_data(data: LeftData) -> Split<LeftData, RightData> {
+//         Split::Left(data)
+//     }
+// }
 
-#[derive(Clone)]
-struct RightSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-{
-    sender: S,
-    phantom: PhantomData<(LeftData, RightData)>,
-}
+// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
+//     GenericSender<LeftData, RightData, S, RightData>
+// {
+//     fn wrap_data(data: RightData) -> Split<LeftData, RightData> {
+//         Split::Right(data)
+//     }
+// }
 
-impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
-    SenderComponent<RightData> for RightSender<LeftData, RightData, S>
-{
-    fn send(&self, data: RightData, recipient: Recipient) -> Result<(), SendError> {
-        self.sender.send(Split::Right(data), recipient)
-    }
-}
+// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+//     SenderComponent<LeftData> for GenericSender<LeftData, RightData, S, LeftData>
+// {
+//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
+//         self.sender.send(Split::Left(data), recipient)
+//     }
+// }
+
+// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+//     SenderComponent<RightData> for GenericSender<LeftData, RightData, S, RightData>
+// {
+//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
+//         self.sender.send(Split::Right(data), recipient)
+//     }
+// }
+
+// #[derive(Clone)]
+// struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> {
+//     sender: S,
+//     phantom: PhantomData<(LeftData, RightData)>,
+// }
+
+// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+//     SenderComponent<LeftData> for LeftSender<LeftData, RightData, S>
+// {
+//     fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
+//         self.sender.send(Split::Left(data), recipient)
+//     }
+// }
+
+// #[derive(Clone)]
+// struct RightSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+// {
+//     sender: S,
+//     phantom: PhantomData<(LeftData, RightData)>,
+// }
+
+// impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+//     SenderComponent<RightData> for RightSender<LeftData, RightData, S>
+// {
+//     fn send(&self, data: RightData, recipient: Recipient) -> Result<(), SendError> {
+//         self.sender.send(Split::Right(data), recipient)
+//     }
+// }
 
 struct GenericReceiver<
     LeftData: Data,
@@ -263,7 +308,6 @@ struct LeftNetwork<
 > {
     sender: LeftSender<LeftData, RightData, S>,
     receiver: Arc<Mutex<LeftReceiver<LeftData, RightData, R>>>,
-    name: &'static str,
 }
 
 impl<
@@ -291,7 +335,6 @@ struct RightNetwork<
 > {
     sender: RightSender<LeftData, RightData, S>,
     receiver: Arc<Mutex<RightReceiver<LeftData, RightData, R>>>,
-    name: &'static str,
 }
 
 impl<
@@ -343,22 +386,22 @@ fn split_receiver<
 ) {
     let (left_sender, left_receiver) = mpsc::unbounded();
     let (right_sender, right_receiver) = mpsc::unbounded();
-    let left_receiver = GenericReceiver {
-        receiver: receiver.clone(),
-        translated_receiver: left_receiver,
-        left_sender: left_sender.clone(),
-        right_sender: right_sender.clone(),
-        name: left_name.to_string(),
-    };
-    let right_receiver = GenericReceiver {
-        receiver,
-        translated_receiver: right_receiver,
-        left_sender,
-        right_sender,
-        name: right_name.to_string(),
-    };
-
-    (left_receiver, right_receiver)
+    (
+        LeftReceiver {
+            receiver: receiver.clone(),
+            translated_receiver: left_receiver,
+            left_sender: left_sender.clone(),
+            right_sender: right_sender.clone(),
+            name: left_name.to_string(),
+        },
+        RightReceiver {
+            receiver,
+            translated_receiver: right_receiver,
+            left_sender,
+            right_sender,
+            name: right_name.to_string(),
+        },
+    )
 }
 
 /// Split a single component network into two separate ones. This way multiple components can send
@@ -384,12 +427,10 @@ pub fn split<LeftData: Data, RightData: Data, CN: ComponentNetwork<Split<LeftDat
         LeftNetwork {
             sender: left_sender,
             receiver: Arc::new(Mutex::new(left_receiver)),
-            name: left_name,
         },
         RightNetwork {
             sender: right_sender,
             receiver: Arc::new(Mutex::new(right_receiver)),
-            name: right_name,
         },
     )
 }
