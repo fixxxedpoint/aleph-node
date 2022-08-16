@@ -177,7 +177,7 @@ impl<
 {
     fn drop(&mut self) {
         debug!("dropping LeftNetwork - aleph?");
-        panic!("no ciekawe")
+        // panic!("no ciekawe")
     }
 }
 
