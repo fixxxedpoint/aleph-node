@@ -37,16 +37,15 @@ impl Task {
 }
 
 /// All the subtasks required to participate in a session as an authority.
-pub struct Subtasks<T> {
+pub struct Subtasks {
     exit: oneshot::Receiver<()>,
     member: PureTask,
     aggregator: PureTask,
     refresher: PureTask,
     data_store: PureTask,
-    network: T,
 }
 
-impl<T> Subtasks<T> {
+impl Subtasks {
     /// Create the subtask collection by passing in all the tasks.
     pub fn new(
         exit: oneshot::Receiver<()>,
@@ -54,7 +53,6 @@ impl<T> Subtasks<T> {
         aggregator: PureTask,
         refresher: PureTask,
         data_store: PureTask,
-        network: T,
     ) -> Self {
         Subtasks {
             exit,
@@ -62,7 +60,6 @@ impl<T> Subtasks<T> {
             aggregator,
             refresher,
             data_store,
-            network,
         }
     }
 
@@ -84,10 +81,10 @@ impl<T> Subtasks<T> {
     pub async fn failed(mut self) -> bool {
         let result = tokio::select! {
             _ = &mut self.exit => false,
-            _ = self.member.stopped() => { warn!("member died!!!"); true },
-            _ = self.aggregator.stopped() => { warn!("aggregator died!!!");true },
-            _ = self.refresher.stopped() => { warn!("refresher died!!!"); true },
-            _ = self.data_store.stopped() => { warn!("data_store died!!!"); true },
+            _ = self.member.stopped() => { warn!(target: "aleph-party", "Member stopped too early"); true },
+            _ = self.aggregator.stopped() => { warn!(target: "aleph-party", "Aggregator stopped too early");true },
+            _ = self.refresher.stopped() => { warn!(target: "aleph-party", "Refresher stopped too early"); true },
+            _ = self.data_store.stopped() => { warn!(target: "aleph-party", "DataStore stopped too early"); true },
         };
         if result {
             debug!(target: "aleph-party", "Something died and it was unexpected");
@@ -98,16 +95,36 @@ impl<T> Subtasks<T> {
     }
 }
 
+pub struct HoldingSubtask<ST, D> {
+    subtask: ST,
+    _holder: D,
+}
+
+impl<ST, D> HoldingSubtask<ST, D> {
+    pub fn new(subtask: ST, holder: D) -> Self {
+        Self {
+            subtask,
+            _holder: holder,
+        }
+    }
+}
+
 #[async_trait]
 pub trait FailingTask {
     async fn failed(mut self) -> bool;
 }
 
 #[async_trait]
-impl<T: Send> FailingTask for Subtasks<T> {
+impl FailingTask for Subtasks {
     async fn failed(mut self) -> bool {
         Subtasks::failed(self).await
-        // self.failed()
+    }
+}
+
+#[async_trait]
+impl<ST: FailingTask + Send, D: Send> FailingTask for HoldingSubtask<ST, D> {
+    async fn failed(mut self) -> bool {
+        self.subtask.failed().await
     }
 }
 

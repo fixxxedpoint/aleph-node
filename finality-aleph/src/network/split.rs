@@ -18,6 +18,58 @@ pub enum Split<LeftData: Data, RightData: Data> {
     Right(RightData),
 }
 
+trait Convert<A, B> {
+    fn convert(a: A) -> B;
+}
+
+#[derive(Clone)]
+struct GenericSender<
+    LeftData: Data,
+    RightData: Data,
+    S: SenderComponent<Split<LeftData, RightData>>,
+    MyData,
+    // Convert: Fn(MyData) -> Split<LeftData, RightData>,
+    Convert: Convert<MyData, Split<LeftData, RightData>>,
+> {
+    sender: S,
+    phantom: PhantomData<(LeftData, RightData, MyData, Convert)>,
+}
+
+struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+{}
+
+impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
+    GenericSender<LeftData, RightData, S, LeftData>
+{
+    fn wrap_data(data: LeftData) -> Split<LeftData, RightData> {
+        Split::Left(data)
+    }
+}
+
+impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>, MyData>
+    GenericSender<LeftData, RightData, S, RightData>
+{
+    fn wrap_data(data: RightData) -> Split<LeftData, RightData> {
+        Split::Right(data)
+    }
+}
+
+impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+    SenderComponent<LeftData> for GenericSender<LeftData, RightData, S, LeftData>
+{
+    fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
+        self.sender.send(Split::Left(data), recipient)
+    }
+}
+
+impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>
+    SenderComponent<RightData> for GenericSender<LeftData, RightData, S, RightData>
+{
+    fn send(&self, data: LeftData, recipient: Recipient) -> Result<(), SendError> {
+        self.sender.send(Split::Right(data), recipient)
+    }
+}
+
 #[derive(Clone)]
 struct LeftSender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>> {
     sender: S,
@@ -47,29 +99,89 @@ impl<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightDa
     }
 }
 
-struct LeftReceiver<
+struct GenericReceiver<
     LeftData: Data,
     RightData: Data,
     R: ReceiverComponent<Split<LeftData, RightData>>,
+    TranslatedData: Data,
 > {
     receiver: Arc<Mutex<R>>,
-    translated_receiver: mpsc::UnboundedReceiver<LeftData>,
+    translated_receiver: mpsc::UnboundedReceiver<TranslatedData>,
     left_sender: mpsc::UnboundedSender<LeftData>,
     right_sender: mpsc::UnboundedSender<RightData>,
-    name: &'static str,
+    name: String,
 }
 
-struct RightReceiver<
+// impl<
+//         LeftData: Data,
+//         RightData: Data,
+//         R: ReceiverComponent<Split<LeftData, RightData>>,
+//         TranslatedData: Data,
+//     > GenericReceiver<LeftData, RightData, R, TranslatedData>
+// {
+//     fn new(receiver: Arc<Mutex<R>>, left_sender: mpsc::UnboundedSender<LeftData) {
+//     }
+// }
+
+#[async_trait::async_trait]
+impl<
+        LeftData: Data,
+        RightData: Data,
+        R: ReceiverComponent<Split<LeftData, RightData>>,
+        MyData: Data,
+    > ReceiverComponent<MyData> for GenericReceiver<LeftData, RightData, R, MyData>
+{
+    async fn next(&mut self) -> Option<MyData> {
+        loop {
+            tokio::select! {
+                data = self.translated_receiver.next() => {
+                    return data;
+                },
+                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
+                    if !should_go_on {
+                        return None;
+                    }
+                },
+            }
+        }
+    }
+}
+
+type LeftReceiver<
     LeftData: Data,
     RightData: Data,
     R: ReceiverComponent<Split<LeftData, RightData>>,
-> {
-    receiver: Arc<Mutex<R>>,
-    translated_receiver: mpsc::UnboundedReceiver<RightData>,
-    left_sender: mpsc::UnboundedSender<LeftData>,
-    right_sender: mpsc::UnboundedSender<RightData>,
-    name: &'static str,
-}
+> = GenericReceiver<LeftData, RightData, R, LeftData>;
+
+type RightReceiver<
+    LeftData: Data,
+    RightData: Data,
+    R: ReceiverComponent<Split<LeftData, RightData>>,
+> = GenericReceiver<LeftData, RightData, R, RightData>;
+
+// struct LeftReceiver<
+//     LeftData: Data,
+//     RightData: Data,
+//     R: ReceiverComponent<Split<LeftData, RightData>>,
+// > {
+//     receiver: Arc<Mutex<R>>,
+//     translated_receiver: mpsc::UnboundedReceiver<LeftData>,
+//     left_sender: mpsc::UnboundedSender<LeftData>,
+//     right_sender: mpsc::UnboundedSender<RightData>,
+//     name: &'static str,
+// }
+
+// struct RightReceiver<
+//     LeftData: Data,
+//     RightData: Data,
+//     R: ReceiverComponent<Split<LeftData, RightData>>,
+// > {
+//     receiver: Arc<Mutex<R>>,
+//     translated_receiver: mpsc::UnboundedReceiver<RightData>,
+//     left_sender: mpsc::UnboundedSender<LeftData>,
+//     right_sender: mpsc::UnboundedSender<RightData>,
+//     name: &'static str,
+// }
 
 async fn forward_or_wait<
     LeftData: Data,
@@ -103,45 +215,45 @@ async fn forward_or_wait<
     }
 }
 
-#[async_trait::async_trait]
-impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, RightData>>>
-    ReceiverComponent<LeftData> for LeftReceiver<LeftData, RightData, R>
-{
-    async fn next(&mut self) -> Option<LeftData> {
-        loop {
-            tokio::select! {
-                data = self.translated_receiver.next() => {
-                    return data;
-                },
-                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
-                    if !should_go_on {
-                        return None;
-                    }
-                },
-            }
-        }
-    }
-}
+// #[async_trait::async_trait]
+// impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, RightData>>>
+//     ReceiverComponent<LeftData> for LeftReceiver<LeftData, RightData, R>
+// {
+//     async fn next(&mut self) -> Option<LeftData> {
+//         loop {
+//             tokio::select! {
+//                 data = self.translated_receiver.next() => {
+//                     return data;
+//                 },
+//                 should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
+//                     if !should_go_on {
+//                         return None;
+//                     }
+//                 },
+//             }
+//         }
+//     }
+// }
 
-#[async_trait::async_trait]
-impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, RightData>>>
-    ReceiverComponent<RightData> for RightReceiver<LeftData, RightData, R>
-{
-    async fn next(&mut self) -> Option<RightData> {
-        loop {
-            tokio::select! {
-                data = self.translated_receiver.next() => {
-                    return data;
-                },
-                should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
-                    if !should_go_on {
-                        return None;
-                    }
-                },
-            }
-        }
-    }
-}
+// #[async_trait::async_trait]
+// impl<LeftData: Data, RightData: Data, R: ReceiverComponent<Split<LeftData, RightData>>>
+//     ReceiverComponent<RightData> for RightReceiver<LeftData, RightData, R>
+// {
+//     async fn next(&mut self) -> Option<RightData> {
+//         loop {
+//             tokio::select! {
+//                 data = self.translated_receiver.next() => {
+//                     return data;
+//                 },
+//                 should_go_on = forward_or_wait(&self.receiver, &self.left_sender, &self.right_sender, self.name.to_string()) => {
+//                     if !should_go_on {
+//                         return None;
+//                     }
+//                 },
+//             }
+//         }
+//     }
+// }
 
 struct LeftNetwork<
     LeftData: Data,
@@ -231,22 +343,22 @@ fn split_receiver<
 ) {
     let (left_sender, left_receiver) = mpsc::unbounded();
     let (right_sender, right_receiver) = mpsc::unbounded();
-    (
-        LeftReceiver {
-            receiver: receiver.clone(),
-            translated_receiver: left_receiver,
-            left_sender: left_sender.clone(),
-            right_sender: right_sender.clone(),
-            name: left_name,
-        },
-        RightReceiver {
-            receiver,
-            translated_receiver: right_receiver,
-            left_sender,
-            right_sender,
-            name: right_name,
-        },
-    )
+    let left_receiver = GenericReceiver {
+        receiver: receiver.clone(),
+        translated_receiver: left_receiver,
+        left_sender: left_sender.clone(),
+        right_sender: right_sender.clone(),
+        name: left_name.to_string(),
+    };
+    let right_receiver = GenericReceiver {
+        receiver,
+        translated_receiver: right_receiver,
+        left_sender,
+        right_sender,
+        name: right_name.to_string(),
+    };
+
+    (left_receiver, right_receiver)
 }
 
 /// Split a single component network into two separate ones. This way multiple components can send

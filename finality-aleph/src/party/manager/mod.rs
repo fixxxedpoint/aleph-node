@@ -181,7 +181,7 @@ where
             ),
             chain_tracker::task(subtask_common.clone(), chain_tracker),
             data_store::task(subtask_common, data_store),
-            network_copy,
+            // network_copy,
         )
     }
 }
