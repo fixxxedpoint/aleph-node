@@ -14,7 +14,7 @@ use crate::{
     crypto::{AuthorityPen, AuthorityVerifier, Keychain},
     data_io::{ChainTracker, DataStore, OrderedDataInterpreter},
     default_aleph_config, mpsc,
-    network::{split, ManagerError, RequestBlocks, SessionManager},
+    network::{split, ManagerError, RequestBlocks, SessionManager, SimpleNetwork},
     party::{backup::ABFTBackup, traits::NodeSessionManager},
     AuthorityId, JustificationNotification, Metrics, NodeIndex, SessionBoundaries, SessionId,
     SessionPeriod, SplitData, UnitCreationDelay,
@@ -153,6 +153,8 @@ where
             Default::default(),
             unfiltered_aleph_network,
         );
+
+        let rmc_network = SimpleNetwork::from_network(rmc_network);
 
         Subtasks::new(
             exit_rx,

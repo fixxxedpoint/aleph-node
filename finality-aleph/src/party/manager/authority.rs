@@ -41,6 +41,7 @@ pub struct Subtasks {
     aggregator: PureTask,
     refresher: PureTask,
     data_store: PureTask,
+    // network: PureTask,
 }
 
 impl Subtasks {
@@ -63,8 +64,8 @@ impl Subtasks {
 
     async fn stop(self) {
         debug!(target: "aleph-party", "Started to stop all tasks");
-        // we should stop data_store first, since it will drop its network's endpoint on its Task's drop
-        // otherwise, if stop aggregator first, it still can send something to it (after it is dropped)
+        // we should stop data_store first, since it will drop its network's endpoint after rmc_network (why?)
+        // otherwise, if we stop aggregator first, data_store might still attempts to send something to it (after its channels are already dropped)
         self.data_store.stop().await;
         trace!(target: "aleph-party", "DataStore stopped");
         // both member and aggregator are implicitly using forwarder,
@@ -84,6 +85,7 @@ impl Subtasks {
             _ = self.member.stopped() => { warn!(target: "aleph-party", "Member stopped too early"); true },
             _ = self.aggregator.stopped() => { warn!(target: "aleph-party", "Aggregator stopped too early");true },
             _ = self.refresher.stopped() => { warn!(target: "aleph-party", "Refresher stopped too early"); true },
+            // TODO alternative solution: run data_store in this thread/task - do not spawn anything
             _ = self.data_store.stopped() => { warn!(target: "aleph-party", "DataStore stopped too early"); true },
         };
         if result {

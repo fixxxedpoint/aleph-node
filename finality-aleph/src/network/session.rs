@@ -106,7 +106,7 @@ impl<D: Data> Manager<D> {
                 session_id,
                 messages_for_network,
             },
-            receiver: Arc::new(Mutex::new(data_from_network)),
+            receiver: data_from_network,
         })
     }
 

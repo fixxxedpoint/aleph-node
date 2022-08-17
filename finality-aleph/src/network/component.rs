@@ -26,15 +26,15 @@ pub trait Network<D: Data>: Sync + Send {
     fn get(self) -> (Self::S, Self::R);
 }
 
-#[async_trait::async_trait]
-impl<D: Data, CN: Network<D>> DataNetwork<D> for CN {
-    fn send(&self, data: D, recipient: Recipient) -> Result<(), SendError> {
-        self.sender().send(data, recipient)
-    }
-    async fn next(&mut self) -> Option<D> {
-        self.receiver().lock_owned().await.next().await
-    }
-}
+// #[async_trait::async_trait]
+// impl<D: Data, CN: Network<D>> DataNetwork<D> for CN {
+//     fn send(&self, data: D, recipient: Recipient) -> Result<(), SendError> {
+//         self.sender().send(data, recipient)
+//     }
+//     async fn next(&mut self) -> Option<D> {
+//         self.receiver().lock_owned().await.next().await
+//     }
+// }
 
 #[async_trait::async_trait]
 impl<D: Data> Sender<D> for mpsc::UnboundedSender<(D, Recipient)> {
@@ -57,13 +57,32 @@ pub struct SimpleNetwork<D: Data, R: Receiver<D>, S: Sender<D>> {
     _phantom: PhantomData<D>,
 }
 
+// impl<D: Data, CN: Network<D>> From<CN> for SimpleNetwork<D, CN::R, CN::S> {
+//     fn from(network: CN) -> Self {
+//         let (sender, receiver) = network.get();
+//         Self::new(sender, receiver)
+//     }
+// }
+
+// impl<D: Data, CN: Network<D>> Into<SimpleNetwork<D, CN::R, CN::S>> for CN {
+//     fn into(self) -> SimpleNetwork<D, CN::R, CN::S> {
+//         let (sender, receiver) = self.get();
+//         SimpleNetwork::new(sender, receiver)
+//     }
+// }
+
 impl<D: Data, R: Receiver<D>, S: Sender<D>> SimpleNetwork<D, R, S> {
     pub fn new(receiver: R, sender: S) -> Self {
         SimpleNetwork {
-            receiver: Arc::new(Mutex::new(receiver)),
+            receiver,
             sender,
             _phantom: PhantomData,
         }
+    }
+
+    pub fn from_network<CN: Network<D, R = R, S = S>>(network: CN) -> Self {
+        let (sender, receiver) = network.get();
+        Self::new(receiver, sender)
     }
 }
 
@@ -73,12 +92,23 @@ impl<D: Data, R: Receiver<D>, S: Sender<D>> Drop for SimpleNetwork<D, R, S> {
     }
 }
 
-impl<D: Data, R: Receiver<D>, S: Sender<D>> Network<D> for SimpleNetwork<D, R, S> {
-    type S = S;
-    type R = R;
+// impl<D: Data, R: Receiver<D>, S: Sender<D>> Network<D> for SimpleNetwork<D, R, S> {
+//     type S = S;
+//     type R = R;
 
-    fn get(self) -> (Self::S, Self::R) {
-        (self.sender, self.receiver)
+//     fn get(self) -> (Self::S, Self::R) {
+//         (self.sender, self.receiver)
+//     }
+// }
+
+#[async_trait::async_trait]
+impl<D: Data, R: Receiver<D>, S: Sender<D>> DataNetwork<D> for SimpleNetwork<D, R, S> {
+    fn send(&self, data: D, recipient: Recipient) -> Result<(), SendError> {
+        self.sender.send(data, recipient)
+    }
+
+    async fn next(&mut self) -> Option<D> {
+        self.receiver.next().await
     }
 }
 

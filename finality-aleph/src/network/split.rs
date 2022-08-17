@@ -51,7 +51,7 @@ impl<A: Data, B: Data> Convert for ToRightSplitConvert<A, B> {
 }
 
 #[derive(Clone)]
-struct GenericSender<
+struct SplitSender<
     LeftData: Data,
     RightData: Data,
     S: SenderComponent<Split<LeftData, RightData>>,
@@ -66,7 +66,7 @@ impl<
         RightData: Data,
         S: SenderComponent<Split<LeftData, RightData>>,
         Conv: Convert<To = Split<LeftData, RightData>> + Clone + Send + Sync,
-    > SenderComponent<Conv::From> for GenericSender<LeftData, RightData, S, Conv>
+    > SenderComponent<Conv::From> for SplitSender<LeftData, RightData, S, Conv>
 where
     <Conv as Convert>::From: Data,
     <Conv as Convert>::To: Data,
@@ -77,12 +77,12 @@ where
 }
 
 type LeftSender<LeftData, RightData, S> =
-    GenericSender<LeftData, RightData, S, ToLeftSplitConvert<LeftData, RightData>>;
+    SplitSender<LeftData, RightData, S, ToLeftSplitConvert<LeftData, RightData>>;
 
 type RightSender<LeftData, RightData, S> =
-    GenericSender<LeftData, RightData, S, ToRightSplitConvert<LeftData, RightData>>;
+    SplitSender<LeftData, RightData, S, ToRightSplitConvert<LeftData, RightData>>;
 
-struct GenericReceiver<
+struct SplitReceiver<
     LeftData: Data,
     RightData: Data,
     R: ReceiverComponent<Split<LeftData, RightData>>,
@@ -101,8 +101,7 @@ impl<
         RightData: Data,
         R: ReceiverComponent<Split<LeftData, RightData>>,
         TranslatedData: Data,
-    > ReceiverComponent<TranslatedData>
-    for GenericReceiver<LeftData, RightData, R, TranslatedData>
+    > ReceiverComponent<TranslatedData> for SplitReceiver<LeftData, RightData, R, TranslatedData>
 {
     async fn next(&mut self) -> Option<TranslatedData> {
         loop {
@@ -120,9 +119,9 @@ impl<
     }
 }
 
-type LeftReceiver<LeftData, RightData, R> = GenericReceiver<LeftData, RightData, R, LeftData>;
+type LeftReceiver<LeftData, RightData, R> = SplitReceiver<LeftData, RightData, R, LeftData>;
 
-type RightReceiver<LeftData, RightData, R> = GenericReceiver<LeftData, RightData, R, RightData>;
+type RightReceiver<LeftData, RightData, R> = SplitReceiver<LeftData, RightData, R, RightData>;
 
 async fn forward_or_wait<
     LeftData: Data,
@@ -168,18 +167,18 @@ struct LeftNetwork<
     receiver: LeftReceiver<LeftData, RightData, R>,
 }
 
-impl<
-        LeftData: Data,
-        RightData: Data,
-        S: SenderComponent<Split<LeftData, RightData>>,
-        R: ReceiverComponent<Split<LeftData, RightData>>,
-    > Drop for LeftNetwork<LeftData, RightData, S, R>
-{
-    fn drop(&mut self) {
-        debug!("dropping LeftNetwork - aleph?");
-        // panic!("no ciekawe")
-    }
-}
+// impl<
+//         LeftData: Data,
+//         RightData: Data,
+//         S: SenderComponent<Split<LeftData, RightData>>,
+//         R: ReceiverComponent<Split<LeftData, RightData>>,
+//     > Drop for LeftNetwork<LeftData, RightData, S, R>
+// {
+//     fn drop(&mut self) {
+//         debug!("dropping LeftNetwork - aleph?");
+//         // panic!("no ciekawe")
+//     }
+// }
 
 impl<
         LeftData: Data,
@@ -206,17 +205,17 @@ struct RightNetwork<
     receiver: RightReceiver<LeftData, RightData, R>,
 }
 
-impl<
-        LeftData: Data,
-        RightData: Data,
-        S: SenderComponent<Split<LeftData, RightData>>,
-        R: ReceiverComponent<Split<LeftData, RightData>>,
-    > Drop for RightNetwork<LeftData, RightData, S, R>
-{
-    fn drop(&mut self) {
-        debug!("dropping RightNetwork - rmc?");
-    }
-}
+// impl<
+//         LeftData: Data,
+//         RightData: Data,
+//         S: SenderComponent<Split<LeftData, RightData>>,
+//         R: ReceiverComponent<Split<LeftData, RightData>>,
+//     > Drop for RightNetwork<LeftData, RightData, S, R>
+// {
+//     fn drop(&mut self) {
+//         debug!("dropping RightNetwork - rmc?");
+//     }
+// }
 
 impl<
         LeftData: Data,
@@ -307,11 +306,11 @@ pub fn split<LeftData: Data, RightData: Data, CN: ComponentNetwork<Split<LeftDat
     (
         LeftNetwork {
             sender: left_sender,
-            receiver: Arc::new(Mutex::new(left_receiver)),
+            receiver: left_receiver,
         },
         RightNetwork {
             sender: right_sender,
-            receiver: Arc::new(Mutex::new(right_receiver)),
+            receiver: right_receiver,
         },
     )
 }
