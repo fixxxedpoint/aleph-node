@@ -165,7 +165,7 @@ struct LeftNetwork<
     R: ReceiverComponent<Split<LeftData, RightData>>,
 > {
     sender: LeftSender<LeftData, RightData, S>,
-    receiver: Arc<Mutex<LeftReceiver<LeftData, RightData, R>>>,
+    receiver: LeftReceiver<LeftData, RightData, R>,
 }
 
 impl<
@@ -190,11 +190,9 @@ impl<
 {
     type S = LeftSender<LeftData, RightData, S>;
     type R = LeftReceiver<LeftData, RightData, R>;
-    fn sender(&self) -> &Self::S {
-        &self.sender
-    }
-    fn receiver(&self) -> Arc<Mutex<Self::R>> {
-        self.receiver.clone()
+
+    fn get(self) -> (Self::S, Self::R) {
+        (self.sender, self.receiver)
     }
 }
 
@@ -205,7 +203,7 @@ struct RightNetwork<
     R: ReceiverComponent<Split<LeftData, RightData>>,
 > {
     sender: RightSender<LeftData, RightData, S>,
-    receiver: Arc<Mutex<RightReceiver<LeftData, RightData, R>>>,
+    receiver: RightReceiver<LeftData, RightData, R>,
 }
 
 impl<
@@ -229,16 +227,14 @@ impl<
 {
     type S = RightSender<LeftData, RightData, S>;
     type R = RightReceiver<LeftData, RightData, R>;
-    fn sender(&self) -> &Self::S {
-        &self.sender
-    }
-    fn receiver(&self) -> Arc<Mutex<Self::R>> {
-        self.receiver.clone()
+
+    fn get(self) -> (Self::S, Self::R) {
+        (self.sender, self.receiver)
     }
 }
 
 fn split_sender<LeftData: Data, RightData: Data, S: SenderComponent<Split<LeftData, RightData>>>(
-    sender: &S,
+    sender: S,
 ) -> (
     LeftSender<LeftData, RightData, S>,
     RightSender<LeftData, RightData, S>,
@@ -260,13 +256,14 @@ fn split_receiver<
     RightData: Data,
     R: ReceiverComponent<Split<LeftData, RightData>>,
 >(
-    receiver: Arc<Mutex<R>>,
+    receiver: R,
     left_name: &'static str,
     right_name: &'static str,
 ) -> (
     LeftReceiver<LeftData, RightData, R>,
     RightReceiver<LeftData, RightData, R>,
 ) {
+    let receiver = Arc::new(Mutex::new(receiver));
     let (left_sender, left_receiver) = mpsc::unbounded();
     let (right_sender, right_receiver) = mpsc::unbounded();
     (
@@ -304,8 +301,9 @@ pub fn split<LeftData: Data, RightData: Data, CN: ComponentNetwork<Split<LeftDat
     impl ComponentNetwork<LeftData>,
     impl ComponentNetwork<RightData>,
 ) {
-    let (left_sender, right_sender) = split_sender(network.sender());
-    let (left_receiver, right_receiver) = split_receiver(network.receiver(), left_name, right_name);
+    let (sender, receiver) = network.get();
+    let (left_sender, right_sender) = split_sender(sender);
+    let (left_receiver, right_receiver) = split_receiver(receiver, left_name, right_name);
     (
         LeftNetwork {
             sender: left_sender,

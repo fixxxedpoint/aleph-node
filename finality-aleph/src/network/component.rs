@@ -22,8 +22,8 @@ pub trait Receiver<D: Data>: Sync + Send {
 pub trait Network<D: Data>: Sync + Send {
     type S: Sender<D>;
     type R: Receiver<D>;
-    fn sender(&self) -> &Self::S;
-    fn receiver(&self) -> Arc<Mutex<Self::R>>;
+
+    fn get(self) -> (Self::S, Self::R);
 }
 
 #[async_trait::async_trait]
@@ -52,7 +52,7 @@ impl<D: Data> Receiver<D> for mpsc::UnboundedReceiver<D> {
 }
 
 pub struct SimpleNetwork<D: Data, R: Receiver<D>, S: Sender<D>> {
-    receiver: Arc<Mutex<R>>,
+    receiver: R,
     sender: S,
     _phantom: PhantomData<D>,
 }
@@ -75,15 +75,10 @@ impl<D: Data, R: Receiver<D>, S: Sender<D>> Drop for SimpleNetwork<D, R, S> {
 
 impl<D: Data, R: Receiver<D>, S: Sender<D>> Network<D> for SimpleNetwork<D, R, S> {
     type S = S;
-
     type R = R;
 
-    fn sender(&self) -> &Self::S {
-        &self.sender
-    }
-
-    fn receiver(&self) -> Arc<Mutex<Self::R>> {
-        self.receiver.clone()
+    fn get(self) -> (Self::S, Self::R) {
+        (self.sender, self.receiver)
     }
 }
 

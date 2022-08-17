@@ -28,17 +28,15 @@ impl<D: Data> SenderComponent<D> for Sender<D> {
 /// Sends and receives data within a single session.
 pub struct Network<D: Data> {
     sender: Sender<D>,
-    receiver: Arc<Mutex<mpsc::UnboundedReceiver<D>>>,
+    receiver: mpsc::UnboundedReceiver<D>,
 }
 
 impl<D: Data> ComponentNetwork<D> for Network<D> {
     type S = Sender<D>;
     type R = mpsc::UnboundedReceiver<D>;
-    fn sender(&self) -> &Self::S {
-        &self.sender
-    }
-    fn receiver(&self) -> Arc<Mutex<Self::R>> {
-        self.receiver.clone()
+
+    fn get(self) -> (Self::S, Self::R) {
+        (self.sender, self.receiver)
     }
 }
 
