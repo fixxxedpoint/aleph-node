@@ -137,14 +137,12 @@ async fn forward_or_wait<
         Some(Split::Left(data)) => {
             if left_sender.unbounded_send(data).is_err() {
                 debug!(target: "aleph-network", "Unable to send to LeftNetwork ({}) - already disabled", name);
-                panic!("hey");
             }
             true
         }
         Some(Split::Right(data)) => {
             if right_sender.unbounded_send(data).is_err() {
                 debug!(target: "aleph-network", "Unable to send to LeftNetwork ({}) - already disabled", name);
-                panic!("hey.2");
             }
             true
         }
@@ -167,19 +165,6 @@ struct LeftNetwork<
     receiver: LeftReceiver<LeftData, RightData, R>,
 }
 
-// impl<
-//         LeftData: Data,
-//         RightData: Data,
-//         S: SenderComponent<Split<LeftData, RightData>>,
-//         R: ReceiverComponent<Split<LeftData, RightData>>,
-//     > Drop for LeftNetwork<LeftData, RightData, S, R>
-// {
-//     fn drop(&mut self) {
-//         debug!("dropping LeftNetwork - aleph?");
-//         // panic!("no ciekawe")
-//     }
-// }
-
 impl<
         LeftData: Data,
         RightData: Data,
@@ -190,7 +175,7 @@ impl<
     type S = LeftSender<LeftData, RightData, S>;
     type R = LeftReceiver<LeftData, RightData, R>;
 
-    fn get(self) -> (Self::S, Self::R) {
+    fn into(self) -> (Self::S, Self::R) {
         (self.sender, self.receiver)
     }
 }
@@ -205,18 +190,6 @@ struct RightNetwork<
     receiver: RightReceiver<LeftData, RightData, R>,
 }
 
-// impl<
-//         LeftData: Data,
-//         RightData: Data,
-//         S: SenderComponent<Split<LeftData, RightData>>,
-//         R: ReceiverComponent<Split<LeftData, RightData>>,
-//     > Drop for RightNetwork<LeftData, RightData, S, R>
-// {
-//     fn drop(&mut self) {
-//         debug!("dropping RightNetwork - rmc?");
-//     }
-// }
-
 impl<
         LeftData: Data,
         RightData: Data,
@@ -227,7 +200,7 @@ impl<
     type S = RightSender<LeftData, RightData, S>;
     type R = RightReceiver<LeftData, RightData, R>;
 
-    fn get(self) -> (Self::S, Self::R) {
+    fn into(self) -> (Self::S, Self::R) {
         (self.sender, self.receiver)
     }
 }
@@ -300,7 +273,7 @@ pub fn split<LeftData: Data, RightData: Data, CN: ComponentNetwork<Split<LeftDat
     impl ComponentNetwork<LeftData>,
     impl ComponentNetwork<RightData>,
 ) {
-    let (sender, receiver) = network.get();
+    let (sender, receiver) = network.into();
     let (left_sender, right_sender) = split_sender(sender);
     let (left_receiver, right_receiver) = split_receiver(receiver, left_name, right_name);
     (

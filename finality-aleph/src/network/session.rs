@@ -1,8 +1,5 @@
-use std::sync::Arc;
-
 use aleph_bft::Recipient;
 use futures::channel::{mpsc, oneshot};
-use tokio::sync::Mutex;
 
 use crate::{
     crypto::{AuthorityPen, AuthorityVerifier},
@@ -35,7 +32,7 @@ impl<D: Data> ComponentNetwork<D> for Network<D> {
     type S = Sender<D>;
     type R = mpsc::UnboundedReceiver<D>;
 
-    fn get(self) -> (Self::S, Self::R) {
+    fn into(self) -> (Self::S, Self::R) {
         (self.sender, self.receiver)
     }
 }

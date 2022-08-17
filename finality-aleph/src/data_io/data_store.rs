@@ -18,7 +18,6 @@ use log::{debug, error, info, trace, warn};
 use lru::LruCache;
 use sc_client_api::{BlockchainEvents, HeaderBackend};
 use sp_runtime::traits::{Block as BlockT, Header as HeaderT, NumberFor, One};
-use tokio::sync::Mutex;
 
 use crate::{
     data_io::{
@@ -213,7 +212,7 @@ where
         component_network: N,
     ) -> (Self, impl DataNetwork<Message>) {
         let (messages_for_aleph, messages_from_data_store) = mpsc::unbounded();
-        let (messages_to_network, messages_from_network) = component_network.get();
+        let (messages_to_network, messages_from_network) = component_network.into();
         let status = client.info();
         let chain_info_provider = CachedChainInfoProvider::new(client.clone(), Default::default());
 
