@@ -27,6 +27,9 @@ impl Task {
 
     /// Cleanly stop the task.
     pub async fn stop(self) -> Result<(), ()> {
+        if let Some(res) = self.error_on_exit {
+            return if res { Err(()) } else { Ok(()) };
+        }
         if let Err(e) = self.exit.send(()) {
             warn!(target: "aleph-party", "Failed to send exit signal to authority: {:?}", e);
             return if let Some(true) = self.error_on_exit {
