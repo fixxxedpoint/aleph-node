@@ -130,7 +130,7 @@ where
             }
             _ = &mut exit_rx => {
                 debug!(target: "aleph-party", "Aggregator received exit signal. Terminating.");
-                return Ok(());
+                break;
             }
         }
     }
