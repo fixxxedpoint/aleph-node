@@ -227,7 +227,7 @@ where
         }
         if let Some(task) = maybe_authority_task {
             debug!(target: "aleph-party", "Stopping the authority task.");
-            task.stop().await;
+            task.stop().await.wait_stopped().await;
         }
         if let Err(e) = self.session_manager.stop_session(session_id) {
             warn!(target: "aleph-party", "Session Manager failed to stop in session {:?}: {:?}", session_id, e)

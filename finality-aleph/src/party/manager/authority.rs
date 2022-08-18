@@ -1,6 +1,7 @@
 use futures::channel::oneshot;
 use log::{debug, trace, warn};
 
+use super::task::TaskStop;
 use crate::{
     party::{Handle, Task as PureTask},
     NodeIndex, SpawnHandle,
@@ -22,7 +23,7 @@ impl Task {
     }
 
     /// Stop the authority task and wait for it to finish.
-    pub async fn stop(self) {
+    pub async fn stop(self) -> TaskStop {
         self.task.stop().await
     }
 
@@ -41,7 +42,6 @@ pub struct Subtasks {
     aggregator: PureTask,
     refresher: PureTask,
     data_store: PureTask,
-    // network: PureTask,
 }
 
 impl Subtasks {
@@ -63,19 +63,22 @@ impl Subtasks {
     }
 
     async fn stop(self) {
-        debug!(target: "aleph-party", "Started to stop all tasks");
-        // we should stop data_store first, since it will drop its network's endpoint after rmc_network (why?)
-        // otherwise, if we stop aggregator first, data_store might still attempts to send something to it (after its channels are already dropped)
-        self.data_store.stop().await;
-        trace!(target: "aleph-party", "DataStore stopped");
         // both member and aggregator are implicitly using forwarder,
-        // so we should force them to exit early to avoid any panics, i.e. `send on closed channel`
-        self.member.stop().await;
+        // so we should force them to exit first to avoid any panics, i.e. `send on closed channel`
+        debug!(target: "aleph-party", "Started to stop all tasks");
+        let mut member_stop = self.member.stop().await;
         trace!(target: "aleph-party", "Member stopped");
-        self.aggregator.stop().await;
+        let mut aggregator_stop = self.aggregator.stop().await;
         trace!(target: "aleph-party", "Aggregator stopped");
-        self.refresher.stop().await;
+        let mut refresher_stop = self.refresher.stop().await;
         trace!(target: "aleph-party", "Refresher stopped");
+        let mut data_store_stop = self.data_store.stop().await;
+        trace!(target: "aleph-party", "DataStore stopped");
+
+        member_stop.wait_stopped().await;
+        aggregator_stop.wait_stopped().await;
+        refresher_stop.wait_stopped().await;
+        data_store_stop.wait_stopped().await;
     }
 
     /// Blocks until the task is done and returns true if it quit unexpectedly.
