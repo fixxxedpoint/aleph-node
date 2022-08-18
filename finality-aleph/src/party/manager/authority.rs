@@ -23,7 +23,7 @@ impl Task {
     }
 
     /// Stop the authority task and wait for it to finish.
-    pub async fn stop(self) -> TaskStop {
+    pub async fn stop(self) -> Result<TaskStop, ()> {
         self.task.stop().await
     }
 
@@ -66,19 +66,19 @@ impl Subtasks {
         // both member and aggregator are implicitly using forwarder,
         // so we should force them to exit first to avoid any panics, i.e. `send on closed channel`
         debug!(target: "aleph-party", "Started to stop all tasks");
-        let mut member_stop = self.member.stop().await;
+        let member_stop = self.member.stop().await;
         trace!(target: "aleph-party", "Member stopped");
-        let mut aggregator_stop = self.aggregator.stop().await;
+        let aggregator_stop = self.aggregator.stop().await;
         trace!(target: "aleph-party", "Aggregator stopped");
-        let mut refresher_stop = self.refresher.stop().await;
+        let refresher_stop = self.refresher.stop().await;
         trace!(target: "aleph-party", "Refresher stopped");
-        let mut data_store_stop = self.data_store.stop().await;
+        let data_store_stop = self.data_store.stop().await;
         trace!(target: "aleph-party", "DataStore stopped");
 
-        member_stop.wait_stopped().await;
-        aggregator_stop.wait_stopped().await;
-        refresher_stop.wait_stopped().await;
-        data_store_stop.wait_stopped().await;
+        wait_stop_for_task(member_stop, "Member").await;
+        wait_stop_for_task(aggregator_stop, "Aggregator").await;
+        wait_stop_for_task(refresher_stop, "Refresher").await;
+        wait_stop_for_task(data_store_stop, "DataStore").await;
     }
 
     /// Blocks until the task is done and returns true if it quit unexpectedly.
@@ -97,6 +97,14 @@ impl Subtasks {
         self.stop().await;
         debug!(target: "aleph-party", "Stopped all processes");
         result
+    }
+}
+
+async fn wait_stop_for_task(stop: Result<TaskStop, ()>, name: &'static str) {
+    if let Ok(mut stop) = stop {
+        stop.wait_stopped().await;
+    } else if let Err(_) = stop {
+        debug!(target: "aleph-party", "Task `{}` failed to stop", name);
     }
 }
 

@@ -21,11 +21,12 @@ impl Task {
     }
 
     /// Cleanly stop the task.
-    pub async fn stop(self) -> TaskStop {
+    pub async fn stop(self) -> Result<TaskStop, ()> {
         if let Err(e) = self.exit.send(()) {
             warn!(target: "aleph-party", "Failed to send exit signal to authority: {:?}", e);
+            return Err(());
         }
-        TaskStop::new(self.handle)
+        Ok(TaskStop::new(self.handle))
     }
 
     /// Await the task to stop by itself. Should usually just block forever, unless something went
