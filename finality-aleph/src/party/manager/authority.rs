@@ -1,5 +1,5 @@
 use futures::channel::oneshot;
-use log::{debug, trace};
+use log::{debug, trace, warn};
 
 use crate::{
     party::{Handle, Task as PureTask},
@@ -67,13 +67,21 @@ impl Subtasks {
         // both member and aggregator are implicitly using forwarder,
         // so we should force them to exit first to avoid any panics, i.e. `send on closed channel`
         debug!(target: "aleph-party", "Started to stop all tasks");
-        let _ = self.member.stop().await;
+        if self.member.stop().await.is_err() {
+            warn!(target: "aleph-party", "Member stopped with en error");
+        }
         trace!(target: "aleph-party", "Member stopped");
-        let _ = self.aggregator.stop().await;
+        if self.aggregator.stop().await.is_err() {
+            warn!(target: "aleph-party", "Aggregator stopped with en error");
+        }
         trace!(target: "aleph-party", "Aggregator stopped");
-        let _ = self.refresher.stop().await;
+        if self.refresher.stop().await.is_err() {
+            warn!(target: "aleph-party", "Refresher stopped with en error");
+        }
         trace!(target: "aleph-party", "Refresher stopped");
-        let _ = self.data_store.stop().await;
+        if self.data_store.stop().await.is_err() {
+            warn!(target: "aleph-party", "DataStore stopped with en error");
+        }
         trace!(target: "aleph-party", "DataStore stopped");
     }
 
