@@ -182,19 +182,19 @@ impl<
         }
     }
 
-    pub(crate) async fn next_multisigned_hash(&mut self) -> Option<(H, PMS)> {
+    pub(crate) async fn next_multisigned_hash(&mut self) -> Result<Result<(H, PMS), ()>, ()> {
         loop {
             trace!(target: "aleph-aggregator", "Entering next_multisigned_hash loop.");
             match self.aggregator.try_pop_hash() {
                 Ok(res) => {
-                    return Some(res);
+                    return Ok(Ok(res));
                 }
                 Err(AggregatorError::LastHashPlaced) => {
                     debug!(
                         target: "aleph-aggregator",
                         "Terminating next_multisigned_hash because the last hash has been signed."
                     );
-                    return None;
+                    return Ok(Err(()));
                 }
                 Err(AggregatorError::NoHashFound) => { /* ignored */ }
                 Err(AggregatorError::DuplicateHash) => {
@@ -207,7 +207,7 @@ impl<
 
             if self.wait_for_next_signature().await.is_err() {
                 warn!(target: "aleph-aggregator", "the network channel closed");
-                return None;
+                return Err(());
             }
         }
     }

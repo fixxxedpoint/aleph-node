@@ -21,27 +21,17 @@ impl Task {
     }
 
     /// Cleanly stop the task.
-    pub async fn stop(self) -> Result<TaskStop, ()> {
+    pub async fn stop(self) -> Result<(), ()> {
         if let Err(e) = self.exit.send(()) {
             warn!(target: "aleph-party", "Failed to send exit signal to authority: {:?}", e);
             return Err(());
         }
-        Ok(TaskStop::new(self.handle))
+        self.handle.await
     }
 
     /// Await the task to stop by itself. Should usually just block forever, unless something went
     /// wrong.
-    pub async fn stopped(&mut self) {
-        let _ = (&mut self.handle).await;
-    }
-}
-
-pub struct TaskStop {
-    _handle: Handle,
-}
-
-impl TaskStop {
-    fn new(handle: Handle) -> Self {
-        Self { _handle: handle }
+    pub async fn stopped(&mut self) -> Result<(), ()> {
+        (&mut self.handle).await
     }
 }

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use aleph_bft::{Keychain as BftKeychain, SignatureSet, SpawnHandle};
+use aleph_bft::{Keychain as BftKeychain, SignatureSet};
 use aleph_bft_rmc::{DoublingDelayScheduler, ReliableMulticast};
 use futures::{
     channel::{mpsc, oneshot},
@@ -78,7 +78,7 @@ fn process_hash<B, C>(
 }
 
 async fn run_aggregator<B, C, N>(
-    aggregator: &mut AggregatorIO<
+    mut aggregator: AggregatorIO<
         B::Hash,
         RmcNetworkData<B>,
         N,
@@ -90,7 +90,8 @@ async fn run_aggregator<B, C, N>(
     session_boundaries: &SessionBoundaries<B>,
     metrics: Option<Metrics<<B::Header as Header>::Hash>>,
     mut exit_rx: oneshot::Receiver<()>,
-) where
+) -> Result<(), ()>
+where
     B: Block,
     C: HeaderBackend<B> + Send + Sync + 'static,
     N: DataNetwork<RmcNetworkData<B>>,
@@ -106,31 +107,30 @@ async fn run_aggregator<B, C, N>(
             maybe_block = blocks_from_interpreter.next() => {
                 if let Some(block) = maybe_block {
                     process_new_block_data(
-                        aggregator,
+                        &mut aggregator,
                         block,
                         session_boundaries,
                         &metrics
                     ).await;
                 } else {
                     debug!(target: "aleph-party", "Blocks ended in aggregator. Terminating.");
-                    break;
+                    return Err(())
                 }
             }
             multisigned_hash = aggregator.next_multisigned_hash() => {
-                if let Some((hash, multisignature)) = multisigned_hash {
+                if let Ok(Ok((hash, multisignature))) = multisigned_hash {
                     process_hash(hash, multisignature, &justifications_for_chain, &client);
+                } else if let Ok(Err(_)) = multisigned_hash {
+                    debug!(target: "aleph-party", "The stream of multisigned hashes has ended, reason: last hash placed. Terminating.");
+                    return Ok(());
                 } else {
-                    if aggregator.last_hash_placed() {
-                        debug!(target: "aleph-party", "The stream of multisigned hashes has ended, reason: last hash placed. Terminating.");
-                        break;
-                    }
                     debug!(target: "aleph-party", "The stream of multisigned hashes has ended. Emergency Termination.");
-                    return;
+                    return Err(());
                 }
             }
             _ = &mut exit_rx => {
                 debug!(target: "aleph-party", "Aggregator received exit signal. Terminating.");
-                return;
+                return Ok(());
             }
         }
     }
@@ -138,6 +138,7 @@ async fn run_aggregator<B, C, N>(
     // this allows aggregator to exit after member,
     // otherwise it can exit too early and member complains about a channel to aggregator being closed
     let _ = exit_rx.await;
+    Ok(())
 }
 
 /// Runs the justification signature aggregator within a single session.
@@ -173,7 +174,7 @@ where
                 scheduler,
             );
             let aggregator = BlockSignatureAggregator::new(metrics.clone());
-            let mut aggregator_io = AggregatorIO::new(
+            let aggregator_io = AggregatorIO::new(
                 messages_for_rmc,
                 messages_from_rmc,
                 rmc_network,
@@ -181,8 +182,8 @@ where
                 aggregator,
             );
             debug!(target: "aleph-party", "Running the aggregator task for {:?}", session_id);
-            run_aggregator(
-                &mut aggregator_io,
+            let result = run_aggregator(
+                aggregator_io,
                 io,
                 client,
                 &session_boundaries,
@@ -191,9 +192,11 @@ where
             )
             .await;
             debug!(target: "aleph-party", "Aggregator task stopped for {:?}", session_id);
+            result
         }
     };
 
-    let handle = spawn_handle.spawn_essential("aleph/consensus_session_aggregator", task);
+    let handle =
+        spawn_handle.spawn_essential_with_result("aleph/consensus_session_aggregator", task);
     Task::new(handle, stop)
 }
