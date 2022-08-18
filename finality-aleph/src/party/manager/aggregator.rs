@@ -118,9 +118,9 @@ where
                 }
             }
             multisigned_hash = aggregator.next_multisigned_hash() => {
-                if let Ok(Ok((hash, multisignature))) = multisigned_hash {
+                if let Ok(Some((hash, multisignature))) = multisigned_hash {
                     process_hash(hash, multisignature, &justifications_for_chain, &client);
-                } else if let Ok(Err(_)) = multisigned_hash {
+                } else if let Ok(None) = multisigned_hash {
                     debug!(target: "aleph-party", "The stream of multisigned hashes has ended, reason: last hash placed. Terminating.");
                     return Ok(());
                 } else {
