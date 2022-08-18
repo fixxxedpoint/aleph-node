@@ -66,19 +66,14 @@ impl Subtasks {
         // both member and aggregator are implicitly using forwarder,
         // so we should force them to exit first to avoid any panics, i.e. `send on closed channel`
         debug!(target: "aleph-party", "Started to stop all tasks");
-        let member_stop = self.member.stop().await;
+        let _ = self.member.stop().await;
         trace!(target: "aleph-party", "Member stopped");
-        let aggregator_stop = self.aggregator.stop().await;
+        let _ = self.aggregator.stop().await;
         trace!(target: "aleph-party", "Aggregator stopped");
-        let refresher_stop = self.refresher.stop().await;
+        let _ = self.refresher.stop().await;
         trace!(target: "aleph-party", "Refresher stopped");
-        let data_store_stop = self.data_store.stop().await;
+        let _ = self.data_store.stop().await;
         trace!(target: "aleph-party", "DataStore stopped");
-
-        wait_stop_for_task(member_stop, "Member").await;
-        wait_stop_for_task(aggregator_stop, "Aggregator").await;
-        wait_stop_for_task(refresher_stop, "Refresher").await;
-        wait_stop_for_task(data_store_stop, "DataStore").await;
     }
 
     /// Blocks until the task is done and returns true if it quit unexpectedly.
@@ -97,14 +92,6 @@ impl Subtasks {
         self.stop().await;
         debug!(target: "aleph-party", "Stopped all processes");
         result
-    }
-}
-
-async fn wait_stop_for_task(stop: Result<TaskStop, ()>, name: &'static str) {
-    if let Ok(mut stop) = stop {
-        stop.wait_stopped().await;
-    } else if let Err(_) = stop {
-        debug!(target: "aleph-party", "Task `{}` failed to stop", name);
     }
 }
 

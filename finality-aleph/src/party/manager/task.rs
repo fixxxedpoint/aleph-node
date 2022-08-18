@@ -37,22 +37,11 @@ impl Task {
 }
 
 pub struct TaskStop {
-    handle: Option<Handle>,
-    stopped: Option<Handle>,
+    _handle: Handle,
 }
 
 impl TaskStop {
     fn new(handle: Handle) -> Self {
-        Self {
-            handle: Some(handle),
-            stopped: None,
-        }
-    }
-
-    pub async fn wait_stopped(&mut self) {
-        if let Some(mut handle) = self.handle.take() {
-            let _ = (&mut handle).await;
-            self.stopped = Some(handle);
-        }
+        Self { _handle: handle }
     }
 }
