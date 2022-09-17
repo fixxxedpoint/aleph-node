@@ -1,23 +1,23 @@
 use log::{debug, error};
 use sc_client_api::Backend;
-use sc_network::ExHashT;
 use sp_consensus::SelectChain;
 use sp_runtime::traits::Block;
 
 use crate::{
+    network::{Network, NetworkIdentity, RequestBlocks},
     nodes::{setup_justification_handler, JustificationParams},
     session_map::{AuthorityProviderImpl, FinalityNotificatorImpl, SessionMapUpdater},
     AlephConfig,
 };
 
-pub async fn run_nonvalidator_node<B, H, C, BE, SC>(aleph_config: AlephConfig<B, H, C, SC>)
+pub async fn run_nonvalidator_node<B, C, BE, SC, N>(aleph_config: AlephConfig<B, C, SC, N>)
 where
     B: Block,
-    H: ExHashT,
     C: crate::ClientForAleph<B, BE> + Send + Sync + 'static,
     C::Api: aleph_primitives::AlephSessionApi<B>,
     BE: Backend<B> + 'static,
     SC: SelectChain<B> + 'static,
+    N: RequestBlocks<B> + Network + NetworkIdentity,
 {
     let AlephConfig {
         network,

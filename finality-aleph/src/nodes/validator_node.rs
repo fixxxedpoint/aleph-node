@@ -2,15 +2,14 @@ use std::marker::PhantomData;
 
 use log::{debug, error};
 use sc_client_api::Backend;
-use sc_network::ExHashT;
 use sp_consensus::SelectChain;
 use sp_runtime::traits::Block;
 
 use crate::{
     mpsc,
     network::{
-        ConnectionIO, ConnectionManager, ConnectionManagerConfig, Service as NetworkService,
-        SessionManager, IO as NetworkIO,
+        ConnectionIO, ConnectionManager, ConnectionManagerConfig, Network, NetworkIdentity,
+        RequestBlocks, Service as NetworkService, SessionManager, IO as NetworkIO,
     },
     nodes::{setup_justification_handler, JustificationParams},
     party::{
@@ -22,14 +21,21 @@ use crate::{
     AlephConfig,
 };
 
-pub async fn run_validator_node<B, H, C, BE, SC>(aleph_config: AlephConfig<B, H, C, SC>)
+pub async fn run_validator_node<B, C, BE, SC, N>(aleph_config: AlephConfig<B, C, SC, N>)
 where
     B: Block,
-    H: ExHashT,
     C: crate::ClientForAleph<B, BE> + Send + Sync + 'static,
     C::Api: aleph_primitives::AlephSessionApi<B>,
     BE: Backend<B> + 'static,
     SC: SelectChain<B> + 'static,
+    N: RequestBlocks<B>
+        + NetworkIdentity
+        + Network<Multiaddress = <N as NetworkIdentity>::Multiaddress>
+        + Send
+        + Sync,
+    <N as NetworkIdentity>::Multiaddress: Send + Sync,
+    <N as NetworkIdentity>::PeerId: Send + Sync,
+    <N as Network>::EventStream: Send,
 {
     let AlephConfig {
         network,
@@ -75,7 +81,7 @@ where
     let (messages_for_service, commands_from_manager) = mpsc::unbounded();
     let (messages_for_user, messages_from_network) = mpsc::unbounded();
 
-    let connection_io = ConnectionIO::new(
+    let connection_io = ConnectionIO::<_, <N as Network>::Multiaddress>::new(
         commands_for_network,
         messages_for_network,
         commands_from_user,

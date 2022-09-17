@@ -6,9 +6,9 @@ use futures::{
     channel::{mpsc, oneshot},
     Future, TryFutureExt,
 };
+use network::{Network, NetworkIdentity, RequestBlocks};
 use sc_client_api::{backend::Backend, BlockchainEvents, Finalizer, LockImportRun, TransactionFor};
 use sc_consensus::BlockImport;
-use sc_network::{ExHashT, NetworkService};
 use sc_service::SpawnTaskHandle;
 use sp_api::{NumberFor, ProvideRuntimeApi};
 use sp_blockchain::{HeaderBackend, HeaderMetadata};
@@ -270,8 +270,11 @@ impl<H, N> From<(H, N)> for HashNum<H, N> {
 
 pub type BlockHashNum<B> = HashNum<<B as Block>::Hash, NumberFor<B>>;
 
-pub struct AlephConfig<B: Block, H: ExHashT, C, SC> {
-    pub network: Arc<NetworkService<B, H>>,
+pub struct AlephConfig<B: Block, C, SC, N>
+where
+    N: RequestBlocks<B> + Network + NetworkIdentity,
+{
+    pub network: N,
     pub client: Arc<C>,
     pub select_chain: SC,
     pub spawn_handle: SpawnTaskHandle,

@@ -8,7 +8,6 @@ use codec::Encode;
 use log::warn;
 pub use nonvalidator_node::run_nonvalidator_node;
 use sc_client_api::Backend;
-use sc_network::{ExHashT, NetworkService};
 use sp_runtime::{
     traits::{Block, Header, NumberFor},
     RuntimeAppPublic,
@@ -24,6 +23,7 @@ use crate::{
     },
     last_block_of_session, mpsc,
     mpsc::UnboundedSender,
+    network::RequestBlocks,
     session_id_from_block_num,
     session_map::ReadOnlySessionMap,
     JustificationNotification, Metrics, MillisecsPerBlock, SessionPeriod,
@@ -78,8 +78,8 @@ impl<B: Block> Verifier<B> for JustificationVerifier {
     }
 }
 
-struct JustificationParams<B: Block, H: ExHashT, C> {
-    pub network: Arc<NetworkService<B, H>>,
+struct JustificationParams<B: Block, C, RB: RequestBlocks<B>> {
+    pub network: RB,
     pub client: Arc<C>,
     pub justification_rx: mpsc::UnboundedReceiver<JustificationNotification<B>>,
     pub metrics: Option<Metrics<<B::Header as Header>::Hash>>,
@@ -121,15 +121,14 @@ impl<B: Block> SessionInfoProvider<B, JustificationVerifier> for SessionInfoProv
     }
 }
 
-fn setup_justification_handler<B, H, C, BE>(
-    just_params: JustificationParams<B, H, C>,
+fn setup_justification_handler<B, C, BE, RB: RequestBlocks<B>>(
+    just_params: JustificationParams<B, C, RB>,
 ) -> (
     UnboundedSender<JustificationNotification<B>>,
     impl Future<Output = ()>,
 )
 where
     B: Block,
-    H: ExHashT,
     C: crate::ClientForAleph<B, BE> + Send + Sync + 'static,
     C::Api: aleph_primitives::AlephSessionApi<B>,
     BE: Backend<B> + 'static,
