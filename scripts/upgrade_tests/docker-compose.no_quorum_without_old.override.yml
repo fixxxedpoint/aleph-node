@@ -1,0 +1,15 @@
+services:
+  Node0:
+    image: aleph-node:old
+
+  Node1:
+    image: aleph-node:old
+
+  Node2:
+    image: aleph-node:new
+
+  Node3:
+    image: aleph-node:new
+
+  Node4:
+    image: aleph-node:new
