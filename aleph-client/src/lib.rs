@@ -262,7 +262,11 @@ pub trait VersionUpgrade<V> {
     type Version;
     type Error: StdError;
 
-    fn schedule_upgrade(&self, version: Self::Version) -> Result<(), Self::Error>;
+    fn schedule_upgrade(
+        &self,
+        version: Self::Version,
+        session: SessionIndex,
+    ) -> Result<(), Self::Error>;
 }
 
 pub trait ManageParams {

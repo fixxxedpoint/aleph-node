@@ -25,3 +25,4 @@ mod treasury;
 mod utility;
 mod validators_change;
 mod validators_rotate;
+mod version_upgrade;
