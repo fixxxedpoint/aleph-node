@@ -74,6 +74,7 @@ mod staking;
 mod system;
 mod transfer;
 mod treasury;
+mod version_upgrade;
 mod vesting;
 mod waiting;
 
@@ -255,6 +256,13 @@ pub trait CallSystem {
     type Error: StdError;
 
     fn fill_block(&self, target_ratio: u32, status: XtStatus) -> Result<(), Self::Error>;
+}
+
+pub trait VersionUpgrade<V> {
+    type Version;
+    type Error: StdError;
+
+    fn schedule_upgrade(&self, version: Self::Version) -> Result<(), Self::Error>;
 }
 
 pub trait ManageParams {
