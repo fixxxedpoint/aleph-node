@@ -82,4 +82,7 @@ pub struct VersionUpgradeParams {
 
     #[clap(long)]
     pub session: SessionIndex,
+
+    #[clap(long)]
+    pub finalization_wait_sessions: u32,
 }
