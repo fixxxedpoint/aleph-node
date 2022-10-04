@@ -69,20 +69,15 @@ pub struct TestCaseParams {
     #[clap(long)]
     pub non_reserved_seats: Option<u32>,
 
-    /// Options for the VersionUpgrade test case.
-    #[clap(long, flatten)]
-    pub version_upgrade: Option<VersionUpgradeParams>,
-}
-
-/// Parameters used by the VersionUpgrade test scenario, i.e. scheduling on block upgrade.
-#[derive(Args, Clone, Debug)]
-pub struct VersionUpgradeParams {
+    /// Version for the VersionUpgrade test.
     #[clap(long)]
-    pub version: u32,
+    pub upgrade_to_version: Option<u32>,
 
+    /// Session in which we should schedule an upgrade in VersionUpgrade test.
     #[clap(long)]
-    pub session: SessionIndex,
+    pub upgrade_session: Option<SessionIndex>,
 
+    /// How many sessions we should wait after upgrade in VersionUpgrade test.
     #[clap(long)]
-    pub finalization_wait_sessions: u32,
+    pub upgrade_finalization_wait_sessions: Option<u32>,
 }

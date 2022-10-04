@@ -12,6 +12,9 @@ pub use treasury::{channeling_fee_and_tip, treasury_access};
 pub use utility::batch_transactions;
 pub use validators_change::change_validators;
 pub use validators_rotate::validators_rotate;
+pub use version_upgrade::{
+    schedule_doomed_version_change_and_verify_finalization_stopped, schedule_version_change,
+};
 
 mod electing_validators;
 mod era_payout;
@@ -25,4 +28,3 @@ mod treasury;
 mod utility;
 mod validators_change;
 mod validators_rotate;
-mod version_upgrade;
