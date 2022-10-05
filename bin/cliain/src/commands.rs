@@ -5,7 +5,7 @@ use std::{
 
 use aleph_client::BlockNumber;
 use clap::{Args, Subcommand};
-use primitives::{Balance, CommitteeSeats};
+use primitives::{Balance, CommitteeSeats, SessionIndex};
 use serde::{Deserialize, Serialize};
 use sp_core::H256;
 use substrate_api_client::AccountId;
@@ -103,6 +103,8 @@ pub struct ChangeValidatorArgs {
     pub non_reserved_validators: Option<Vec<AccountId>>,
     pub committee_size: Option<CommitteeSeats>,
 }
+
+pub type Version = u32;
 
 impl std::str::FromStr for ChangeValidatorArgs {
     type Err = serde_json::Error;
@@ -326,4 +328,13 @@ pub enum Command {
     /// Code can only be removed by its original uploader (its owner) and only if it is not used by any contract.
     /// API signature: https://polkadot.js.org/docs/substrate/extrinsics/#removecodecode_hash-h256
     ContractRemoveCode(ContractRemoveCode),
+
+    /// Schedules a version upgrade of the network.
+    VersionUpgradeSchedule {
+        #[clap(long)]
+        version: Version,
+
+        #[clap(long)]
+        session: SessionIndex,
+    },
 }

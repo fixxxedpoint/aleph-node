@@ -8,9 +8,9 @@ use clap::Parser;
 use cliain::{
     bond, call, change_validators, finalize, force_new_era, instantiate, instantiate_with_code,
     next_session_keys, nominate, prepare_keys, prompt_password_hidden, remove_code, rotate_keys,
-    set_emergency_finalizer, set_keys, set_staking_limits, transfer, treasury_approve,
-    treasury_propose, treasury_reject, update_runtime, upload_code, validate, vest, vest_other,
-    vested_transfer, Command, ConnectionConfig,
+    schedule_upgrade, set_emergency_finalizer, set_keys, set_staking_limits, transfer,
+    treasury_approve, treasury_propose, treasury_reject, update_runtime, upload_code, validate,
+    vest, vest_other, vested_transfer, Command, ConnectionConfig,
 };
 use log::{error, info};
 use sp_core::Pair;
@@ -180,6 +180,9 @@ fn main() {
             Ok(result) => println!("{:?}", result),
             Err(why) => error!("Contract remove code failed {:?}", why),
         },
+        Command::VersionUpgradeSchedule(version, session_for_upgrade) => {
+            schedule_upgrade(cfg.into(), version, session_for_upgrade)
+        }
     }
 }
 
