@@ -12,7 +12,7 @@ impl VersionUpgrade for RootConnection {
         &self,
         version: Self::Version,
         session: SessionIndex,
-    ) -> Result<(), Self::Error> {
+    ) -> anyhow::Result<(), Self::Error> {
         let connection = self.as_connection();
         let upgrade_call = compose_call!(
             connection.metadata,

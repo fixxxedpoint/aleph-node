@@ -267,7 +267,7 @@ pub trait VersionUpgrade {
         &self,
         version: Self::Version,
         session: SessionIndex,
-    ) -> Result<(), Self::Error>;
+    ) -> anyhow::Result<(), Self::Error>;
 }
 
 pub trait ManageParams {

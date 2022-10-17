@@ -183,7 +183,10 @@ fn main() {
         Command::VersionUpgradeSchedule {
             version,
             session: session_for_upgrade,
-        } => schedule_upgrade(cfg.into(), version, session_for_upgrade),
+        } => match schedule_upgrade(cfg.into(), version, session_for_upgrade) {
+            Ok(_) => {}
+            Err(why) => error!("Unable to schedule an upgrade {:?}", why),
+        },
     }
 }
 

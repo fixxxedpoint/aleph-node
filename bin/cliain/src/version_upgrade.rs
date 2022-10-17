@@ -7,7 +7,7 @@ pub fn schedule_upgrade(
     connection: RootConnection,
     version: Version,
     session_for_upgrade: SessionIndex,
-) {
+) -> anyhow::Result<()> {
     connection
         .schedule_upgrade(version, session_for_upgrade)
         .unwrap_or_else(|err| {
