@@ -1,4 +1,4 @@
-use aleph_client::{ RootConnection, Sched };
+use aleph_client::{RootConnection, VersionUpgrade};
 use primitives::SessionIndex;
 
 use crate::commands::Version;
@@ -8,5 +8,9 @@ pub fn schedule_upgrade(
     version: Version,
     session_for_upgrade: SessionIndex,
 ) {
-    connection.
+    connection
+        .schedule_upgrade(version, session_for_upgrade)
+        .unwrap_or_else(|err| {
+            panic!("unable to schedule an upgrade {:?}", err);
+        });
 }

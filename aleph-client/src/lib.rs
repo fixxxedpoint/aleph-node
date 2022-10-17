@@ -18,6 +18,7 @@ pub use multisig::{
     compute_call_hash, perform_multisig_with_threshold_1, MultisigError, MultisigParty,
     SignatureAggregation,
 };
+use primitives::SessionIndex;
 pub use primitives::{Balance, BlockHash, BlockNumber, Header};
 pub use rpc::{emergency_finalize, rotate_keys, rotate_keys_raw_result, state_query_storage_at};
 pub use session::{
@@ -258,7 +259,7 @@ pub trait CallSystem {
     fn fill_block(&self, target_ratio: u32, status: XtStatus) -> Result<(), Self::Error>;
 }
 
-pub trait VersionUpgrade<V> {
+pub trait VersionUpgrade {
     type Version;
     type Error: StdError;
 

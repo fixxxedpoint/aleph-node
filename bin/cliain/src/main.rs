@@ -180,9 +180,10 @@ fn main() {
             Ok(result) => println!("{:?}", result),
             Err(why) => error!("Contract remove code failed {:?}", why),
         },
-        Command::VersionUpgradeSchedule(version, session_for_upgrade) => {
-            schedule_upgrade(cfg.into(), version, session_for_upgrade)
-        }
+        Command::VersionUpgradeSchedule {
+            version,
+            session: session_for_upgrade,
+        } => schedule_upgrade(cfg.into(), version, session_for_upgrade),
     }
 }
 

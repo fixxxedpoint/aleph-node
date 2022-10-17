@@ -1,13 +1,18 @@
 use primitives::SessionIndex;
-use substrate_api_client::XtStatus;
+use sp_core::Pair;
+use substrate_api_client::{compose_call, compose_extrinsic, ExtrinsicParams, XtStatus};
 
-use crate::{try_send_xt, RootConnection, VersionUpgrade};
+use crate::{try_send_xt, AnyConnection, RootConnection, VersionUpgrade};
 
 impl VersionUpgrade for RootConnection {
     type Version = u32;
-    type Error = &str;
+    type Error = substrate_api_client::ApiClientError;
 
-    fn schedule_upgrade(&self, version: Version, session: SessionIndex) -> Result<(), Self::Error> {
+    fn schedule_upgrade(
+        &self,
+        version: Self::Version,
+        session: SessionIndex,
+    ) -> Result<(), Self::Error> {
         let connection = self.as_connection();
         let upgrade_call = compose_call!(
             connection.metadata,
