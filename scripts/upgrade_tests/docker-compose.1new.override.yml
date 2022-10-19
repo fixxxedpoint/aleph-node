@@ -1,15 +1,31 @@
 services:
   Node0:
     image: aleph-node:new
+    networks:
+      - main
 
   Node1:
     image: aleph-node:old
+    networks:
+      - main
 
   Node2:
     image: aleph-node:old
+    networks:
+      - main
 
   Node3:
     image: aleph-node:old
+    networks:
+      - main
 
   Node4:
     image: aleph-node:old
+    networks:
+      - main
+
+networks:
+  main:
+    name: main-network
+  hidden:
+    name: hidden-network

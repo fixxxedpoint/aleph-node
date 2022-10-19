@@ -1,9 +1,9 @@
 #!/bin/bash
 
-RPC_HOST=127.0.0.1
-RPC_PORT=9933
+RPC_HOST=${RPC_HOST:-127.0.0.1}
+RPC_PORT=${RPC_PORT:-9933}
 LAST_FINALIZED=""
-VALIDATOR=damian
+VALIDATOR=${VALIDATOR:-damian}
 
 while [[ "$LAST_FINALIZED" =~ "0x0" ]] || [[ -z "$LAST_FINALIZED" ]]; do
   block_hash=$(docker run --network container:$VALIDATOR appropriate/curl:latest \
