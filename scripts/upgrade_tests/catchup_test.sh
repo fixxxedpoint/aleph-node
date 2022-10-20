@@ -12,68 +12,73 @@ RPC_HOST=${RPC_HOST:-127.0.0.1}
 RPC_PORT=${RPC_PORT:-9933}
 NODES=${NODES:-""}
 UPGRADE_BEFORE_DISABLE=${UPGRADE_BEFORE_DISABLE:-false}
+SEED=${SEED:-"//0"}
+ALL_NODES_RPC=${ALL_NODES_RPC:-(TODO)}
 
 function initialize {
     local init_block=$1
     local node=$2
-    local address=$3
-    while [[ $(get_best_finalized) -le $init_block ]]; do
+    local port=$3
+
+    while [[ $(get_best_finalized ${node} ${port}) -le $init_block ]]; do
         sleep 1
     done
 }
 
 function get_best_finalized {
     local validator=$1
-    local rpc_address=$2
-    local rpc_port=$3
+    local rpc_port=$2
 
-    VALIDATOR=$validator RPC_HOST=$rpc_address RPC_PORT=$rpc_port ./.github/scripts/check_finalization.sh | sed 's/Last finalized block number: //'
+    VALIDATOR=${validator} RPC_HOST="localhost" RPC_PORT=${rpc_port} ./.github/scripts/check_finalization.sh | sed 's/Last finalized block number: //'
 }
 
 function set_upgrade_round {
     local round=$1
     local version=$2
+    local validator=$3
+    local seed=$4
 
-    docker run --network container:$VALIDATOR appropriate/curl:latest \
-             -H "Content-Type: application/json" \
-             -d '{"id":1, "jsonrpc":"2.0", "method": "aleph_setUpgrade", "params": ['$round', '$version']}' http://$RPC_HOST:$RPC_PORT | jq '.result'
+    docker run --network container:$validator cliain:latest --node 127.0.0.1:9933 --seed "${seed}" version_upgrade_schedule --version ${version} --session ${round}
 }
 
-function disable_nodes {
+function disconnect_nodes {
     local nodes=$1
     for node in $nodes; do
-        docker network disconnect main ${node}
+        docker network disconnect main-network ${node}
     done
 }
 
-function enable_nodes {
+function connect_nodes {
     local nodes=$1
     for node in $nodes; do
-        docker network connect main ${node}
+        docker network connect main-network ${node}
     done
 }
 
 function wait_for_round {
     local round=$1
-    local rpc_host=$2
+    local validator=$2
     local rpc_port=$3
 
-    initialize $1
+    initialize $round
     local last_block=""
     while [[ -z "$last_block" ]]; do
-        last_block=$(docker run --network container:$VALIDATOR appropriate/curl:latest \
+        last_block=$(docker run --network container:$validator appropriate/curl:latest \
                -H "Content-Type: application/json" \
-               -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params": '$round'}' http://$rpc_host:$rpc_port | jq '.result')
+               -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params": '$round'}' http://127.0.0.1:${rpc_port} | jq '.result')
     done
 }
 
 function get_last_block {
-    last_block_hash=$(docker run --network container:$VALIDATOR appropriate/curl:latest \
+    local validator=$1
+    local rpc_port=$2
+
+    last_block_hash=$(docker run --network container:$validator appropriate/curl:latest \
               -H "Content-Type: application/json" \
-              -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash"}' http://$RPC_HOST:$RPC_PORT | jq '.result')
-    docker run --network container:$VALIDATOR appropriate/curl:latest \
+              -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash"}' http://127.0.0.1:$rpc_port | jq '.result')
+    docker run --network container:$validator appropriate/curl:latest \
            -H "Content-Type: application/json" \
-           -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash"}' http://$RPC_HOST:$RPC_PORT | jq '.result'
+           -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash"}' http://127.0.0.1:$rpc_port | jq '.result'
 }
 
 function check_finalization {
@@ -83,33 +88,34 @@ function check_finalization {
     local ports=$4
 
     for i in "${!nodes[@]}"; do
-        local node=node[i]
+        local node=nodes[i]
         local address=addresses[i]
+        local port=ports[i]
 
-        initialize ${block_to_check} ${node} ${address}
+        initialize ${block_to_check} ${address} ${port}
     done
 }
 
-./.github/scripts/run_consensus.sh
+OVERRIDE_DOCKER_COMPOSE=./docker/docker-compose.bridged.yml ./.github/scripts/run_consensus.sh
 
-initialize ${INIT_BLOCK}
+initialize ${INIT_BLOCK} "Node4" 9933
 
 if [[ $UPGRADE_BEFORE_DISABLE = true ]]; then
-    set_upgrade_round ${UPGRADE_ROUND} ${UPGRADE_VERSION}
+    set_upgrade_round ${UPGRADE_ROUND} ${UPGRADE_VERSION} ${VALIDATOR} ${SEED}
 fi
 
-disable_nodes ${NODES}
+disconnect_nodes ${NODES}
 
 if [[ $UPGRADE_BEFORE_DISABLE = false ]]; then
-    set_upgrade_round ${UPGRADE_ROUND} ${UPGRADE_VERSION}
+    set_upgrade_round ${UPGRADE_ROUND} ${UPGRADE_VERSION} ${VALIDATOR} ${SEED}
 fi
 
-wait_for_round ${ROUND}
+wait_for_round ${ROUND} ${VALIDATOR} ${RPC_PORT}
 
-enable_nodes ${NODES}
+connect_nodes ${NODES}
 
-last_block=$(get_last_block)
+last_block=$(get_last_block ${VALIDATOR} ${RPC_PORT})
 
-check_finalization $($last_block+1) ${ALL_NODES} ${ADDRESSES}
+check_finalization $($last_block+1) ${ALL_NODES_RPC}
 
 exit $?
