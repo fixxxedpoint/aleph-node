@@ -93,6 +93,6 @@ function run_containers {
 authorities=$(generate_authorities ${NODE_COUNT})
 generate_chainspec "${authorities[@]}" "${MIN_VALIDATOR_COUNT}"
 generate_bootnode_peer_id ${authorities[0]}
-run_containers ${NODE_COUNT} ${OVERRIDE_DOCKER_COMPOSE}
+run_containers ${NODE_COUNT} "${OVERRIDE_DOCKER_COMPOSE}"
 
 exit $?

@@ -11,6 +11,7 @@ VALIDATOR=${VALIDATOR:-"Node1"}
 RPC_HOST=${RPC_HOST:-127.0.0.1}
 RPC_PORT=${RPC_PORT:-9933}
 NODES=${NODES:-""}
+UPGRADE_BEFORE_DISABLE=${UPGRADE_BEFORE_DISABLE:-false}
 
 function initialize {
     local init_block=$1
@@ -26,13 +27,7 @@ function get_best_finalized {
     local rpc_address=$2
     local rpc_port=$3
 
-    echo $( VALIDATOR=$validator RPC_HOST=$rpc_address RPC_PORT=$rpc_port ./.github/scripts/check_finalization.sh | sed 's/Last finalized block number: //' )
-
-    # local finalized=""
-    # while  [[ -z "$finalized" ]]; do
-    #     finalized=$( VALIDATOR ./.github/scripts/check_finalization.sh | sed 's/Last finalized block number: //' )
-    # done
-    # echo $finalized
+    VALIDATOR=$validator RPC_HOST=$rpc_address RPC_PORT=$rpc_port ./.github/scripts/check_finalization.sh | sed 's/Last finalized block number: //'
 }
 
 function set_upgrade_round {
@@ -60,11 +55,25 @@ function enable_nodes {
 
 function wait_for_round {
     local round=$1
+    local rpc_host=$2
+    local rpc_port=$3
 
     initialize $1
+    local last_block=""
+    while [[ -z "$last_block" ]]; do
+        last_block=$(docker run --network container:$VALIDATOR appropriate/curl:latest \
+               -H "Content-Type: application/json" \
+               -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash", "params": '$round'}' http://$rpc_host:$rpc_port | jq '.result')
+    done
 }
 
 function get_last_block {
+    last_block_hash=$(docker run --network container:$VALIDATOR appropriate/curl:latest \
+              -H "Content-Type: application/json" \
+              -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash"}' http://$RPC_HOST:$RPC_PORT | jq '.result')
+    docker run --network container:$VALIDATOR appropriate/curl:latest \
+           -H "Content-Type: application/json" \
+           -d '{"id":1, "jsonrpc":"2.0", "method": "chain_getBlockHash"}' http://$RPC_HOST:$RPC_PORT | jq '.result'
 }
 
 function check_finalization {
@@ -85,15 +94,21 @@ function check_finalization {
 
 initialize ${INIT_BLOCK}
 
+if [[ $UPGRADE_BEFORE_DISABLE = true ]]; then
+    set_upgrade_round ${UPGRADE_ROUND} ${UPGRADE_VERSION}
+fi
+
 disable_nodes ${NODES}
 
-set_upgrade_round ${UPGRADE_ROUND} ${UPGRADE_VERSION}
+if [[ $UPGRADE_BEFORE_DISABLE = false ]]; then
+    set_upgrade_round ${UPGRADE_ROUND} ${UPGRADE_VERSION}
+fi
 
 wait_for_round ${ROUND}
 
 enable_nodes ${NODES}
 
-last_block=$(get_last_block ${VALIDATOR} ${VALIDATOR_ADDRESS} ${VALIDATOR_PORT})
+last_block=$(get_last_block)
 
 check_finalization $($last_block+1) ${ALL_NODES} ${ADDRESSES}
 

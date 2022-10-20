@@ -1,31 +1,42 @@
 services:
   Node0:
-    image: aleph-node:new
+    image: aleph-node:latest
+    # network_mode: "bridge"
     networks:
       - main
 
   Node1:
-    image: aleph-node:old
+    image: aleph-node:latest
+    # network_mode: "bridge"
     networks:
       - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
 
   Node2:
-    image: aleph-node:old
+    image: aleph-node:latest
+    # network_mode: "bridge"
     networks:
       - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
 
   Node3:
-    image: aleph-node:old
+    image: aleph-node:latest
+    # network_mode: "bridge"
     networks:
       - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
 
   Node4:
-    image: aleph-node:old
+    image: aleph-node:latest
+    # network_mode: "bridge"
     networks:
       - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
 
 networks:
   main:
     name: main-network
-  hidden:
-    name: hidden-network
