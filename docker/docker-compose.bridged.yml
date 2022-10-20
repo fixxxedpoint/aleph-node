@@ -1,0 +1,47 @@
+services:
+  Node0:
+    extends:
+      file: docker-compose.base.yml
+      service: Node0
+    networks:
+      - main
+
+  Node1:
+    extends:
+      file: docker-compose.base.yml
+      service: Node1
+    networks:
+      - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
+
+  Node2:
+    extends:
+      file: docker-compose.base.yml
+      service: Node2
+    networks:
+      - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
+
+  Node3:
+    extends:
+      file: docker-compose.base.yml
+      service: Node3
+    networks:
+      - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
+
+  Node4:
+    extends:
+      file: docker-compose.base.yml
+      service: Node4
+    networks:
+      - main
+    environment:
+      - BOOT_NODES=/dns4/Node0/tcp/30333/p2p/$BOOTNODE_PEER_ID
+
+networks:
+  main:
+    name: main-network

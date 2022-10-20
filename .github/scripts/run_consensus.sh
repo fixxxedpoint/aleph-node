@@ -86,7 +86,7 @@ function run_containers {
   if [[ -z ${override_file} ]]; then
       docker-compose -f docker/docker-compose.yml up -d
   else
-      docker-compose -f docker/docker-compose.yml -f "${override_file}" up -d
+      docker-compose -f "${override_file}" up -d
   fi
 }
 
