@@ -1,34 +1,15 @@
 services:
   Node0:
     image: aleph-node:old
-    network_mode: "bridge"
-    networks:
-      - main
 
   Node1:
     image: aleph-node:old
-    network_mode: "bridge"
-    networks:
-      - main
 
   Node2:
-    image: aleph-node:new
-    network_mode: "bridge"
-    networks:
-      - main
+    image: aleph-node:latest
 
   Node3:
-    image: aleph-node:new
-    network_mode: "bridge"
-    networks:
-      - main
+    image: aleph-node:latest
 
   Node4:
-    image: aleph-node:new
-    network_mode: "bridge"
-    networks:
-      - main
-
-networks:
-  main:
-    name: main-network
+    image: aleph-node:latest
