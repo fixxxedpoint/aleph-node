@@ -4,6 +4,7 @@ mod chain_spec;
 mod cli;
 mod commands;
 mod executor;
+mod import_queue;
 mod resources;
 mod rpc;
 mod service;
