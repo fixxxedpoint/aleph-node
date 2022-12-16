@@ -17,7 +17,7 @@ jobs:
       AWS_REGION: us-east-1 # this region is used by all public ECR repos
     steps:
       - name: GIT | Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: GIT | Get branch info & current commit sha.
         id: vars
@@ -104,7 +104,7 @@ jobs:
             aleph-runtime-${{ steps.get_branch.outputs.sha_short }}.tar.gz
 
       - name: GIT | Checkout aleph-apps repo
-        uses: actions/checkout@master
+        uses: actions/checkout@v3
         with:
           ref: testnet
           repository: Cardinal-Cryptography/aleph-apps
@@ -152,7 +152,7 @@ jobs:
     if: always()
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Send Slack message
         uses: ./.github/actions/slack-notification
