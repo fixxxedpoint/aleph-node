@@ -40,7 +40,7 @@ pub trait AsSigned {
 }
 
 #[async_trait::async_trait]
-pub trait ConnectionApi: AsConnection + Sync {
+pub trait ConnectionApi: Sync {
     async fn get_storage_entry<T: DecodeWithMetadata + Sync, Defaultable: Sync, Iterable: Sync>(
         &self,
         addrs: &StaticStorageAddress<T, Yes, Defaultable, Iterable>,

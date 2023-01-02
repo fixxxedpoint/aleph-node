@@ -9,7 +9,7 @@ use aleph_client::{
 use log::debug;
 use primitives::SessionIndex;
 
-pub async fn get_and_test_members_for_session<C: ConnectionApi>(
+pub async fn get_and_test_members_for_session<C: ConnectionApi + BlocksApi>(
     connection: &C,
     seats: CommitteeSeats,
     era_validators: &EraValidators<AccountId>,
