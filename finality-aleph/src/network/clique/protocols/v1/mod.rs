@@ -145,11 +145,17 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
 
 #[cfg(test)]
 mod tests {
-    use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
+    use std::{
+        pin::Pin,
+        task::{Context, Poll},
+    };
 
-    use super::{incoming, outgoing, ProtocolError};
+    use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+
+    use super::{incoming, manage_connection, outgoing, ProtocolError};
     use crate::network::clique::{
-        mock::{key, MockPrelims, MockSplittable},
+        mock::{key, MockPrelims, MockPublicKey, MockSplittable},
         protocols::ConnectionType,
         Data,
     };
@@ -427,5 +433,100 @@ mod tests {
             Err(e) => panic!("unexpected error: {}", e),
             Ok(_) => panic!("successfully finished when connection dead"),
         };
+    }
+
+    #[tokio::test]
+    async fn try_starving_sender() {
+        let (user_sender, _user_receiver) = mpsc::unbounded();
+        let (data_from_user_sender, data_from_user_receiver) = mpsc::unbounded();
+        let mut data_from_user_sender = Some(data_from_user_sender);
+
+        struct MockReader<A, R> {
+            action: A,
+            reader: R,
+        }
+
+        impl<A: FnMut() + Unpin, R: AsyncRead + Unpin> AsyncRead for MockReader<A, R> {
+            fn poll_read(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+                buf: &mut ReadBuf<'_>,
+            ) -> Poll<std::io::Result<()>> {
+                let self_mut = self.get_mut();
+                (self_mut.action)();
+                Pin::new(&mut self_mut.reader).poll_read(cx, buf)
+            }
+        }
+
+        struct IteratorWrapper<I>(I);
+
+        impl<I: Iterator<Item = u8> + Unpin> AsyncRead for IteratorWrapper<I> {
+            fn poll_read(
+                self: Pin<&mut Self>,
+                _: &mut Context<'_>,
+                buf: &mut ReadBuf<'_>,
+            ) -> Poll<std::io::Result<()>> {
+                let iter = &mut self.get_mut().0;
+                let buffer = buf.initialize_unfilled();
+                for cell in buffer.iter_mut() {
+                    match iter.next() {
+                        Some(next) => *cell = next,
+                        None => return Poll::Pending,
+                    }
+                }
+                Poll::Ready(Result::Ok(()))
+            }
+        }
+
+        let mut data = Vec::new();
+        data = crate::network::clique::protocols::v1::send_data(data, vec![1, 3, 3])
+            .await
+            .expect("we should be able to encode data");
+        let reader = MockReader {
+            action: move || {
+                data_from_user_sender
+                    .take()
+                    .map(|ch| drop(ch))
+                    .unwrap_or(())
+            },
+            reader: IteratorWrapper(data.into_iter().cycle()),
+        };
+
+        struct MockWriter {}
+
+        impl AsyncWrite for MockWriter {
+            fn poll_write(
+                self: Pin<&mut Self>,
+                _: &mut Context<'_>,
+                _: &[u8],
+            ) -> Poll<std::io::Result<usize>> {
+                panic!("MockWriter `poll_write` should never be called");
+                // Poll::Ready(std::io::Result::Ok(1))
+            }
+
+            fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+                panic!("MockWriter `poll_flush` should never be called");
+                // Poll::Ready(std::io::Result::Ok(()))
+            }
+
+            fn poll_shutdown(
+                self: Pin<&mut Self>,
+                _: &mut Context<'_>,
+            ) -> Poll<std::io::Result<()>> {
+                panic!("MockWriter `poll_shutdown` should never be called");
+                // Poll::Ready(std::io::Result::Ok(()))
+            }
+        }
+
+        manage_connection::<MockPublicKey, Vec<u8>, _, _>(
+            MockWriter {},
+            reader,
+            data_from_user_receiver,
+            user_sender,
+        )
+        .await
+        .expect("it should never return");
+
+        panic!("this test should never end");
     }
 }
