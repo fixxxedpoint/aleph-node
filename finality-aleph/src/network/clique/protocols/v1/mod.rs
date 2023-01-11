@@ -156,7 +156,7 @@ mod tests {
     use super::{incoming, manage_connection, outgoing, ProtocolError};
     use crate::network::clique::{
         mock::{key, MockPrelims, MockPublicKey, MockSplittable},
-        protocols::ConnectionType,
+        protocols::{v1::Message, ConnectionType},
         Data,
     };
 
@@ -468,20 +468,27 @@ mod tests {
             ) -> Poll<std::io::Result<()>> {
                 let iter = &mut self.get_mut().0;
                 let buffer = buf.initialize_unfilled();
+                let remaining = buffer.len();
                 for cell in buffer.iter_mut() {
                     match iter.next() {
                         Some(next) => *cell = next,
-                        None => return Poll::Pending,
+                        None => {
+                            println!("how?");
+                            return Poll::Pending;
+                        }
                     }
                 }
+                buf.advance(remaining);
                 Poll::Ready(Result::Ok(()))
             }
         }
 
-        let mut data = Vec::new();
-        data = crate::network::clique::protocols::v1::send_data(data, vec![1, 3, 3])
+        let mut data = Vec::<u8>::new();
+        let data_to_send = Message::Data(vec![1u8, 2u8, 3u8]);
+        data = crate::network::clique::protocols::v1::send_data(data, data_to_send)
             .await
             .expect("we should be able to encode data");
+        println!("data: {:?}", data);
         let reader = MockReader {
             action: move || {
                 data_from_user_sender
