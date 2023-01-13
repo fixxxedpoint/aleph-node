@@ -552,7 +552,7 @@ mod tests {
 
     #[tokio::test]
     async fn try_starving_sender_with_tcp_stream() {
-        let (user_sender, _user_receiver) = mpsc::unbounded();
+        let (user_sender, mut user_receiver) = mpsc::unbounded();
         let (data_from_user_sender, mut data_from_user_receiver): (_, UnboundedReceiver<Vec<u8>>) =
             mpsc::unbounded();
         let mut data_from_user_sender = Some(data_from_user_sender);
@@ -615,6 +615,7 @@ mod tests {
 
         let reader = MockReader {
             action: move || {
+                println!("reading");
                 // println!("dropping");
                 // data_from_user_sender
                 //     .take()
@@ -661,6 +662,7 @@ mod tests {
                 // Poll::Ready(std::io::Result::Ok(()))
                 // Poll::Pending
                 // self.as_mut().poll_flush(cx)
+                println!("flush called");
                 <W as AsyncWrite>::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
             }
 
@@ -671,16 +673,16 @@ mod tests {
                 // panic!("MockWriter `poll_shutdown` should never be called");
                 // Poll::Ready(std::io::Result::Ok(()))
                 // Poll::Pending
+                println!("shutdown called");
                 <W as AsyncWrite>::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
             }
         }
 
         tokio::spawn(async move {
-            while let Some(_) = data_from_user_receiver.next().await {
+            while let Some(_) = user_receiver.next().await {
                 println!("received data on user-channel");
             }
         });
-        let (_user_sender, user_receiver) = mpsc::unbounded();
         manage_connection::<MockPublicKey, Vec<u8>, _, _>(
             MockWriter {
                 action: move || {
@@ -693,7 +695,7 @@ mod tests {
                 writer,
             },
             reader,
-            user_receiver,
+            data_from_user_receiver,
             user_sender,
         )
         .await
