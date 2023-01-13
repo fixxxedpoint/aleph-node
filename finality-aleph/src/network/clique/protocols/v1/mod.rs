@@ -146,13 +146,18 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
 #[cfg(test)]
 mod tests {
     use std::{
+        io::Write,
         pin::Pin,
         task::{Context, Poll},
-        thread::spawn,
+        thread::{sleep, spawn},
+        time::Duration,
     };
 
     use futures::{
-        channel::{mpsc, oneshot},
+        channel::{
+            mpsc::{self, UnboundedReceiver},
+            oneshot,
+        },
         pin_mut, FutureExt, StreamExt,
     };
     use tokio::{
@@ -548,12 +553,12 @@ mod tests {
     #[tokio::test]
     async fn try_starving_sender_with_tcp_stream() {
         let (user_sender, _user_receiver) = mpsc::unbounded();
-        let (data_from_user_sender, data_from_user_receiver) = mpsc::unbounded();
+        let (data_from_user_sender, mut data_from_user_receiver): (_, UnboundedReceiver<Vec<u8>>) =
+            mpsc::unbounded();
         let mut data_from_user_sender = Some(data_from_user_sender);
 
         let localhost_address = "127.0.0.1:6666";
-        let listener = TcpListener::bind(localhost_address)
-            .await
+        let listener = std::net::TcpListener::bind(localhost_address)
             .expect("we should be able to create a TcpListener");
 
         let mut data = Vec::<u8>::new();
@@ -562,25 +567,23 @@ mod tests {
             .await
             .expect("we should be able to encode data");
         let (sender, receiver) = oneshot::channel();
-        spawn_blocking(|| {
-            tokio::spawn(async move {
-                sender
-                    .send(())
-                    .expect("we should be able to send thread initialization signal");
+        // spawn_blocking(|| {
+        std::thread::spawn(move || {
+            sender
+                .send(())
+                .expect("we should be able to send thread initialization signal");
 
-                let mut stream = listener
-                    .accept()
-                    .await
-                    .map(|(stream, _)| stream)
-                    .expect("we should be able to accept an connection");
+            let mut stream = listener
+                .accept()
+                .map(|(stream, _)| stream)
+                .expect("we should be able to accept an connection");
 
-                loop {
-                    stream
-                        .write_all(&data[..])
-                        .await
-                        .expect("we should be able to send data using TcpStream");
-                }
-            })
+            loop {
+                // sleep(Duration::from_secs(1))
+                stream
+                    .write_all(&data[..])
+                    .expect("we should be able to send data using TcpStream");
+            }
         });
 
         receiver
@@ -604,9 +607,11 @@ mod tests {
             }
         }
 
-        let reader = TcpStream::connect(localhost_address)
+        let mut out_connection = TcpStream::connect(localhost_address)
             .await
             .expect("we should be able to connect to our TcpListener");
+
+        let (reader, writer) = out_connection.split();
 
         let reader = MockReader {
             action: move || {
@@ -619,38 +624,63 @@ mod tests {
             reader,
         };
 
-        struct MockWriter<A> {
+        struct MockWriter<A, W> {
             action: A,
+            writer: W,
         }
 
-        impl<A: FnMut() + Unpin> AsyncWrite for MockWriter<A> {
+        // impl<A, W> std::ops::Deref for MockWriter<A, W> {
+        //     type Target = W;
+
+        //     fn deref(&self) -> &Self::Target {
+        //         &self.writer
+        //     }
+        // }
+
+        impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for MockWriter<A, W> {
             fn poll_write(
                 self: Pin<&mut Self>,
-                _: &mut Context<'_>,
-                _: &[u8],
+                cx: &mut Context<'_>,
+                buf: &[u8],
             ) -> Poll<std::io::Result<usize>> {
                 // panic!("MockWriter `poll_write` should never be called");
                 // Poll::Ready(std::io::Result::Ok(1))
-                (self.get_mut().action)();
-                Poll::Pending
+                let self_mut = self.get_mut();
+                // Poll::Pending
+                println!("write called");
+                let result = <W as AsyncWrite>::poll_write(Pin::new(&mut self_mut.writer), cx, buf);
+                if let Poll::Pending = result {
+                    println!("calling action");
+                    (self_mut.action)();
+                }
+                result
             }
 
-            fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+            fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
                 // panic!("MockWriter `poll_flush` should never be called");
                 // Poll::Ready(std::io::Result::Ok(()))
-                Poll::Pending
+                // Poll::Pending
+                // self.as_mut().poll_flush(cx)
+                <W as AsyncWrite>::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
             }
 
             fn poll_shutdown(
                 self: Pin<&mut Self>,
-                _: &mut Context<'_>,
+                cx: &mut Context<'_>,
             ) -> Poll<std::io::Result<()>> {
                 // panic!("MockWriter `poll_shutdown` should never be called");
                 // Poll::Ready(std::io::Result::Ok(()))
-                Poll::Pending
+                // Poll::Pending
+                <W as AsyncWrite>::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
             }
         }
 
+        tokio::spawn(async move {
+            while let Some(_) = data_from_user_receiver.next().await {
+                println!("received data on user-channel");
+            }
+        });
+        let (_user_sender, user_receiver) = mpsc::unbounded();
         manage_connection::<MockPublicKey, Vec<u8>, _, _>(
             MockWriter {
                 action: move || {
@@ -660,9 +690,10 @@ mod tests {
                         .map(|ch| drop(ch))
                         .unwrap_or(())
                 },
+                writer,
             },
             reader,
-            data_from_user_receiver,
+            user_receiver,
             user_sender,
         )
         .await
