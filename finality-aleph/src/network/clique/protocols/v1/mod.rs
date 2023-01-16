@@ -553,7 +553,7 @@ mod tests {
     #[tokio::test]
     async fn try_starving_sender_with_tcp_stream() {
         let (user_sender, mut user_receiver) = mpsc::unbounded();
-        let (data_from_user_sender, mut data_from_user_receiver): (_, UnboundedReceiver<Vec<u8>>) =
+        let (data_from_user_sender, data_from_user_receiver): (_, UnboundedReceiver<Vec<u8>>) =
             mpsc::unbounded();
         let mut data_from_user_sender = Some(data_from_user_sender);
 
@@ -615,7 +615,7 @@ mod tests {
 
         let reader = MockReader {
             action: move || {
-                println!("reading");
+                // println!("reading");
                 // println!("dropping");
                 // data_from_user_sender
                 //     .take()
@@ -630,14 +630,6 @@ mod tests {
             writer: W,
         }
 
-        // impl<A, W> std::ops::Deref for MockWriter<A, W> {
-        //     type Target = W;
-
-        //     fn deref(&self) -> &Self::Target {
-        //         &self.writer
-        //     }
-        // }
-
         impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for MockWriter<A, W> {
             fn poll_write(
                 self: Pin<&mut Self>,
@@ -649,6 +641,10 @@ mod tests {
                 let self_mut = self.get_mut();
                 // Poll::Pending
                 println!("write called");
+
+                // println!("calling action");
+                // (self_mut.action)();
+
                 let result = <W as AsyncWrite>::poll_write(Pin::new(&mut self_mut.writer), cx, buf);
                 if let Poll::Pending = result {
                     println!("calling action");
