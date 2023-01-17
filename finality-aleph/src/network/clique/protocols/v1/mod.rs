@@ -641,6 +641,8 @@ mod tests {
                 let self_mut = self.get_mut();
                 // Poll::Pending
                 println!("write called");
+                (self_mut.action)();
+                return Poll::Pending;
 
                 // println!("calling action");
                 // (self_mut.action)();
@@ -677,6 +679,159 @@ mod tests {
         tokio::spawn(async move {
             while let Some(_) = user_receiver.next().await {
                 println!("received data on user-channel");
+            }
+        });
+        manage_connection::<MockPublicKey, Vec<u8>, _, _>(
+            MockWriter {
+                action: move || {
+                    println!("dropping");
+                    data_from_user_sender
+                        .take()
+                        .map(|ch| drop(ch))
+                        .unwrap_or(())
+                },
+                writer,
+            },
+            reader,
+            data_from_user_receiver,
+            user_sender,
+        )
+        .await
+        .expect("it should never return");
+
+        panic!("this test should never end");
+    }
+
+    #[tokio::test]
+    async fn make_sender_never_call_timeout_again() {
+        let (user_sender, mut user_receiver) = mpsc::unbounded();
+        let (data_from_user_sender, data_from_user_receiver): (_, UnboundedReceiver<Vec<u8>>) =
+            mpsc::unbounded();
+        let mut data_from_user_sender = Some(data_from_user_sender);
+
+        let localhost_address = "127.0.0.1:6666";
+        let listener = std::net::TcpListener::bind(localhost_address)
+            .expect("we should be able to create a TcpListener");
+
+        let mut data = Vec::<u8>::new();
+        let data_to_send = Message::Data(vec![1u8, 2u8, 3u8]);
+        data = crate::network::clique::protocols::v1::send_data(data, data_to_send)
+            .await
+            .expect("we should be able to encode data");
+        let (sender, receiver) = oneshot::channel();
+        // spawn_blocking(|| {
+        std::thread::spawn(move || {
+            sender
+                .send(())
+                .expect("we should be able to send thread initialization signal");
+
+            let mut stream = listener
+                .accept()
+                .map(|(stream, _)| stream)
+                .expect("we should be able to accept an connection");
+
+            loop {
+                // sleep(Duration::from_secs(1))
+                stream
+                    .write_all(&data[..])
+                    .expect("we should be able to send data using TcpStream");
+            }
+        });
+
+        receiver
+            .await
+            .expect("we should be able to receive thread initialization signal");
+
+        struct MockReader<A, R> {
+            action: A,
+            reader: R,
+        }
+
+        impl<A: FnMut() + Unpin, R: AsyncRead + Unpin> AsyncRead for MockReader<A, R> {
+            fn poll_read(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+                buf: &mut ReadBuf<'_>,
+            ) -> Poll<std::io::Result<()>> {
+                let self_mut = self.get_mut();
+                (self_mut.action)();
+                Pin::new(&mut self_mut.reader).poll_read(cx, buf)
+            }
+        }
+
+        let mut out_connection = TcpStream::connect(localhost_address)
+            .await
+            .expect("we should be able to connect to our TcpListener");
+
+        let (reader, writer) = out_connection.split();
+
+        let reader = MockReader {
+            action: move || {
+                // println!("reading");
+                // println!("dropping");
+                // data_from_user_sender
+                //     .take()
+                //     .map(|ch| drop(ch))
+                //     .unwrap_or(())
+            },
+            reader,
+        };
+
+        struct MockWriter<A, W> {
+            action: A,
+            writer: W,
+        }
+
+        impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for MockWriter<A, W> {
+            fn poll_write(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+                buf: &[u8],
+            ) -> Poll<std::io::Result<usize>> {
+                // panic!("MockWriter `poll_write` should never be called");
+                // Poll::Ready(std::io::Result::Ok(1))
+                let self_mut = self.get_mut();
+                // Poll::Pending
+                println!("write called");
+                (self_mut.action)();
+                return Poll::Pending;
+                // return Poll::Ready(Ok(buf.len()));
+
+                // println!("calling action");
+                // (self_mut.action)();
+
+                let result = <W as AsyncWrite>::poll_write(Pin::new(&mut self_mut.writer), cx, buf);
+                if let Poll::Pending = result {
+                    println!("calling action");
+                    (self_mut.action)();
+                }
+                result
+            }
+
+            fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
+                // panic!("MockWriter `poll_flush` should never be called");
+                // Poll::Ready(std::io::Result::Ok(()))
+                // Poll::Pending
+                // self.as_mut().poll_flush(cx)
+                println!("flush called");
+                <W as AsyncWrite>::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
+            }
+
+            fn poll_shutdown(
+                self: Pin<&mut Self>,
+                cx: &mut Context<'_>,
+            ) -> Poll<std::io::Result<()>> {
+                // panic!("MockWriter `poll_shutdown` should never be called");
+                // Poll::Ready(std::io::Result::Ok(()))
+                // Poll::Pending
+                println!("shutdown called");
+                <W as AsyncWrite>::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
+            }
+        }
+
+        tokio::spawn(async move {
+            while let Some(_) = user_receiver.next().await {
+                // println!("received data on user-channel");
             }
         });
         manage_connection::<MockPublicKey, Vec<u8>, _, _>(
