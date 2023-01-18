@@ -1,15 +1,19 @@
 use codec::{Decode, Encode};
-use futures::{channel::mpsc, StreamExt};
-use log::{debug, info, trace};
+use futures::{
+    channel::{mpsc, oneshot},
+    StreamExt,
+};
+use log::{debug, info, trace, warn};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     time::{timeout, Duration},
 };
 
+use super::{AuthorizationContinuation, Continuation};
 use crate::network::clique::{
     io::{receive_data, send_data},
     protocols::{
-        handshake::{v0_handshake_incoming, v0_handshake_outgoing},
+        handshake::{v0_handshake_incoming, v0_handshake_outgoing, HandshakeError},
         ConnectionType, ProtocolError, ResultForService,
     },
     Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
@@ -83,13 +87,41 @@ async fn manage_connection<
     }
 }
 
+pub struct AuthContinuationHandler<PK, D> {
+    result: ResultForService<PK, D>,
+    result_sender: oneshot::Sender<bool>,
+}
+
+impl<PK, D> Continuation<ResultForService<PK, D>, bool, ()> for AuthContinuationHandler<PK, D> {
+    fn cont(self, continuation: impl Fn(ResultForService<PK, D>) -> bool) -> () {
+        let auth_result = continuation(self.result);
+        if let Err(er) = self.result_sender.send(auth_result) {
+            debug!(
+                target: LOG_TARGET,
+                "Unable to send a result from authorization."
+            );
+        }
+    }
+}
+
+// #[async_trait::async_trait]
+// impl AuthorizationContinuation for AuthContinuationHandler {
+//     async fn authorize<PK, D, Cont, Ret>(&mut self, continuation: Cont)
+//     where
+//         Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType) -> Ret,
+//         Ret: futures::Future<Output = bool>,
+//     {
+//         todo!()
+//     }
+// }
+
 /// Performs the outgoing handshake, and then manages a connection sending and receiving data.
 /// Exits on parent request, or in case of broken or dead network connection.
 pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     secret_key: SK,
     public_key: SK::PublicKey,
-    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Extending hand to {}.", public_key);
@@ -99,13 +131,33 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
         "Outgoing handshake with {} finished successfully.", public_key
     );
     let (data_for_network, data_from_user) = mpsc::unbounded();
-    result_for_parent
-        .unbounded_send((
+    let (auth_sender, auth_receiver) = oneshot::channel();
+    let auth_handler = AuthContinuationHandler {
+        result: (
             public_key.clone(),
             Some(data_for_network),
             ConnectionType::New,
-        ))
+        ),
+        result_sender: auth_sender,
+    };
+    result_for_parent
+        .unbounded_send(auth_handler)
         .map_err(|_| ProtocolError::NoParentConnection)?;
+    let authorized = auth_receiver
+        .await
+        .map_err(|_| ProtocolError::NoParentConnection)?;
+
+    if !authorized {
+        warn!(
+            target: LOG_TARGET,
+            "Node presenting public_key={} was not authorized.", public_key
+        );
+        // TODO whatever
+        return Err(ProtocolError::HandshakeError(
+            HandshakeError::SignatureError,
+        ));
+    }
+
     debug!(
         target: LOG_TARGET,
         "Starting worker for communicating with {}.", public_key

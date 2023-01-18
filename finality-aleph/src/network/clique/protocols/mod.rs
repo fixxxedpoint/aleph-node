@@ -1,6 +1,6 @@
 use std::fmt::{Display, Error as FmtError, Formatter};
 
-use futures::channel::mpsc;
+use futures::{channel::mpsc, Future};
 
 use crate::network::clique::{
     io::{ReceiveError, SendError},
@@ -14,6 +14,7 @@ mod v1;
 
 use handshake::HandshakeError;
 pub use negotiation::{protocol, ProtocolNegotiationError};
+pub use v1::AuthContinuationHandler;
 
 pub type Version = u32;
 
@@ -31,6 +32,20 @@ pub enum ConnectionType {
 /// connection was unsuccessful and should be reestablished. Finally a marker for legacy
 /// compatibility.
 pub type ResultForService<PK, D> = (PK, Option<mpsc::UnboundedSender<D>>, ConnectionType);
+// pub type ResultForService<PK, D, T, F, Cont> = F
+//   where Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType), F: Fn<Cont>;
+
+pub trait Continuation<In, Out, AllOut> {
+    fn cont(self, continuation: impl Fn(In) -> Out) -> AllOut;
+}
+
+#[async_trait::async_trait]
+pub trait AuthorizationContinuation {
+    async fn authorize<PK, D, Cont, Ret>(&mut self, continuation: Cont)
+    where
+        Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType) -> Ret,
+        Ret: Future<Output = bool>;
+}
 
 /// Defines the protocol for communication.
 #[derive(Debug, PartialEq, Eq)]
@@ -119,7 +134,7 @@ impl Protocol {
         stream: S,
         secret_key: SK,
         public_key: SK::PublicKey,
-        result_for_service: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+        result_for_service: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
         data_for_user: mpsc::UnboundedSender<D>,
     ) -> Result<(), ProtocolError<SK::PublicKey>> {
         use Protocol::*;

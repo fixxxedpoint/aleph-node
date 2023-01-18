@@ -3,6 +3,7 @@ use std::fmt::{Display, Error as FmtError, Formatter};
 use futures::channel::mpsc;
 use log::{debug, info};
 
+use super::protocols::AuthContinuationHandler;
 use crate::network::clique::{
     protocols::{protocol, ProtocolError, ProtocolNegotiationError, ResultForService},
     Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
@@ -38,7 +39,7 @@ impl<PK: PublicKey> From<ProtocolError<PK>> for IncomingError<PK> {
 async fn manage_incoming<SK: SecretKey, D: Data, S: Splittable>(
     secret_key: SK,
     stream: S,
-    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), IncomingError<SK::PublicKey>> {
     debug!(
@@ -60,7 +61,7 @@ async fn manage_incoming<SK: SecretKey, D: Data, S: Splittable>(
 pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     secret_key: SK,
     stream: S,
-    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) {
     let addr = stream.peer_address_info();
