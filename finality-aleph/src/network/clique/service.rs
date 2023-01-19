@@ -314,7 +314,7 @@ where
                     },
                 },
                 Some(request) = authorization_handler.next_authorization_request() => {
-                    if let Err(err) = request.handle_authorization(|pk| self.is_authorized(&pk)) {
+                    if let Err(_) = request.handle_authorization(|pk| self.is_authorized(&pk)) {
                         warn!(target: LOG_TARGET, "Other side of the authorization request is already closed.");
                     }
                 },
