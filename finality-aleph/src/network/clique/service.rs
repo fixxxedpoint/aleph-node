@@ -133,7 +133,7 @@ where
     }
 
     fn spawn_new_outgoing(
-        &self,
+        &mut self,
         public_key: SK::PublicKey,
         address: A,
         result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
@@ -142,7 +142,7 @@ where
         let dialer = self.dialer.clone();
         let next_to_interface = self.next_to_interface.clone();
         self.spawn_task(
-            public_key,
+            public_key.clone(),
             "aleph/clique_network_outgoing",
             outgoing(
                 secret_key,
@@ -159,7 +159,7 @@ where
         &self,
         stream: NL::Connection,
         result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
-        authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+        authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey>>,
     ) {
         let secret_key = self.secret_key.clone();
         let next_to_interface = self.next_to_interface.clone();
@@ -176,7 +176,7 @@ where
             });
     }
 
-    fn spawn_task<F>(&self, public_key: SK::PublicKey, name: &str, task: F)
+    fn spawn_task<F>(&mut self, public_key: SK::PublicKey, name: &'static str, task: F)
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -277,7 +277,7 @@ where
             tokio::select! {
                 // got new incoming connection from the listener - spawn an incoming worker
                 maybe_stream = self.listener.accept() => match maybe_stream {
-                    Ok(stream) => self.spawn_new_incoming(stream, result_for_parent.clone(), authorization_for_parent),
+                    Ok(stream) => self.spawn_new_incoming(stream, result_for_parent.clone(), authorization_for_parent.clone()),
                     Err(e) => warn!(target: LOG_TARGET, "Listener failed to accept connection: {}", e),
                 },
                 // got a new command from the interface
@@ -334,15 +334,12 @@ where
                     use AddResult::*;
                     match maybe_data_for_network {
                         Some(data_for_network) => match self.add_connection(public_key.clone(), data_for_network, connection_type) {
-                            Uninterested => { warn!(target: LOG_TARGET, "Established connection with peer {} for unknown reasons.", public_key); false },
-                            Added => { info!(target: LOG_TARGET, "New connection with peer {}.", public_key); true },
-                            Replaced => { info!(target: LOG_TARGET, "Replaced connection with peer {}.", public_key); true },
+                            Uninterested => warn!(target: LOG_TARGET, "Established connection with peer {} for unknown reasons.", public_key),
+                            Added => info!(target: LOG_TARGET, "New connection with peer {}.", public_key) ,
+                            Replaced => info!(target: LOG_TARGET, "Replaced connection with peer {}.", public_key) ,
                         },
                         None => if let Some(address) = self.peer_address(&public_key) {
                             self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
-                            true
-                        } else {
-                            false
                         }
                     }
                 },

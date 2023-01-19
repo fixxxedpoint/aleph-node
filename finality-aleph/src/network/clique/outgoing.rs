@@ -47,7 +47,7 @@ async fn manage_outgoing<SK: SecretKey, D: Data, A: Data, ND: Dialer<A>>(
     public_key: SK::PublicKey,
     mut dialer: ND,
     address: A,
-    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), OutgoingError<SK::PublicKey, A, ND>> {
     debug!(target: LOG_TARGET, "Trying to connect to {}.", public_key);
@@ -86,7 +86,7 @@ pub async fn outgoing<SK: SecretKey, D: Data, A: Data + Debug, ND: Dialer<A>>(
     public_key: SK::PublicKey,
     dialer: ND,
     address: A,
-    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) {
     if let Err(e) = manage_outgoing(

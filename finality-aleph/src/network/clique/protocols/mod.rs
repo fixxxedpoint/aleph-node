@@ -118,9 +118,9 @@ impl Protocol {
         &self,
         stream: S,
         secret_key: SK,
-        result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+        result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
         data_for_user: mpsc::UnboundedSender<D>,
-        authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+        authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey>>,
     ) -> Result<(), ProtocolError<SK::PublicKey>> {
         use Protocol::*;
         match self {
@@ -129,7 +129,7 @@ impl Protocol {
                     stream,
                     secret_key,
                     authorization_requests,
-                    result_for_service,
+                    result_for_parent,
                     data_for_user,
                 )
                 .await
@@ -139,7 +139,7 @@ impl Protocol {
                     stream,
                     secret_key,
                     authorization_requests,
-                    result_for_service,
+                    result_for_parent,
                     data_for_user,
                 )
                 .await
@@ -153,7 +153,7 @@ impl Protocol {
         stream: S,
         secret_key: SK,
         public_key: SK::PublicKey,
-        result_for_service: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+        result_for_service: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
         data_for_user: mpsc::UnboundedSender<D>,
     ) -> Result<(), ProtocolError<SK::PublicKey>> {
         use Protocol::*;

@@ -131,7 +131,7 @@ impl<PK> Authorizator<PK> {
         Self { sender }
     }
 
-    pub async fn is_authorized(&mut self, value: PK) -> Result<bool, AuthorizatorError> {
+    pub async fn is_authorized(&self, value: PK) -> Result<bool, AuthorizatorError> {
         let (handler, receiver) = AuthContinuationHandler::new(value);
         self.sender
             .unbounded_send(handler)
@@ -159,7 +159,7 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     secret_key: SK,
     public_key: SK::PublicKey,
-    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Extending hand to {}.", public_key);
@@ -230,6 +230,10 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
         }
     };
     if !authorized {
+        warn!(
+            target: LOG_TARGET,
+            "public_key={} was not authorized.", public_key
+        );
         return Ok(());
     }
 
