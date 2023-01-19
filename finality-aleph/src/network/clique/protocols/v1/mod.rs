@@ -1,7 +1,7 @@
 use codec::{Decode, Encode};
 use futures::{
     channel::{mpsc, oneshot},
-    StreamExt,
+    Future, StreamExt,
 };
 use log::{debug, info, trace, warn};
 use tokio::{
@@ -106,7 +106,7 @@ impl<PK> AuthContinuationHandler<PK> {
 }
 
 impl<PK> Continuation<PK, bool, ()> for AuthContinuationHandler<PK> {
-    fn cont(self, continuation: impl Fn(PK) -> bool) -> () {
+    fn cont(self, mut continuation: impl FnMut(PK) -> bool) -> () {
         let auth_result = continuation(self.result);
         if let Err(er) = self.result_sender.send(auth_result) {
             debug!(
@@ -120,6 +120,29 @@ impl<PK> Continuation<PK, bool, ()> for AuthContinuationHandler<PK> {
 pub enum AuthorizatorError {
     MissingService,
     ServiceDisappeared,
+}
+
+pub struct AuthorizationHandler<PK> {
+    receiver: mpsc::UnboundedReceiver<AuthContinuationHandler<PK>>,
+}
+
+impl<PK> AuthorizationHandler<PK> {
+    pub fn new(receiver: mpsc::UnboundedReceiver<AuthContinuationHandler<PK>>) -> Self {
+        Self { receiver }
+    }
+
+    pub async fn handle_authorization<F: FnMut(PK) -> bool>(
+        &mut self,
+        handler: F,
+    ) -> Result<(), AuthorizatorError> {
+        let next = self
+            .receiver
+            .next()
+            .await
+            .ok_or(AuthorizatorError::MissingService)?;
+
+        Ok(next.cont(handler))
+    }
 }
 
 pub struct Authorizator<PK> {

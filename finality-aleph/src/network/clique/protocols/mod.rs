@@ -36,7 +36,7 @@ pub type ResultForService<PK, D> = (PK, Option<mpsc::UnboundedSender<D>>, Connec
 //   where Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType), F: Fn<Cont>;
 
 pub trait Continuation<In, Out, AllOut> {
-    fn cont(self, continuation: impl Fn(In) -> Out) -> AllOut;
+    fn cont(self, continuation: impl FnMut(In) -> Out) -> AllOut;
 }
 
 #[async_trait::async_trait]
