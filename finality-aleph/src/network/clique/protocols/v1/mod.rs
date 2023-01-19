@@ -92,6 +92,8 @@ pub struct AuthContinuationHandler<PK, D> {
     result_sender: oneshot::Sender<bool>,
 }
 
+impl<PK, D> AuthContinuationHandler<PK, D> {}
+
 impl<PK, D> Continuation<ResultForService<PK, D>, bool, ()> for AuthContinuationHandler<PK, D> {
     fn cont(self, continuation: impl Fn(ResultForService<PK, D>) -> bool) -> () {
         let auth_result = continuation(self.result);

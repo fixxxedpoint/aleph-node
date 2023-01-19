@@ -118,7 +118,7 @@ impl Protocol {
         &self,
         stream: S,
         secret_key: SK,
-        result_for_service: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+        result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
         data_for_user: mpsc::UnboundedSender<D>,
     ) -> Result<(), ProtocolError<SK::PublicKey>> {
         use Protocol::*;

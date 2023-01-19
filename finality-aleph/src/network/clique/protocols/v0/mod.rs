@@ -15,6 +15,8 @@ mod heartbeat;
 
 use heartbeat::{heartbeat_receiver, heartbeat_sender};
 
+use super::AuthContinuationHandler;
+
 /// Receives data from the parent service and sends it over the network.
 /// Exits when the parent channel is closed, or if the network connection is broken.
 async fn sending<PK: PublicKey, D: Data, S: AsyncWrite + Unpin + Send>(
@@ -88,7 +90,7 @@ async fn receiving<PK: PublicKey, D: Data, S: AsyncRead + Unpin + Send>(
 pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     secret_key: SK,
-    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Waiting for extended hand...");
