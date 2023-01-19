@@ -41,6 +41,7 @@ async fn manage_incoming<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
+    authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
 ) -> Result<(), IncomingError<SK::PublicKey>> {
     debug!(
         target: LOG_TARGET,
@@ -49,7 +50,13 @@ async fn manage_incoming<SK: SecretKey, D: Data, S: Splittable>(
     let (stream, protocol) = protocol(stream).await?;
     debug!(target: LOG_TARGET, "Negotiated protocol, running.");
     Ok(protocol
-        .manage_incoming(stream, secret_key, result_for_parent, data_for_user)
+        .manage_incoming(
+            stream,
+            secret_key,
+            result_for_parent,
+            data_for_user,
+            authorization_requests,
+        )
         .await?)
 }
 
@@ -61,11 +68,20 @@ async fn manage_incoming<SK: SecretKey, D: Data, S: Splittable>(
 pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     secret_key: SK,
     stream: S,
-    result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
+    authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
 ) {
     let addr = stream.peer_address_info();
-    if let Err(e) = manage_incoming(secret_key, stream, result_for_parent, data_for_user).await {
+    if let Err(e) = manage_incoming(
+        secret_key,
+        stream,
+        result_for_parent,
+        data_for_user,
+        authorization_requests,
+    )
+    .await
+    {
         info!(
             target: LOG_TARGET,
             "Incoming connection from {} failed: {}.", addr, e

@@ -87,15 +87,26 @@ async fn manage_connection<
     }
 }
 
-pub struct AuthContinuationHandler<PK, D> {
-    result: ResultForService<PK, D>,
+pub struct AuthContinuationHandler<PK> {
+    result: PK,
     result_sender: oneshot::Sender<bool>,
 }
 
-impl<PK, D> AuthContinuationHandler<PK, D> {}
+impl<PK> AuthContinuationHandler<PK> {
+    pub fn new(result: PK) -> (Self, oneshot::Receiver<bool>) {
+        let (auth_sender, auth_receiver) = oneshot::channel();
+        (
+            Self {
+                result,
+                result_sender: auth_sender,
+            },
+            auth_receiver,
+        )
+    }
+}
 
-impl<PK, D> Continuation<ResultForService<PK, D>, bool, ()> for AuthContinuationHandler<PK, D> {
-    fn cont(self, continuation: impl Fn(ResultForService<PK, D>) -> bool) -> () {
+impl<PK> Continuation<PK, bool, ()> for AuthContinuationHandler<PK> {
+    fn cont(self, continuation: impl Fn(PK) -> bool) -> () {
         let auth_result = continuation(self.result);
         if let Err(er) = self.result_sender.send(auth_result) {
             debug!(
@@ -103,6 +114,31 @@ impl<PK, D> Continuation<ResultForService<PK, D>, bool, ()> for AuthContinuation
                 "Unable to send a result from authorization."
             );
         }
+    }
+}
+
+pub enum AuthorizatorError {
+    MissingService,
+    ServiceDisappeared,
+}
+
+pub struct Authorizator<PK> {
+    sender: mpsc::UnboundedSender<AuthContinuationHandler<PK>>,
+}
+
+impl<PK> Authorizator<PK> {
+    pub fn new(sender: mpsc::UnboundedSender<AuthContinuationHandler<PK>>) -> Self {
+        Self { sender }
+    }
+
+    pub async fn is_authorized(&mut self, value: PK) -> Result<bool, AuthorizatorError> {
+        let (handler, receiver) = AuthContinuationHandler::new(value);
+        self.sender
+            .unbounded_send(handler)
+            .map_err(|_| AuthorizatorError::MissingService)?;
+        receiver
+            .await
+            .map_err(|_| AuthorizatorError::ServiceDisappeared)
     }
 }
 
@@ -135,30 +171,19 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
     let (data_for_network, data_from_user) = mpsc::unbounded();
     let (auth_sender, auth_receiver) = oneshot::channel();
     let auth_handler = AuthContinuationHandler {
-        result: (
-            public_key.clone(),
-            Some(data_for_network),
-            ConnectionType::New,
-        ),
+        result: (),
         result_sender: auth_sender,
     };
     result_for_parent
-        .unbounded_send(auth_handler)
+        .unbounded_send((
+            public_key.clone(),
+            Some(data_for_network),
+            ConnectionType::New,
+        ))
         .map_err(|_| ProtocolError::NoParentConnection)?;
     let authorized = auth_receiver
         .await
         .map_err(|_| ProtocolError::NoParentConnection)?;
-
-    if !authorized {
-        warn!(
-            target: LOG_TARGET,
-            "Node presenting public_key={} was not authorized.", public_key
-        );
-        // TODO whatever
-        return Err(ProtocolError::HandshakeError(
-            HandshakeError::SignatureError,
-        ));
-    }
 
     debug!(
         target: LOG_TARGET,
@@ -173,6 +198,7 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
 pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     secret_key: SK,
+    authorization_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey>>,
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
@@ -182,6 +208,31 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
         target: LOG_TARGET,
         "Incoming handshake with {} finished successfully.", public_key
     );
+
+    let authorizator = Authorizator::new(authorization_for_parent);
+    let authorization_result = authorizator.is_authorized(public_key.clone()).await;
+    let authorized = match authorization_result {
+        Ok(result) => result,
+        Err(err) => {
+            match err {
+                AuthorizatorError::MissingService => warn!(
+                    target: LOG_TARGET,
+                    "Authorization service for public_key={} went missing before we called it.",
+                    public_key
+                ),
+                AuthorizatorError::ServiceDisappeared => warn!(
+                    target: LOG_TARGET,
+                    "We managed to send authorization request for public_key={}, but were unable to receive an answer.",
+                    public_key
+                ),
+            }
+            return Err(ProtocolError::HandshakeError(HandshakeError::NotAuthorized));
+        }
+    };
+    if !authorized {
+        return Ok(());
+    }
+
     let (data_for_network, data_from_user) = mpsc::unbounded();
     result_for_parent
         .unbounded_send((

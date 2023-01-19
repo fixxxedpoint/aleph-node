@@ -91,6 +91,7 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     secret_key: SK,
     result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+    authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Waiting for extended hand...");

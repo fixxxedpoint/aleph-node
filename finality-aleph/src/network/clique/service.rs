@@ -11,7 +11,7 @@ use futures::{
 use log::{debug, info, trace, warn};
 use tokio::time;
 
-use super::protocols::AuthContinuationHandler;
+use super::protocols::{AuthContinuationHandler, ResultForService};
 use crate::{
     network::{
         clique::{
@@ -136,7 +136,7 @@ where
         &self,
         public_key: SK::PublicKey,
         address: A,
-        result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+        result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     ) {
         let secret_key = self.secret_key.clone();
         let dialer = self.dialer.clone();
@@ -158,13 +158,21 @@ where
     fn spawn_new_incoming(
         &self,
         stream: NL::Connection,
-        result_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
+        result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+        authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey, D>>,
     ) {
         let secret_key = self.secret_key.clone();
         let next_to_interface = self.next_to_interface.clone();
         self.spawn_handle
             .spawn("aleph/clique_network_incoming", None, async move {
-                incoming(secret_key, stream, result_for_parent, next_to_interface).await;
+                incoming(
+                    secret_key,
+                    stream,
+                    result_for_parent,
+                    next_to_interface,
+                    authorization_requests,
+                )
+                .await;
             });
     }
 
@@ -186,6 +194,10 @@ where
             true => self.legacy_manager.peer_address(public_key),
             false => self.manager.peer_address(public_key),
         }
+    }
+
+    fn is_authorized(&self, public_key: &SK::PublicKey) -> bool {
+        self.manager.is_authorized(public_key)
     }
 
     fn add_connection(
@@ -259,12 +271,13 @@ where
     pub async fn run(mut self, mut exit: oneshot::Receiver<()>) {
         let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
         let (result_for_parent, mut worker_results) = mpsc::unbounded();
+        let (authorization_for_parent, mut authorization_requests) = mpsc::unbounded();
         use ServiceCommand::*;
         loop {
             tokio::select! {
                 // got new incoming connection from the listener - spawn an incoming worker
                 maybe_stream = self.listener.accept() => match maybe_stream {
-                    Ok(stream) => self.spawn_new_incoming(stream, result_for_parent.clone()),
+                    Ok(stream) => self.spawn_new_incoming(stream, result_for_parent.clone(), authorization_for_parent),
                     Err(e) => warn!(target: LOG_TARGET, "Listener failed to accept connection: {}", e),
                 },
                 // got a new command from the interface
@@ -300,36 +313,38 @@ where
                         }
                     },
                 },
+                Some(authorization_request) = authorization_requests.next() => {
+                    authorization_request.cont(|public_key| {
+                        self.is_authorized(&public_key)
+                    });
+                },
                 // received information from a spawned worker managing a connection
                 // check if we still want to be connected to the peer, and if so, spawn a new worker or actually add proper connection
-                Some(worker_callback) = worker_results.next() => {
-                    worker_callback.cont(|(public_key, maybe_data_for_network, connection_type)| {
-                        if self.check_for_legacy(&public_key, connection_type) {
-                            match self.legacy_manager.peer_address(&public_key) {
-                                Some(address) => self.spawn_new_outgoing(public_key.clone(), address, result_for_parent.clone()),
-                                None => {
-                                    // We received a result from a worker we are no longer interested
-                                    // in.
-                                    self.legacy_connected.remove(&public_key);
-                                },
-                            }
-                        }
-                        use AddResult::*;
-                        match maybe_data_for_network {
-                            Some(data_for_network) => match self.add_connection(public_key.clone(), data_for_network, connection_type) {
-                                Uninterested => { warn!(target: LOG_TARGET, "Established connection with peer {} for unknown reasons.", public_key); false },
-                                Added => { info!(target: LOG_TARGET, "New connection with peer {}.", public_key); true },
-                                Replaced => { info!(target: LOG_TARGET, "Replaced connection with peer {}.", public_key); true },
+                Some((public_key, maybe_data_for_network, connection_type)) = worker_results.next() => {
+                    if self.check_for_legacy(&public_key, connection_type) {
+                        match self.legacy_manager.peer_address(&public_key) {
+                            Some(address) => self.spawn_new_outgoing(public_key.clone(), address, result_for_parent.clone()),
+                            None => {
+                                // We received a result from a worker we are no longer interested
+                                // in.
+                                self.legacy_connected.remove(&public_key);
                             },
-                            None => if let Some(address) = self.peer_address(&public_key) {
-                                self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
-                                true
-                            } else {
-                                false
-                            }
                         }
-
-                    }).await;
+                    }
+                    use AddResult::*;
+                    match maybe_data_for_network {
+                        Some(data_for_network) => match self.add_connection(public_key.clone(), data_for_network, connection_type) {
+                            Uninterested => { warn!(target: LOG_TARGET, "Established connection with peer {} for unknown reasons.", public_key); false },
+                            Added => { info!(target: LOG_TARGET, "New connection with peer {}.", public_key); true },
+                            Replaced => { info!(target: LOG_TARGET, "Replaced connection with peer {}.", public_key); true },
+                        },
+                        None => if let Some(address) = self.peer_address(&public_key) {
+                            self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
+                            true
+                        } else {
+                            false
+                        }
+                    }
                 },
                 // periodically reporting what we are trying to do
                 _ = status_ticker.tick() => {
