@@ -114,6 +114,16 @@ impl<PK> AuthContinuationHandler<PK> {
             auth_receiver,
         )
     }
+
+    pub fn handle_authorization(
+        self,
+        mut handler: impl FnMut(PK) -> bool,
+    ) -> Result<(), AuthorizatorError> {
+        let auth_result = handler(self.result);
+        self.result_sender
+            .send(auth_result)
+            .map_err(|_| AuthorizatorError::MissingService)
+    }
 }
 
 impl<PK> Continuation<PK, bool, ()> for AuthContinuationHandler<PK> {
@@ -142,17 +152,8 @@ impl<PK> AuthorizationHandler<PK> {
         Self { receiver }
     }
 
-    pub async fn handle_authorization<F: Fn(PK) -> bool>(
-        &mut self,
-        handler: F,
-    ) -> Result<(), AuthorizatorError> {
-        let next = self
-            .receiver
-            .next()
-            .await
-            .ok_or(AuthorizatorError::MissingService)?;
-
-        Ok(next.cont(handler))
+    pub async fn next_authorization_request(&mut self) -> Option<AuthContinuationHandler<PK>> {
+        self.receiver.next().await
     }
 }
 
