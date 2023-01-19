@@ -14,7 +14,8 @@ mod v1;
 
 use handshake::HandshakeError;
 pub use negotiation::{protocol, ProtocolNegotiationError};
-pub use v1::AuthContinuationHandler;
+
+use super::Authorizator;
 
 pub type Version = u32;
 
@@ -32,20 +33,6 @@ pub enum ConnectionType {
 /// connection was unsuccessful and should be reestablished. Finally a marker for legacy
 /// compatibility.
 pub type ResultForService<PK, D> = (PK, Option<mpsc::UnboundedSender<D>>, ConnectionType);
-// pub type ResultForService<PK, D, T, F, Cont> = F
-//   where Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType), F: Fn<Cont>;
-
-pub trait Continuation<In, Out, AllOut> {
-    fn cont(self, continuation: impl FnMut(In) -> Out) -> AllOut;
-}
-
-#[async_trait::async_trait]
-pub trait AuthorizationContinuation {
-    async fn authorize<PK, D, Cont, Ret>(&mut self, continuation: Cont)
-    where
-        Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType) -> Ret,
-        Ret: Future<Output = bool>;
-}
 
 /// Defines the protocol for communication.
 #[derive(Debug, PartialEq, Eq)]
@@ -120,7 +107,7 @@ impl Protocol {
         secret_key: SK,
         result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
         data_for_user: mpsc::UnboundedSender<D>,
-        authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey>>,
+        authorizator: Authorizator<SK::PublicKey>,
     ) -> Result<(), ProtocolError<SK::PublicKey>> {
         use Protocol::*;
         match self {
@@ -128,7 +115,7 @@ impl Protocol {
                 v0::incoming(
                     stream,
                     secret_key,
-                    authorization_requests,
+                    authorizator,
                     result_for_parent,
                     data_for_user,
                 )
@@ -138,7 +125,7 @@ impl Protocol {
                 v1::incoming(
                     stream,
                     secret_key,
-                    authorization_requests,
+                    authorizator,
                     result_for_parent,
                     data_for_user,
                 )

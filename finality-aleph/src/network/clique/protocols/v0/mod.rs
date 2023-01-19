@@ -8,14 +8,12 @@ use crate::network::clique::{
         handshake::{v0_handshake_incoming, v0_handshake_outgoing},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Authorizator, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 mod heartbeat;
 
 use heartbeat::{heartbeat_receiver, heartbeat_sender};
-
-use super::AuthContinuationHandler;
 
 /// Receives data from the parent service and sends it over the network.
 /// Exits when the parent channel is closed, or if the network connection is broken.
@@ -90,7 +88,7 @@ async fn receiving<PK: PublicKey, D: Data, S: AsyncRead + Unpin + Send>(
 pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     secret_key: SK,
-    authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey>>,
+    authorizator: Authorizator<SK::PublicKey>,
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {

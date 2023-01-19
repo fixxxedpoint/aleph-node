@@ -11,14 +11,14 @@ use futures::{
 use log::{debug, info, trace, warn};
 use tokio::time;
 
-use super::protocols::{AuthContinuationHandler, ResultForService};
+use super::{protocols::ResultForService, Authorizator};
 use crate::{
     network::{
         clique::{
             incoming::incoming,
             manager::{AddResult, LegacyManager, Manager},
             outgoing::outgoing,
-            protocols::{ConnectionType, Continuation},
+            protocols::ConnectionType,
             Dialer, Listener, Network, PublicKey, SecretKey, LOG_TARGET,
         },
         Data, PeerId,
@@ -159,7 +159,7 @@ where
         &self,
         stream: NL::Connection,
         result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
-        authorization_requests: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey>>,
+        authorizator: Authorizator<SK::PublicKey>,
     ) {
         let secret_key = self.secret_key.clone();
         let next_to_interface = self.next_to_interface.clone();
@@ -170,7 +170,7 @@ where
                     stream,
                     result_for_parent,
                     next_to_interface,
-                    authorization_requests,
+                    authorizator,
                 )
                 .await;
             });
@@ -271,13 +271,13 @@ where
     pub async fn run(mut self, mut exit: oneshot::Receiver<()>) {
         let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
         let (result_for_parent, mut worker_results) = mpsc::unbounded();
-        let (authorization_for_parent, mut authorization_requests) = mpsc::unbounded();
+        let (authorizator, mut authorization_handler) = Authorizator::new();
         use ServiceCommand::*;
         loop {
             tokio::select! {
                 // got new incoming connection from the listener - spawn an incoming worker
                 maybe_stream = self.listener.accept() => match maybe_stream {
-                    Ok(stream) => self.spawn_new_incoming(stream, result_for_parent.clone(), authorization_for_parent.clone()),
+                    Ok(stream) => self.spawn_new_incoming(stream, result_for_parent.clone(), authorizator.clone()),
                     Err(e) => warn!(target: LOG_TARGET, "Listener failed to accept connection: {}", e),
                 },
                 // got a new command from the interface
@@ -313,10 +313,10 @@ where
                         }
                     },
                 },
-                Some(authorization_request) = authorization_requests.next() => {
-                    authorization_request.cont(|public_key| {
-                        self.is_authorized(&public_key)
-                    });
+                result = authorization_handler.handle_authorization(|pk| self.is_authorized(&pk)) => {
+                    if let Err(err) = result {
+
+                    }
                 },
                 // received information from a spawned worker managing a connection
                 // check if we still want to be connected to the peer, and if so, spawn a new worker or actually add proper connection

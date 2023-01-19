@@ -4,7 +4,6 @@ use futures::channel::mpsc;
 use log::{debug, info};
 use tokio::time::{sleep, timeout, Duration};
 
-use super::protocols::AuthContinuationHandler;
 use crate::network::clique::{
     protocols::{
         protocol, ConnectionType, ProtocolError, ProtocolNegotiationError, ResultForService,

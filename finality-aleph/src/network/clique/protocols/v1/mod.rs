@@ -9,14 +9,13 @@ use tokio::{
     time::{timeout, Duration},
 };
 
-use super::{AuthorizationContinuation, Continuation};
 use crate::network::clique::{
     io::{receive_data, send_data},
     protocols::{
         handshake::{v0_handshake_incoming, v0_handshake_outgoing, HandshakeError},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Authorizator, AuthorizatorError, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -87,95 +86,6 @@ async fn manage_connection<
     }
 }
 
-pub struct AuthContinuationHandler<PK> {
-    result: PK,
-    result_sender: oneshot::Sender<bool>,
-}
-
-impl<PK> AuthContinuationHandler<PK> {
-    pub fn new(result: PK) -> (Self, oneshot::Receiver<bool>) {
-        let (auth_sender, auth_receiver) = oneshot::channel();
-        (
-            Self {
-                result,
-                result_sender: auth_sender,
-            },
-            auth_receiver,
-        )
-    }
-}
-
-impl<PK> Continuation<PK, bool, ()> for AuthContinuationHandler<PK> {
-    fn cont(self, mut continuation: impl FnMut(PK) -> bool) -> () {
-        let auth_result = continuation(self.result);
-        if let Err(er) = self.result_sender.send(auth_result) {
-            debug!(
-                target: LOG_TARGET,
-                "Unable to send a result from authorization."
-            );
-        }
-    }
-}
-
-pub enum AuthorizatorError {
-    MissingService,
-    ServiceDisappeared,
-}
-
-pub struct AuthorizationHandler<PK> {
-    receiver: mpsc::UnboundedReceiver<AuthContinuationHandler<PK>>,
-}
-
-impl<PK> AuthorizationHandler<PK> {
-    pub fn new(receiver: mpsc::UnboundedReceiver<AuthContinuationHandler<PK>>) -> Self {
-        Self { receiver }
-    }
-
-    pub async fn handle_authorization<F: FnMut(PK) -> bool>(
-        &mut self,
-        handler: F,
-    ) -> Result<(), AuthorizatorError> {
-        let next = self
-            .receiver
-            .next()
-            .await
-            .ok_or(AuthorizatorError::MissingService)?;
-
-        Ok(next.cont(handler))
-    }
-}
-
-pub struct Authorizator<PK> {
-    sender: mpsc::UnboundedSender<AuthContinuationHandler<PK>>,
-}
-
-impl<PK> Authorizator<PK> {
-    pub fn new(sender: mpsc::UnboundedSender<AuthContinuationHandler<PK>>) -> Self {
-        Self { sender }
-    }
-
-    pub async fn is_authorized(&self, value: PK) -> Result<bool, AuthorizatorError> {
-        let (handler, receiver) = AuthContinuationHandler::new(value);
-        self.sender
-            .unbounded_send(handler)
-            .map_err(|_| AuthorizatorError::MissingService)?;
-        receiver
-            .await
-            .map_err(|_| AuthorizatorError::ServiceDisappeared)
-    }
-}
-
-// #[async_trait::async_trait]
-// impl AuthorizationContinuation for AuthContinuationHandler {
-//     async fn authorize<PK, D, Cont, Ret>(&mut self, continuation: Cont)
-//     where
-//         Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType) -> Ret,
-//         Ret: futures::Future<Output = bool>,
-//     {
-//         todo!()
-//     }
-// }
-
 /// Performs the outgoing handshake, and then manages a connection sending and receiving data.
 /// Exits on parent request, or in case of broken or dead network connection.
 pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
@@ -192,20 +102,12 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
         "Outgoing handshake with {} finished successfully.", public_key
     );
     let (data_for_network, data_from_user) = mpsc::unbounded();
-    let (auth_sender, auth_receiver) = oneshot::channel();
-    let auth_handler = AuthContinuationHandler {
-        result: (),
-        result_sender: auth_sender,
-    };
     result_for_parent
         .unbounded_send((
             public_key.clone(),
             Some(data_for_network),
             ConnectionType::New,
         ))
-        .map_err(|_| ProtocolError::NoParentConnection)?;
-    let authorized = auth_receiver
-        .await
         .map_err(|_| ProtocolError::NoParentConnection)?;
 
     debug!(
@@ -221,7 +123,7 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
 pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     stream: S,
     secret_key: SK,
-    authorization_for_parent: mpsc::UnboundedSender<AuthContinuationHandler<SK::PublicKey>>,
+    authorizator: Authorizator<SK::PublicKey>,
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
@@ -232,7 +134,6 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
         "Incoming handshake with {} finished successfully.", public_key
     );
 
-    let authorizator = Authorizator::new(authorization_for_parent);
     let authorization_result = authorizator.is_authorized(public_key.clone()).await;
     let authorized = match authorization_result {
         Ok(result) => result,
