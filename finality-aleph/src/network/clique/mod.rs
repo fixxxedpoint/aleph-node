@@ -5,7 +5,6 @@ use futures::{
     channel::{mpsc, oneshot},
     StreamExt,
 };
-use log::debug;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::network::Data;
@@ -86,25 +85,13 @@ pub trait Listener {
     async fn accept(&mut self) -> Result<Self::Connection, Self::Error>;
 }
 
-pub trait Continuation<In, Out, AllOut> {
-    fn cont(self, continuation: impl FnMut(In) -> Out) -> AllOut;
-}
-
-// #[async_trait::async_trait]
-// pub trait AuthorizationContinuation {
-//     async fn authorize<PK, D, Cont, Ret>(&mut self, continuation: Cont)
-//     where
-//         Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType) -> Ret,
-//         Ret: Future<Output = bool>;
-// }
-
-pub struct AuthContinuationHandler<PK> {
+struct AuthContinuationHandler<PK> {
     result: PK,
     result_sender: oneshot::Sender<bool>,
 }
 
 impl<PK> AuthContinuationHandler<PK> {
-    pub fn new(result: PK) -> (Self, oneshot::Receiver<bool>) {
+    fn new(result: PK) -> (Self, oneshot::Receiver<bool>) {
         let (auth_sender, auth_receiver) = oneshot::channel();
         (
             Self {
@@ -115,21 +102,14 @@ impl<PK> AuthContinuationHandler<PK> {
         )
     }
 
-    pub fn handle_authorization(self, mut handler: impl FnMut(PK) -> bool) -> Result<(), ()> {
+    pub fn handle_authorization(
+        self,
+        mut handler: impl FnMut(PK) -> bool,
+    ) -> Result<(), AuthorizatorError> {
         let auth_result = handler(self.result);
-        self.result_sender.send(auth_result).map_err(|_| ())
-    }
-}
-
-impl<PK> Continuation<PK, bool, ()> for AuthContinuationHandler<PK> {
-    fn cont(self, mut continuation: impl FnMut(PK) -> bool) -> () {
-        let auth_result = continuation(self.result);
-        if let Err(er) = self.result_sender.send(auth_result) {
-            debug!(
-                target: LOG_TARGET,
-                "Unable to send a result from authorization."
-            );
-        }
+        self.result_sender
+            .send(auth_result)
+            .map_err(|_| AuthorizatorError::MissingService)
     }
 }
 
@@ -138,17 +118,26 @@ pub enum AuthorizatorError {
     ServiceDisappeared,
 }
 
-pub struct AuthorizationHandler<PK> {
+pub struct AuthorizationRequestHandler<PK> {
     receiver: mpsc::UnboundedReceiver<AuthContinuationHandler<PK>>,
 }
 
-impl<PK> AuthorizationHandler<PK> {
-    pub fn new(receiver: mpsc::UnboundedReceiver<AuthContinuationHandler<PK>>) -> Self {
+impl<PK> AuthorizationRequestHandler<PK> {
+    fn new(receiver: mpsc::UnboundedReceiver<AuthContinuationHandler<PK>>) -> Self {
         Self { receiver }
     }
 
-    pub async fn next_authorization_request(&mut self) -> Option<AuthContinuationHandler<PK>> {
-        self.receiver.next().await
+    pub async fn handle_authorization<F: Fn(PK) -> bool>(
+        &mut self,
+        handler: F,
+    ) -> Result<(), AuthorizatorError> {
+        let next = self
+            .receiver
+            .next()
+            .await
+            .ok_or(AuthorizatorError::MissingService)?;
+
+        next.handle_authorization(handler)
     }
 }
 
@@ -158,9 +147,9 @@ pub struct Authorizator<PK> {
 }
 
 impl<PK> Authorizator<PK> {
-    pub fn new() -> (Self, AuthorizationHandler<PK>) {
+    pub fn new() -> (Self, AuthorizationRequestHandler<PK>) {
         let (sender, receiver) = mpsc::unbounded();
-        (Self { sender }, AuthorizationHandler::new(receiver))
+        (Self { sender }, AuthorizationRequestHandler::new(receiver))
     }
 
     pub async fn is_authorized(&self, value: PK) -> Result<bool, AuthorizatorError> {
@@ -173,14 +162,3 @@ impl<PK> Authorizator<PK> {
             .map_err(|_| AuthorizatorError::ServiceDisappeared)
     }
 }
-
-// #[async_trait::async_trait]
-// impl AuthorizationContinuation for AuthContinuationHandler {
-//     async fn authorize<PK, D, Cont, Ret>(&mut self, continuation: Cont)
-//     where
-//         Cont: Fn(PK, Option<mpsc::UnboundedSender<D>>, ConnectionType) -> Ret,
-//         Ret: futures::Future<Output = bool>,
-//     {
-//         todo!()
-//     }
-// }

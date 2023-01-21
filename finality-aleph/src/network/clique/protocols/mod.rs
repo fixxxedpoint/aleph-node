@@ -1,6 +1,6 @@
 use std::fmt::{Display, Error as FmtError, Formatter};
 
-use futures::{channel::mpsc, Future};
+use futures::channel::mpsc;
 
 use crate::network::clique::{
     io::{ReceiveError, SendError},
@@ -14,8 +14,9 @@ mod v1;
 
 use handshake::HandshakeError;
 pub use negotiation::{protocol, ProtocolNegotiationError};
+pub use v0::handle_authorization;
 
-use super::Authorizator;
+use crate::network::clique::Authorizator;
 
 pub type Version = u32;
 
@@ -59,6 +60,8 @@ pub enum ProtocolError<PK: PublicKey> {
     NoParentConnection,
     /// Data channel closed.
     NoUserConnection,
+    /// Authorization error.
+    NotAuthorized,
 }
 
 impl<PK: PublicKey> Display for ProtocolError<PK> {
@@ -71,6 +74,7 @@ impl<PK: PublicKey> Display for ProtocolError<PK> {
             CardiacArrest => write!(f, "heartbeat stopped"),
             NoParentConnection => write!(f, "cannot send result to service"),
             NoUserConnection => write!(f, "cannot send data to user"),
+            NotAuthorized => write!(f, "user not authorized"),
         }
     }
 }

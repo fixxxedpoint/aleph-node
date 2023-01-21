@@ -1,8 +1,5 @@
 use codec::{Decode, Encode};
-use futures::{
-    channel::{mpsc, oneshot},
-    Future, StreamExt,
-};
+use futures::{channel::mpsc, StreamExt};
 use log::{debug, info, trace, warn};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -12,10 +9,11 @@ use tokio::{
 use crate::network::clique::{
     io::{receive_data, send_data},
     protocols::{
-        handshake::{v0_handshake_incoming, v0_handshake_outgoing, HandshakeError},
+        handle_authorization,
+        handshake::{v0_handshake_incoming, v0_handshake_outgoing},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Authorizator, AuthorizatorError, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Authorizator, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -134,25 +132,9 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
         "Incoming handshake with {} finished successfully.", public_key
     );
 
-    let authorization_result = authorizator.is_authorized(public_key.clone()).await;
-    let authorized = match authorization_result {
-        Ok(result) => result,
-        Err(err) => {
-            match err {
-                AuthorizatorError::MissingService => warn!(
-                    target: LOG_TARGET,
-                    "Authorization service for public_key={} went missing before we called it.",
-                    public_key
-                ),
-                AuthorizatorError::ServiceDisappeared => warn!(
-                    target: LOG_TARGET,
-                    "We managed to send authorization request for public_key={}, but were unable to receive an answer.",
-                    public_key
-                ),
-            }
-            return Err(ProtocolError::HandshakeError(HandshakeError::NotAuthorized));
-        }
-    };
+    let authorized = handle_authorization::<SK>(authorizator, public_key.clone())
+        .await
+        .map_err(|_| ProtocolError::NotAuthorized)?;
     if !authorized {
         warn!(
             target: LOG_TARGET,

@@ -182,7 +182,7 @@ where
     {
         let (handle, registration) = AbortHandle::new_pair();
         self.spawn_handle.spawn(name, None, async move {
-            Abortable::new(task, registration).await.unwrap_or(())
+            Abortable::new(task, registration).await.unwrap_or(());
         });
         self.exits_for_spawned
             .insert(public_key, handle)
@@ -194,10 +194,6 @@ where
             true => self.legacy_manager.peer_address(public_key),
             false => self.manager.peer_address(public_key),
         }
-    }
-
-    fn is_authorized(&self, public_key: &SK::PublicKey) -> bool {
-        self.manager.is_authorized(public_key)
     }
 
     fn add_connection(
@@ -265,6 +261,9 @@ where
         self.manager.remove_peer(public_key);
         self.legacy_manager.remove_peer(public_key);
         self.legacy_connected.remove(public_key);
+        self.exits_for_spawned
+            .remove(&public_key)
+            .map(|h| h.abort());
     }
 
     /// Run the service until a signal from exit.
@@ -274,6 +273,7 @@ where
         let (authorizator, mut authorization_handler) = Authorizator::new();
         use ServiceCommand::*;
         loop {
+            let manager = &self.manager;
             tokio::select! {
                 // got new incoming connection from the listener - spawn an incoming worker
                 maybe_stream = self.listener.accept() => match maybe_stream {
@@ -313,8 +313,8 @@ where
                         }
                     },
                 },
-                Some(request) = authorization_handler.next_authorization_request() => {
-                    if let Err(_) = request.handle_authorization(|pk| self.is_authorized(&pk)) {
+                result = authorization_handler.handle_authorization(|pk| manager.is_authorized(&pk)) => {
+                    if let Err(_) = result {
                         warn!(target: LOG_TARGET, "Other side of the authorization request is already closed.");
                     }
                 },

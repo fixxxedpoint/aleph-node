@@ -24,8 +24,6 @@ pub enum HandshakeError<PK: PublicKey> {
     ChallengeError(PK, PK),
     /// Timeout.
     TimedOut,
-    /// Not authorized.
-    NotAuthorized,
 }
 
 impl<PK: PublicKey> Display for HandshakeError<PK> {
@@ -41,7 +39,6 @@ impl<PK: PublicKey> Display for HandshakeError<PK> {
                 expected, got
             ),
             TimedOut => write!(f, "timed out"),
-            NotAuthorized => write!(f, "not authorized"),
         }
     }
 }

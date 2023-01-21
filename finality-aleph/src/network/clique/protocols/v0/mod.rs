@@ -1,5 +1,5 @@
 use futures::{channel::mpsc, StreamExt};
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::network::clique::{
@@ -8,7 +8,7 @@ use crate::network::clique::{
         handshake::{v0_handshake_incoming, v0_handshake_outgoing},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Authorizator, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Authorizator, AuthorizatorError, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 mod heartbeat;
@@ -99,6 +99,17 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
         "Incoming handshake with {} finished successfully.", public_key
     );
 
+    let authorized = handle_authorization::<SK>(authorizator, public_key.clone())
+        .await
+        .map_err(|_| ProtocolError::NotAuthorized)?;
+    if !authorized {
+        warn!(
+            target: LOG_TARGET,
+            "public_key={} was not authorized.", public_key
+        );
+        return Ok(());
+    }
+
     let (tx_exit, mut exit) = mpsc::unbounded();
     result_for_parent
         .unbounded_send((
@@ -120,6 +131,31 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
             _ = heartbeat => return Err(ProtocolError::CardiacArrest),
             result = receiving => return result,
             _ = exit.next() => return Ok(()),
+        }
+    }
+}
+
+pub async fn handle_authorization<SK: SecretKey>(
+    authorizator: Authorizator<SK::PublicKey>,
+    public_key: SK::PublicKey,
+) -> Result<bool, ()> {
+    let authorization_result = authorizator.is_authorized(public_key.clone()).await;
+    match authorization_result {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            match error {
+                AuthorizatorError::MissingService => warn!(
+                    target: LOG_TARGET,
+                    "Authorization service for public_key={} went missing before we called it.",
+                    public_key
+                ),
+                AuthorizatorError::ServiceDisappeared => warn!(
+                    target: LOG_TARGET,
+                    "We managed to send authorization request for public_key={}, but were unable to receive an answer.",
+                    public_key
+                ),
+            };
+            Err(())
         }
     }
 }
