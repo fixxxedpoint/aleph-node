@@ -8,7 +8,7 @@ use crate::network::clique::{
         handshake::{v0_handshake_incoming, v0_handshake_outgoing},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Authorizator, AuthorizatorError, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Authorization, AuthorizatorError, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 mod heartbeat;
@@ -85,10 +85,10 @@ async fn receiving<PK: PublicKey, D: Data, S: AsyncRead + Unpin + Send>(
 
 /// Performs the handshake, and then keeps sending data received from the network to the parent service.
 /// Exits on parent request, or in case of broken or dead network connection.
-pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
+pub async fn incoming<SK: SecretKey, D: Data, S: Splittable, A: Authorization<SK::PublicKey>>(
     stream: S,
     secret_key: SK,
-    authorizator: Authorizator<SK::PublicKey>,
+    authorizator: A,
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
@@ -99,7 +99,7 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
         "Incoming handshake with {} finished successfully.", public_key
     );
 
-    let authorized = handle_authorization::<SK>(authorizator, public_key.clone())
+    let authorized = handle_authorization::<SK, A>(authorizator, public_key.clone())
         .await
         .map_err(|_| ProtocolError::NotAuthorized)?;
     if !authorized {
@@ -135,8 +135,8 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
     }
 }
 
-pub async fn handle_authorization<SK: SecretKey>(
-    authorizator: Authorizator<SK::PublicKey>,
+pub async fn handle_authorization<SK: SecretKey, A: Authorization<SK::PublicKey>>(
+    authorizator: A,
     public_key: SK::PublicKey,
 ) -> Result<bool, ()> {
     let authorization_result = authorizator.is_authorized(public_key.clone()).await;
@@ -166,7 +166,7 @@ mod tests {
 
     use super::{incoming, outgoing, ProtocolError};
     use crate::network::clique::{
-        mock::{key, MockPrelims, MockSplittable},
+        mock::{key, MockAuthorizer, MockPrelims, MockSplittable},
         protocols::ConnectionType,
         Data,
     };
@@ -182,6 +182,7 @@ mod tests {
         let incoming_handle = Box::pin(incoming(
             stream_incoming,
             pen_incoming.clone(),
+            MockAuthorizer::new(),
             incoming_result_for_service,
             data_for_user,
         ));

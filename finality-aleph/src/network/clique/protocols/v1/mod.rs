@@ -13,7 +13,7 @@ use crate::network::clique::{
         handshake::{v0_handshake_incoming, v0_handshake_outgoing},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Authorizator, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Authorization, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -118,10 +118,10 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
 /// Performs the incoming handshake, and then manages a connection sending and receiving data.
 /// Exits on parent request (when the data source is dropped), or in case of broken or dead
 /// network connection.
-pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
+pub async fn incoming<SK: SecretKey, D: Data, S: Splittable, A: Authorization<SK::PublicKey>>(
     stream: S,
     secret_key: SK,
-    authorizator: Authorizator<SK::PublicKey>,
+    authorizator: A,
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
@@ -132,7 +132,7 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable>(
         "Incoming handshake with {} finished successfully.", public_key
     );
 
-    let authorized = handle_authorization::<SK>(authorizator, public_key.clone())
+    let authorized = handle_authorization::<SK, A>(authorizator, public_key.clone())
         .await
         .map_err(|_| ProtocolError::NotAuthorized)?;
     if !authorized {
@@ -185,7 +185,7 @@ mod tests {
     use crate::network::clique::{
         mock::{key, MockPrelims, MockPublicKey, MockSplittable},
         protocols::{v1::Message, ConnectionType},
-        Data,
+        Authorizator, Data,
     };
 
     fn prepare<D: Data>() -> MockPrelims<D> {
@@ -197,9 +197,11 @@ mod tests {
         let (outgoing_result_for_service, result_from_outgoing) = mpsc::unbounded();
         let (incoming_data_for_user, data_from_incoming) = mpsc::unbounded::<D>();
         let (outgoing_data_for_user, data_from_outgoing) = mpsc::unbounded::<D>();
+        let (authorizer, auth_handler) = Authorizator::new();
         let incoming_handle = Box::pin(incoming(
             stream_incoming,
             pen_incoming.clone(),
+            authorizer,
             incoming_result_for_service,
             incoming_data_for_user,
         ));
