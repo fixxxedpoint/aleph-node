@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fmt::{Display, Error as FmtError, Formatter},
     io::Result as IoResult,
+    marker::PhantomData,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -557,17 +558,21 @@ pub struct MockPrelims<D> {
     pub result_from_outgoing: UnboundedReceiver<ResultForService<MockPublicKey, D>>,
 }
 
-pub struct MockAuthorizer {}
+pub struct MockAuthorizer<PK> {
+    _phantom: PhantomData<PK>,
+}
 
-impl MockAuthorizer {
+impl<PK> MockAuthorizer<PK> {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            _phantom: PhantomData,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl<PK: Send> Authorization<PK> for MockAuthorizer {
-    async fn is_authorized(&self, value: PK) -> Result<bool, AuthorizatorError> {
+impl<PK: Send + Sync> Authorization<PK> for MockAuthorizer<PK> {
+    async fn is_authorized(&self, _: PK) -> Result<bool, AuthorizatorError> {
         Ok(true)
     }
 }
