@@ -205,35 +205,21 @@ pub async fn handle_incoming<
 #[cfg(test)]
 mod tests {
     use std::{
-        io::Write,
         pin::Pin,
         sync::Mutex,
         task::{Context, Poll},
     };
 
-    use futures::{
-        channel::{
-            mpsc::{self, UnboundedReceiver},
-            oneshot,
-        },
-        pin_mut, FutureExt, StreamExt,
-    };
-    use tokio::{
-        io::{AsyncRead, AsyncWrite, ReadBuf},
-        net::TcpStream,
-    };
+    use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
+    use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-    use super::{incoming, manage_connection, outgoing, Handshake, ProtocolError};
+    use super::{incoming, outgoing, Handshake, ProtocolError};
     use crate::network::clique::{
         mock::{
-            key, new_authorizer, MockAuthorizer, MockPrelims, MockPublicKey, MockSecretKey,
-            MockSplittable, MockWrappedSplittable,
+            key, new_authorizer, MockAuthorizer, MockPrelims, MockSecretKey, MockSplittable,
+            MockWrappedSplittable,
         },
-        protocols::{
-            handshake::HandshakeError,
-            v1::{handle_incoming, Message},
-            ConnectionType,
-        },
+        protocols::{handshake::HandshakeError, v1::handle_incoming, ConnectionType},
         ConnectionInfo, Data, SecretKey, Splittable,
     };
 
@@ -520,13 +506,6 @@ mod tests {
     }
 
     impl<A, R> WrappingReader<A, R> {
-        pub fn new_panicking() -> impl AsyncRead {
-            WrappingReader {
-                action: || panic!("Reader should never be called"),
-                reader: IteratorWrapper([0].into_iter().cycle()),
-            }
-        }
-
         pub fn new_with_closure(reader: R, closure: A) -> Self {
             Self {
                 action: closure,
@@ -588,12 +567,6 @@ mod tests {
         }
     }
 
-    fn new_panicking_writer() -> WrappingWriter<impl FnMut() + Unpin, impl AsyncWrite + Unpin> {
-        WrappingWriter::new_with_closure(Vec::new(), || {
-            panic!("Writer should never be called");
-        })
-    }
-
     impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for WrappingWriter<A, W> {
         fn poll_write(
             self: Pin<&mut Self>,
@@ -648,7 +621,6 @@ mod tests {
 
     #[tokio::test]
     async fn do_not_call_sender_and_receiver_until_authorized() {
-        let (_, secret_key) = key();
         let writer = WrappingWriter::new_with_closure(Vec::new(), move || {
             panic!("Writer should not be called.");
         });
@@ -665,7 +637,9 @@ mod tests {
             *authorizer_called.lock().unwrap() = true;
             false
         });
+        let (_, secret_key) = key();
         // it should exit immediately after we reject authorization
+        // `NoHandshake` mocks the real handshake procedure. It does not call reader and writer.
         let result = handle_incoming::<_, _, _, _, NoHandshake>(
             stream,
             secret_key,
@@ -676,343 +650,5 @@ mod tests {
         .await;
         assert!(result.is_ok());
         assert!(*authorizer_called.lock().unwrap());
-    }
-
-    #[tokio::test]
-    async fn try_starving_sender() {
-        let (user_sender, _user_receiver) = mpsc::unbounded();
-        let (data_from_user_sender, data_from_user_receiver) = mpsc::unbounded();
-        let mut data_from_user_sender = Some(data_from_user_sender);
-
-        let mut data_storage = Vec::<u8>::new();
-        let data_to_send = Message::Data(vec![1u8, 2u8, 3u8]);
-        data_storage = crate::network::clique::protocols::v1::send_data(data_storage, data_to_send)
-            .await
-            .expect("we should be able to encode data");
-
-        let reader = WrappingReader {
-            action: move || {
-                data_from_user_sender
-                    .take()
-                    .map(|ch| drop(ch))
-                    .unwrap_or(())
-            },
-            reader: IteratorWrapper(data_storage.into_iter().cycle()),
-        };
-        let panicking_writer = new_panicking_writer();
-
-        manage_connection::<MockPublicKey, Vec<u8>, _, _>(
-            panicking_writer,
-            reader,
-            data_from_user_receiver,
-            user_sender,
-        )
-        .await
-        .expect("it should never return");
-    }
-
-    #[tokio::test]
-    async fn try_starving_sender_with_tcp_stream() {
-        let (user_sender, mut user_receiver) = mpsc::unbounded();
-        let (data_from_user_sender, data_from_user_receiver): (_, UnboundedReceiver<Vec<u8>>) =
-            mpsc::unbounded();
-        let mut data_from_user_sender = Some(data_from_user_sender);
-
-        let localhost_address = "127.0.0.1:6666";
-        let listener = std::net::TcpListener::bind(localhost_address)
-            .expect("we should be able to create a TcpListener");
-
-        let mut data = Vec::<u8>::new();
-        let data_to_send = Message::Data(vec![1u8, 2u8, 3u8]);
-        data = crate::network::clique::protocols::v1::send_data(data, data_to_send)
-            .await
-            .expect("we should be able to encode data");
-        let (sender, receiver) = oneshot::channel();
-        // spawn_blocking(|| {
-        std::thread::spawn(move || {
-            sender
-                .send(())
-                .expect("we should be able to send thread initialization signal");
-
-            let mut stream = listener
-                .accept()
-                .map(|(stream, _)| stream)
-                .expect("we should be able to accept an connection");
-
-            loop {
-                // sleep(Duration::from_secs(1))
-                stream
-                    .write_all(&data[..])
-                    .expect("we should be able to send data using TcpStream");
-            }
-        });
-
-        receiver
-            .await
-            .expect("we should be able to receive thread initialization signal");
-
-        struct MockReader<A, R> {
-            action: A,
-            reader: R,
-        }
-
-        impl<A: FnMut() + Unpin, R: AsyncRead + Unpin> AsyncRead for MockReader<A, R> {
-            fn poll_read(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-                buf: &mut ReadBuf<'_>,
-            ) -> Poll<std::io::Result<()>> {
-                let self_mut = self.get_mut();
-                (self_mut.action)();
-                Pin::new(&mut self_mut.reader).poll_read(cx, buf)
-            }
-        }
-
-        let mut out_connection = TcpStream::connect(localhost_address)
-            .await
-            .expect("we should be able to connect to our TcpListener");
-
-        let (writer, reader) = out_connection.split();
-
-        let reader = MockReader {
-            action: move || {
-                // println!("reading");
-                // println!("dropping");
-                // data_from_user_sender
-                //     .take()
-                //     .map(|ch| drop(ch))
-                //     .unwrap_or(())
-            },
-            reader,
-        };
-
-        struct MockWriter<A, W> {
-            action: A,
-            writer: W,
-        }
-
-        impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for MockWriter<A, W> {
-            fn poll_write(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-                buf: &[u8],
-            ) -> Poll<std::io::Result<usize>> {
-                // panic!("MockWriter `poll_write` should never be called");
-                // Poll::Ready(std::io::Result::Ok(1))
-                let self_mut = self.get_mut();
-                // Poll::Pending
-                println!("write called");
-                (self_mut.action)();
-                return Poll::Pending;
-
-                // println!("calling action");
-                // (self_mut.action)();
-
-                let result = <W as AsyncWrite>::poll_write(Pin::new(&mut self_mut.writer), cx, buf);
-                if let Poll::Pending = result {
-                    println!("calling action");
-                    (self_mut.action)();
-                }
-                result
-            }
-
-            fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-                // panic!("MockWriter `poll_flush` should never be called");
-                // Poll::Ready(std::io::Result::Ok(()))
-                // Poll::Pending
-                // self.as_mut().poll_flush(cx)
-                println!("flush called");
-                <W as AsyncWrite>::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
-            }
-
-            fn poll_shutdown(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll<std::io::Result<()>> {
-                // panic!("MockWriter `poll_shutdown` should never be called");
-                // Poll::Ready(std::io::Result::Ok(()))
-                // Poll::Pending
-                println!("shutdown called");
-                <W as AsyncWrite>::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
-            }
-        }
-
-        tokio::spawn(async move {
-            while let Some(_) = user_receiver.next().await {
-                println!("received data on user-channel");
-            }
-        });
-        manage_connection::<MockPublicKey, Vec<u8>, _, _>(
-            MockWriter {
-                action: move || {
-                    println!("dropping");
-                    data_from_user_sender
-                        .take()
-                        .map(|ch| drop(ch))
-                        .unwrap_or(())
-                },
-                writer,
-            },
-            reader,
-            data_from_user_receiver,
-            user_sender,
-        )
-        .await
-        .expect("it should never return");
-
-        panic!("this test should never end");
-    }
-
-    #[tokio::test]
-    async fn make_sender_never_call_timeout_again() {
-        let (user_sender, mut user_receiver) = mpsc::unbounded();
-        let (data_from_user_sender, data_from_user_receiver): (_, UnboundedReceiver<Vec<u8>>) =
-            mpsc::unbounded();
-        let mut data_from_user_sender = Some(data_from_user_sender);
-
-        let localhost_address = "127.0.0.1:6666";
-        let listener = std::net::TcpListener::bind(localhost_address)
-            .expect("we should be able to create a TcpListener");
-
-        let mut data = Vec::<u8>::new();
-        let data_to_send = Message::Data(vec![1u8, 2u8, 3u8]);
-        data = crate::network::clique::protocols::v1::send_data(data, data_to_send)
-            .await
-            .expect("we should be able to encode data");
-        let (sender, receiver) = oneshot::channel();
-        // spawn_blocking(|| {
-        std::thread::spawn(move || {
-            sender
-                .send(())
-                .expect("we should be able to send thread initialization signal");
-
-            let mut stream = listener
-                .accept()
-                .map(|(stream, _)| stream)
-                .expect("we should be able to accept an connection");
-
-            loop {
-                // sleep(Duration::from_secs(1))
-                stream
-                    .write_all(&data[..])
-                    .expect("we should be able to send data using TcpStream");
-            }
-        });
-
-        receiver
-            .await
-            .expect("we should be able to receive thread initialization signal");
-
-        struct MockReader<A, R> {
-            action: A,
-            reader: R,
-        }
-
-        impl<A: FnMut() + Unpin, R: AsyncRead + Unpin> AsyncRead for MockReader<A, R> {
-            fn poll_read(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-                buf: &mut ReadBuf<'_>,
-            ) -> Poll<std::io::Result<()>> {
-                let self_mut = self.get_mut();
-                (self_mut.action)();
-                Pin::new(&mut self_mut.reader).poll_read(cx, buf)
-            }
-        }
-
-        let mut out_connection = TcpStream::connect(localhost_address)
-            .await
-            .expect("we should be able to connect to our TcpListener");
-
-        let (writer, reader) = out_connection.split();
-
-        let reader = MockReader {
-            action: move || {
-                // println!("reading");
-                // println!("dropping");
-                // data_from_user_sender
-                //     .take()
-                //     .map(|ch| drop(ch))
-                //     .unwrap_or(())
-            },
-            reader,
-        };
-
-        struct MockWriter<A, W> {
-            action: A,
-            writer: W,
-        }
-
-        impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for MockWriter<A, W> {
-            fn poll_write(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-                buf: &[u8],
-            ) -> Poll<std::io::Result<usize>> {
-                // panic!("MockWriter `poll_write` should never be called");
-                // Poll::Ready(std::io::Result::Ok(1))
-                let self_mut = self.get_mut();
-                // Poll::Pending
-                println!("write called");
-                (self_mut.action)();
-                return Poll::Pending;
-                // return Poll::Ready(Ok(buf.len()));
-
-                // println!("calling action");
-                // (self_mut.action)();
-
-                let result = <W as AsyncWrite>::poll_write(Pin::new(&mut self_mut.writer), cx, buf);
-                if let Poll::Pending = result {
-                    println!("calling action");
-                    (self_mut.action)();
-                }
-                result
-            }
-
-            fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-                // panic!("MockWriter `poll_flush` should never be called");
-                // Poll::Ready(std::io::Result::Ok(()))
-                // Poll::Pending
-                // self.as_mut().poll_flush(cx)
-                println!("flush called");
-                <W as AsyncWrite>::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
-            }
-
-            fn poll_shutdown(
-                self: Pin<&mut Self>,
-                cx: &mut Context<'_>,
-            ) -> Poll<std::io::Result<()>> {
-                // panic!("MockWriter `poll_shutdown` should never be called");
-                // Poll::Ready(std::io::Result::Ok(()))
-                // Poll::Pending
-                println!("shutdown called");
-                <W as AsyncWrite>::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
-            }
-        }
-
-        tokio::spawn(async move {
-            while let Some(_) = user_receiver.next().await {
-                // println!("received data on user-channel");
-            }
-        });
-        manage_connection::<MockPublicKey, Vec<u8>, _, _>(
-            MockWriter {
-                action: move || {
-                    println!("dropping");
-                    data_from_user_sender
-                        .take()
-                        .map(|ch| drop(ch))
-                        .unwrap_or(())
-                },
-                writer,
-            },
-            reader,
-            data_from_user_receiver,
-            user_sender,
-        )
-        .await
-        .expect("it should never return");
-
-        panic!("this test should never end");
     }
 }
