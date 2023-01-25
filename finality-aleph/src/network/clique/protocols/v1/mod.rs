@@ -6,6 +6,7 @@ use tokio::{
     time::{timeout, Duration},
 };
 
+use super::handshake::HandshakeError;
 use crate::network::clique::{
     io::{receive_data, send_data},
     protocols::{
@@ -115,6 +116,26 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
     manage_connection(sender, receiver, data_from_user, data_for_user).await
 }
 
+#[async_trait::async_trait]
+pub trait Handshake<SK: SecretKey> {
+    async fn handshake<S: Splittable>(
+        stream: S,
+        secret_key: SK,
+    ) -> Result<(S::Sender, S::Receiver, SK::PublicKey), HandshakeError<SK::PublicKey>>;
+}
+
+struct DefaultHandshake {}
+
+#[async_trait::async_trait]
+impl<SK: SecretKey> Handshake<SK> for DefaultHandshake {
+    async fn handshake<S: Splittable>(
+        stream: S,
+        secret_key: SK,
+    ) -> Result<(S::Sender, S::Receiver, SK::PublicKey), HandshakeError<SK::PublicKey>> {
+        v0_handshake_incoming(stream, secret_key).await
+    }
+}
+
 /// Performs the incoming handshake, and then manages a connection sending and receiving data.
 /// Exits on parent request (when the data source is dropped), or in case of broken or dead
 /// network connection.
@@ -125,8 +146,31 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable, A: Authorization<SK
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
+    handle_incoming::<_, _, _, _, DefaultHandshake>(
+        stream,
+        secret_key,
+        authorizator,
+        result_for_parent,
+        data_for_user,
+    )
+    .await
+}
+
+pub async fn handle_incoming<
+    SK: SecretKey,
+    D: Data,
+    S: Splittable,
+    A: Authorization<SK::PublicKey>,
+    H: Handshake<SK>,
+>(
+    stream: S,
+    secret_key: SK,
+    authorizator: A,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+    data_for_user: mpsc::UnboundedSender<D>,
+) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Waiting for extended hand...");
-    let (sender, receiver, public_key) = v0_handshake_incoming(stream, secret_key).await?;
+    let (sender, receiver, public_key) = H::handshake(stream, secret_key).await?;
     info!(
         target: LOG_TARGET,
         "Incoming handshake with {} finished successfully.", public_key
@@ -162,6 +206,7 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable, A: Authorization<SK
 mod tests {
     use std::{
         io::Write,
+        marker::PhantomData,
         pin::Pin,
         task::{Context, Poll},
     };
@@ -178,14 +223,18 @@ mod tests {
         net::TcpStream,
     };
 
-    use super::{incoming, manage_connection, outgoing, ProtocolError};
+    use super::{incoming, manage_connection, outgoing, Handshake, ProtocolError};
     use crate::network::clique::{
         mock::{
-            key, new_authorizer, MockAuthorizer, MockPrelims, MockPublicKey, MockSplittable,
-            MockWrappedSplittable,
+            key, new_authorizer, MockAuthorizer, MockPrelims, MockPublicKey, MockSecretKey,
+            MockSplittable, MockWrappedSplittable,
         },
-        protocols::{v1::Message, ConnectionType},
-        ConnectionInfo, Data,
+        protocols::{
+            handshake::HandshakeError,
+            v1::{handle_incoming, Message},
+            ConnectionType,
+        },
+        ConnectionInfo, Data, SecretKey, Splittable,
     };
 
     fn prepare<D: Data>() -> MockPrelims<D> {
@@ -534,27 +583,15 @@ mod tests {
     }
 
     impl<A, W> WrappingWriter<A, W> {
-        pub fn new_panicking() -> impl AsyncWrite {
-            WrappingWriter {
-                action: || {
-                    panic!("Writer should never be called");
-                },
-                writer: Vec::new(),
-            }
-        }
-
         pub fn new_with_closure(writer: W, action: A) -> Self {
             Self { action, writer }
         }
     }
 
     fn new_panicking_writer() -> WrappingWriter<impl FnMut() + Unpin, impl AsyncWrite + Unpin> {
-        WrappingWriter {
-            action: || {
-                panic!("Writer should never be called");
-            },
-            writer: Vec::new(),
-        }
+        WrappingWriter::new_with_closure(Vec::new(), || {
+            panic!("Writer should never be called");
+        })
     }
 
     impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for WrappingWriter<A, W> {
@@ -589,23 +626,37 @@ mod tests {
         }
     }
 
+    trait Provider {
+        type Output;
+
+        fn provide() -> Self::Output;
+    }
+
+    struct NoHandshake<P: Provider> {
+        _phantom_data: PhantomData<P>,
+    }
+
+    #[async_trait::async_trait]
+    impl<SK: SecretKey, P: Provider<Output = SK::PublicKey>> Handshake<SK> for NoHandshake<P> {
+        async fn handshake<S: Splittable>(
+            stream: S,
+            secret_key: SK,
+        ) -> Result<(S::Sender, S::Receiver, SK::PublicKey), HandshakeError<SK::PublicKey>>
+        {
+            let (sender, receiver) = stream.split();
+            Ok((sender, receiver, P::provide()))
+        }
+    }
+
     #[tokio::test]
     async fn do_not_call_sender_and_receiver_until_authorized() {
-        let (public_key, secret_key) = key();
-        let mut writer_counter = 0;
+        let (_, secret_key) = key();
         let writer = WrappingWriter::new_with_closure(Vec::new(), move || {
-            writer_counter += 1;
-            if writer_counter > 1 {
-                panic!("Writer should be called just once, for the purpose of handshake.");
-            }
+            panic!("Writer should be called just once, for the purpose of handshake.");
         });
-        let mut reader_counter = 0;
         let reader =
             WrappingReader::new_with_closure(IteratorWrapper([0].into_iter().cycle()), move || {
-                reader_counter += 1;
-                if reader_counter > 1 {
-                    panic!("Reader should be called just once, for the purpose of handshake.");
-                }
+                panic!("Reader should be called just once, for the purpose of handshake.");
             });
         let stream = MockWrappedSplittable::new(reader, writer);
         let (result_for_parent, _) = mpsc::unbounded();
@@ -613,13 +664,24 @@ mod tests {
 
         // TODO we need to call the mock anyway for handshake. It should count number of calls
         // and test should fail if more than threshold many calls
-        incoming(
+        // it should exit immediately after we reject authorization
+        struct KeyProvider {}
+        impl Provider for KeyProvider {
+            type Output = MockPublicKey;
+
+            fn provide() -> Self::Output {
+                key().0
+            }
+        }
+        handle_incoming::<_, _, _, _, NoHandshake<KeyProvider>>(
             stream,
             secret_key,
             MockAuthorizer::new_with_closure(|_| false),
             result_for_parent,
             data_for_user,
-        );
+        )
+        .await
+        .expect("it should return Ok");
     }
 
     #[tokio::test]
@@ -716,7 +778,7 @@ mod tests {
             .await
             .expect("we should be able to connect to our TcpListener");
 
-        let (reader, writer) = out_connection.split();
+        let (writer, reader) = out_connection.split();
 
         let reader = MockReader {
             action: move || {
@@ -868,7 +930,7 @@ mod tests {
             .await
             .expect("we should be able to connect to our TcpListener");
 
-        let (reader, writer) = out_connection.split();
+        let (writer, reader) = out_connection.split();
 
         let reader = MockReader {
             action: move || {
