@@ -180,9 +180,12 @@ mod tests {
 
     use super::{incoming, manage_connection, outgoing, ProtocolError};
     use crate::network::clique::{
-        mock::{key, MockAuthorizer, MockPrelims, MockPublicKey, MockSplittable},
+        mock::{
+            key, new_authorizer, MockAuthorizer, MockPrelims, MockPublicKey, MockSplittable,
+            MockWrappedSplittable,
+        },
         protocols::{v1::Message, ConnectionType},
-        Data,
+        ConnectionInfo, Data,
     };
 
     fn prepare<D: Data>() -> MockPrelims<D> {
@@ -194,7 +197,7 @@ mod tests {
         let (outgoing_result_for_service, result_from_outgoing) = mpsc::unbounded();
         let (incoming_data_for_user, data_from_incoming) = mpsc::unbounded::<D>();
         let (outgoing_data_for_user, data_from_outgoing) = mpsc::unbounded::<D>();
-        let authorizer = MockAuthorizer::new();
+        let authorizer = new_authorizer();
         let incoming_handle = Box::pin(incoming(
             stream_incoming,
             pen_incoming.clone(),
@@ -467,6 +470,22 @@ mod tests {
         reader: R,
     }
 
+    impl<A, R> WrappingReader<A, R> {
+        pub fn new_panicking() -> impl AsyncRead {
+            WrappingReader {
+                action: || panic!("Reader should never be called"),
+                reader: IteratorWrapper([0].into_iter().cycle()),
+            }
+        }
+
+        pub fn new_with_closure(reader: R, closure: A) -> Self {
+            Self {
+                action: closure,
+                reader,
+            }
+        }
+    }
+
     impl<A: FnMut() + Unpin, R: AsyncRead + Unpin> AsyncRead for WrappingReader<A, R> {
         fn poll_read(
             self: Pin<&mut Self>,
@@ -476,6 +495,12 @@ mod tests {
             let self_mut = self.get_mut();
             (self_mut.action)();
             Pin::new(&mut self_mut.reader).poll_read(cx, buf)
+        }
+    }
+
+    impl<A, W> ConnectionInfo for WrappingReader<A, W> {
+        fn peer_address_info(&self) -> crate::network::clique::PeerAddressInfo {
+            String::from("WRAPPING_READER")
         }
     }
 
@@ -503,30 +528,98 @@ mod tests {
         }
     }
 
-    struct PanickingWriter {}
+    struct WrappingWriter<A, W> {
+        action: A,
+        writer: W,
+    }
 
-    impl PanickingWriter {
-        pub fn new() -> Self {
-            Self {}
+    impl<A, W> WrappingWriter<A, W> {
+        pub fn new_panicking() -> impl AsyncWrite {
+            WrappingWriter {
+                action: || {
+                    panic!("Writer should never be called");
+                },
+                writer: Vec::new(),
+            }
+        }
+
+        pub fn new_with_closure(writer: W, action: A) -> Self {
+            Self { action, writer }
         }
     }
 
-    impl AsyncWrite for PanickingWriter {
+    fn new_panicking_writer() -> WrappingWriter<impl FnMut() + Unpin, impl AsyncWrite + Unpin> {
+        WrappingWriter {
+            action: || {
+                panic!("Writer should never be called");
+            },
+            writer: Vec::new(),
+        }
+    }
+
+    impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for WrappingWriter<A, W> {
         fn poll_write(
             self: Pin<&mut Self>,
-            _: &mut Context<'_>,
-            _: &[u8],
-        ) -> Poll<std::io::Result<usize>> {
-            panic!("MockWriter `poll_write` should never be called");
+            cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<Result<usize, std::io::Error>> {
+            let self_mut = self.get_mut();
+            (self_mut.action)();
+            AsyncWrite::poll_write(Pin::new(&mut self_mut.writer), cx, buf)
         }
 
-        fn poll_flush(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-            panic!("MockWriter `poll_flush` should never be called");
+        fn poll_flush(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), std::io::Error>> {
+            AsyncWrite::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
         }
 
-        fn poll_shutdown(self: Pin<&mut Self>, _: &mut Context<'_>) -> Poll<std::io::Result<()>> {
-            panic!("MockWriter `poll_shutdown` should never be called");
+        fn poll_shutdown(
+            self: Pin<&mut Self>,
+            cx: &mut Context<'_>,
+        ) -> Poll<Result<(), std::io::Error>> {
+            AsyncWrite::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
         }
+    }
+
+    impl<A, W> ConnectionInfo for WrappingWriter<A, W> {
+        fn peer_address_info(&self) -> crate::network::clique::PeerAddressInfo {
+            String::from("WRAPPING_WRITER")
+        }
+    }
+
+    #[tokio::test]
+    async fn do_not_call_sender_and_receiver_until_authorized() {
+        let (public_key, secret_key) = key();
+        let mut writer_counter = 0;
+        let writer = WrappingWriter::new_with_closure(Vec::new(), move || {
+            writer_counter += 1;
+            if writer_counter > 1 {
+                panic!("Writer should be called just once, for the purpose of handshake.");
+            }
+        });
+        let mut reader_counter = 0;
+        let reader =
+            WrappingReader::new_with_closure(IteratorWrapper([0].into_iter().cycle()), move || {
+                reader_counter += 1;
+                if reader_counter > 1 {
+                    panic!("Reader should be called just once, for the purpose of handshake.");
+                }
+            });
+        let stream = MockWrappedSplittable::new(reader, writer);
+        let (result_for_parent, _) = mpsc::unbounded();
+        let (data_for_user, _) = mpsc::unbounded::<Vec<i32>>();
+
+        // TODO we need to call the mock anyway for handshake. It should count number of calls
+        // and test should fail if more than threshold many calls
+        incoming(
+            stream,
+            secret_key,
+            MockAuthorizer::new_with_closure(|_| false),
+            result_for_parent,
+            data_for_user,
+        );
     }
 
     #[tokio::test]
@@ -550,7 +643,7 @@ mod tests {
             },
             reader: IteratorWrapper(data_storage.into_iter().cycle()),
         };
-        let panicking_writer = PanickingWriter::new();
+        let panicking_writer = new_panicking_writer();
 
         manage_connection::<MockPublicKey, Vec<u8>, _, _>(
             panicking_writer,

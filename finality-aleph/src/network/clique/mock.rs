@@ -167,6 +167,67 @@ impl Splittable for MockSplittable {
     }
 }
 
+pub struct MockWrappedSplittable<R, W> {
+    reader: R,
+    writer: W,
+}
+
+impl<R, W> MockWrappedSplittable<R, W> {
+    pub fn new(reader: R, writer: W) -> Self {
+        Self { reader, writer }
+    }
+}
+
+impl<R: Unpin, W: AsyncWrite + Unpin> AsyncWrite for MockWrappedSplittable<R, W> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, std::io::Error>> {
+        Pin::new(&mut self.get_mut().writer).poll_write(cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+        Pin::new(&mut self.get_mut().writer).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
+        Pin::new(&mut self.get_mut().writer).poll_shutdown(cx)
+    }
+}
+
+impl<R: AsyncRead + Unpin, W: Unpin> AsyncRead for MockWrappedSplittable<R, W> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        Pin::new(&mut self.get_mut().reader).poll_read(cx, buf)
+    }
+}
+
+impl<R, W> ConnectionInfo for MockWrappedSplittable<R, W> {
+    fn peer_address_info(&self) -> PeerAddressInfo {
+        String::from("MOCK_WRAPPED_ADDRESS")
+    }
+}
+
+impl<
+        R: AsyncRead + Unpin + Send + ConnectionInfo,
+        W: AsyncWrite + Unpin + Send + ConnectionInfo,
+    > Splittable for MockWrappedSplittable<R, W>
+{
+    type Sender = W;
+    type Receiver = R;
+
+    fn split(self) -> (Self::Sender, Self::Receiver) {
+        (self.writer, self.reader)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Encode, Decode)]
 pub struct MockAddressingInformation {
     peer_id: MockPublicKey,
@@ -558,21 +619,35 @@ pub struct MockPrelims<D> {
     pub result_from_outgoing: UnboundedReceiver<ResultForService<MockPublicKey, D>>,
 }
 
-pub struct MockAuthorizer<PK> {
-    _phantom: PhantomData<PK>,
+pub struct MockAuthorizer<PK, C> {
+    check: C,
+    _phantom_data: PhantomData<PK>,
 }
 
-impl<PK> MockAuthorizer<PK> {
-    pub fn new() -> Self {
-        Self {
-            _phantom: PhantomData,
+impl<PK: Send + Sync, C> MockAuthorizer<PK, C> {
+    pub fn new() -> MockAuthorizer<PK, impl Fn(PK) -> bool> {
+        // MockAuthorizer {
+        //     check: |_: PK| true,
+        //     _phantom_data: PhantomData,
+        // }
+        MockAuthorizer::new_with_closure(|_: PK| true)
+    }
+
+    pub fn new_with_closure(check: C) -> MockAuthorizer<PK, C> {
+        MockAuthorizer {
+            check,
+            _phantom_data: PhantomData,
         }
     }
 }
 
+pub fn new_authorizer<PK: Send + Sync>() -> MockAuthorizer<PK, impl Fn(PK) -> bool> {
+    MockAuthorizer::new_with_closure(|_: PK| true)
+}
+
 #[async_trait::async_trait]
-impl<PK: Send + Sync> Authorization<PK> for MockAuthorizer<PK> {
-    async fn is_authorized(&self, _: PK) -> Result<bool, AuthorizatorError> {
-        Ok(true)
+impl<PK: Send + Sync, C: Fn(PK) -> bool + Send + Sync> Authorization<PK> for MockAuthorizer<PK, C> {
+    async fn is_authorized(&self, public_key: PK) -> Result<bool, AuthorizatorError> {
+        Ok((self.check)(public_key))
     }
 }

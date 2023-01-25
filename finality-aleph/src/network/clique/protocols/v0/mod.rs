@@ -166,7 +166,7 @@ mod tests {
 
     use super::{incoming, outgoing, ProtocolError};
     use crate::network::clique::{
-        mock::{key, MockAuthorizer, MockPrelims, MockSplittable},
+        mock::{key, new_authorizer, MockAuthorizer, MockPrelims, MockSplittable},
         protocols::ConnectionType,
         Data,
     };
@@ -182,7 +182,7 @@ mod tests {
         let incoming_handle = Box::pin(incoming(
             stream_incoming,
             pen_incoming.clone(),
-            MockAuthorizer::new(),
+            new_authorizer(),
             incoming_result_for_service,
             data_for_user,
         ));
