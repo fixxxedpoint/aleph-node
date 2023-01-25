@@ -3,12 +3,13 @@ use log::{debug, info, trace, warn};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::network::clique::{
+    authorization::{Authorization, AuthorizatorError},
     io::{receive_data, send_data},
     protocols::{
         handshake::{v0_handshake_incoming, v0_handshake_outgoing},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Authorization, AuthorizatorError, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 mod heartbeat;

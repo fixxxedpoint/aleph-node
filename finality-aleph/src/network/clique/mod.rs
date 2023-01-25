@@ -1,14 +1,11 @@
 //! A network for maintaining direct connections between all nodes.
 use std::fmt::Display;
 
-use futures::{
-    channel::{mpsc, oneshot},
-    StreamExt,
-};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::network::Data;
 
+mod authorization;
 mod crypto;
 mod incoming;
 mod io;
@@ -83,93 +80,4 @@ pub trait Listener {
 
     /// Returns the next incoming connection.
     async fn accept(&mut self) -> Result<Self::Connection, Self::Error>;
-}
-
-struct AuthorizationHandler<PK> {
-    identifier: PK,
-    result_sender: oneshot::Sender<bool>,
-}
-
-impl<PK> AuthorizationHandler<PK> {
-    fn new(result: PK) -> (Self, oneshot::Receiver<bool>) {
-        let (auth_sender, auth_receiver) = oneshot::channel();
-        (
-            Self {
-                identifier: result,
-                result_sender: auth_sender,
-            },
-            auth_receiver,
-        )
-    }
-
-    pub fn handle_authorization(
-        self,
-        mut handler: impl FnMut(PK) -> bool,
-    ) -> Result<(), AuthorizatorError> {
-        let auth_result = handler(self.identifier);
-        self.result_sender
-            .send(auth_result)
-            .map_err(|_| AuthorizatorError::MissingService)
-    }
-}
-
-pub enum AuthorizatorError {
-    MissingService,
-    ServiceDisappeared,
-}
-
-pub struct AuthorizationRequestHandler<PK> {
-    receiver: mpsc::UnboundedReceiver<AuthorizationHandler<PK>>,
-}
-
-impl<PK> AuthorizationRequestHandler<PK> {
-    fn new(receiver: mpsc::UnboundedReceiver<AuthorizationHandler<PK>>) -> Self {
-        Self { receiver }
-    }
-
-    pub async fn handle_authorization<F: FnMut(PK) -> bool>(
-        &mut self,
-        handler: F,
-    ) -> Result<(), AuthorizatorError> {
-        let next = self
-            .receiver
-            .next()
-            .await
-            .ok_or(AuthorizatorError::MissingService)?;
-
-        next.handle_authorization(handler)
-    }
-}
-
-#[async_trait::async_trait]
-pub trait Authorization<PK> {
-    async fn is_authorized(&self, value: PK) -> Result<bool, AuthorizatorError>;
-}
-
-#[derive(Clone)]
-pub struct Authorizator<PK> {
-    sender: mpsc::UnboundedSender<AuthorizationHandler<PK>>,
-}
-
-/// Each call to [is_authorized](Authorizator::is_authorized) should be matched with execution of
-/// [handle_authorization](AuthorizationHandler::handle_authorization) which is responsible to verifying if a user is
-/// authorized.
-impl<PK> Authorizator<PK> {
-    pub fn new() -> (Self, AuthorizationRequestHandler<PK>) {
-        let (sender, receiver) = mpsc::unbounded();
-        (Self { sender }, AuthorizationRequestHandler::new(receiver))
-    }
-}
-
-#[async_trait::async_trait]
-impl<PK: Send> Authorization<PK> for Authorizator<PK> {
-    async fn is_authorized(&self, value: PK) -> Result<bool, AuthorizatorError> {
-        let (handler, receiver) = AuthorizationHandler::new(value);
-        self.sender
-            .unbounded_send(handler)
-            .map_err(|_| AuthorizatorError::MissingService)?;
-        receiver
-            .await
-            .map_err(|_| AuthorizatorError::ServiceDisappeared)
-    }
 }

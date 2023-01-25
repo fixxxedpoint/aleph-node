@@ -10,14 +10,14 @@ use futures::{
 use log::{debug, info, trace, warn};
 use tokio::time;
 
-use super::{protocols::ResultForService, Authorizator};
 use crate::{
     network::{
         clique::{
+            authorization::Authorizator,
             incoming::incoming,
             manager::{AddResult, LegacyManager, Manager},
             outgoing::outgoing,
-            protocols::ConnectionType,
+            protocols::{ConnectionType, ResultForService},
             Dialer, Listener, Network, PublicKey, SecretKey, LOG_TARGET,
         },
         Data, PeerId,

@@ -8,13 +8,14 @@ use tokio::{
 
 use super::handshake::HandshakeError;
 use crate::network::clique::{
+    authorization::Authorization,
     io::{receive_data, send_data},
     protocols::{
         handle_authorization,
         handshake::{v0_handshake_incoming, v0_handshake_outgoing},
         ConnectionType, ProtocolError, ResultForService,
     },
-    Authorization, Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
+    Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5);

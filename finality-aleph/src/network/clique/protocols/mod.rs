@@ -3,6 +3,7 @@ use std::fmt::{Display, Error as FmtError, Formatter};
 use futures::channel::mpsc;
 
 use crate::network::clique::{
+    authorization::Authorizator,
     io::{ReceiveError, SendError},
     Data, PublicKey, SecretKey, Splittable,
 };
@@ -15,8 +16,6 @@ mod v1;
 use handshake::HandshakeError;
 pub use negotiation::{protocol, ProtocolNegotiationError};
 pub use v0::handle_authorization;
-
-use crate::network::clique::Authorizator;
 
 pub type Version = u32;
 
