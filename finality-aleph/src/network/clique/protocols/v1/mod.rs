@@ -206,8 +206,8 @@ pub async fn handle_incoming<
 mod tests {
     use std::{
         io::Write,
-        marker::PhantomData,
         pin::Pin,
+        sync::Mutex,
         task::{Context, Poll},
     };
 
@@ -626,25 +626,23 @@ mod tests {
         }
     }
 
-    trait Provider {
-        type Output;
-
-        fn provide() -> Self::Output;
-    }
-
-    struct NoHandshake<P: Provider> {
-        _phantom_data: PhantomData<P>,
-    }
+    struct NoHandshake {}
 
     #[async_trait::async_trait]
-    impl<SK: SecretKey, P: Provider<Output = SK::PublicKey>> Handshake<SK> for NoHandshake<P> {
+    impl Handshake<MockSecretKey> for NoHandshake {
         async fn handshake<S: Splittable>(
             stream: S,
-            secret_key: SK,
-        ) -> Result<(S::Sender, S::Receiver, SK::PublicKey), HandshakeError<SK::PublicKey>>
-        {
+            _: MockSecretKey,
+        ) -> Result<
+            (
+                S::Sender,
+                S::Receiver,
+                <MockSecretKey as SecretKey>::PublicKey,
+            ),
+            HandshakeError<<MockSecretKey as SecretKey>::PublicKey>,
+        > {
             let (sender, receiver) = stream.split();
-            Ok((sender, receiver, P::provide()))
+            Ok((sender, receiver, key().0))
         }
     }
 
@@ -652,36 +650,32 @@ mod tests {
     async fn do_not_call_sender_and_receiver_until_authorized() {
         let (_, secret_key) = key();
         let writer = WrappingWriter::new_with_closure(Vec::new(), move || {
-            panic!("Writer should be called just once, for the purpose of handshake.");
+            panic!("Writer should not be called.");
         });
         let reader =
             WrappingReader::new_with_closure(IteratorWrapper([0].into_iter().cycle()), move || {
-                panic!("Reader should be called just once, for the purpose of handshake.");
+                panic!("Reader should not be called.");
             });
         let stream = MockWrappedSplittable::new(reader, writer);
         let (result_for_parent, _) = mpsc::unbounded();
         let (data_for_user, _) = mpsc::unbounded::<Vec<i32>>();
 
-        // TODO we need to call the mock anyway for handshake. It should count number of calls
-        // and test should fail if more than threshold many calls
+        let authorizer_called = Mutex::new(false);
+        let authorizer = MockAuthorizer::new_with_closure(|_| {
+            *authorizer_called.lock().unwrap() = true;
+            false
+        });
         // it should exit immediately after we reject authorization
-        struct KeyProvider {}
-        impl Provider for KeyProvider {
-            type Output = MockPublicKey;
-
-            fn provide() -> Self::Output {
-                key().0
-            }
-        }
-        handle_incoming::<_, _, _, _, NoHandshake<KeyProvider>>(
+        let result = handle_incoming::<_, _, _, _, NoHandshake>(
             stream,
             secret_key,
-            MockAuthorizer::new_with_closure(|_| false),
+            authorizer,
             result_for_parent,
             data_for_user,
         )
-        .await
-        .expect("it should return Ok");
+        .await;
+        assert!(result.is_ok());
+        assert!(*authorizer_called.lock().unwrap());
     }
 
     #[tokio::test]
