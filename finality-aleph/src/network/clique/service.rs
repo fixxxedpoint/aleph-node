@@ -1,12 +1,11 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fmt::Debug,
-};
+use std::{collections::HashSet, fmt::Debug};
 
 use futures::{
-    channel::{mpsc, oneshot},
-    stream::{AbortHandle, Abortable},
-    Future, StreamExt,
+    channel::{
+        mpsc::{self, UnboundedSender},
+        oneshot,
+    },
+    StreamExt,
 };
 use log::{debug, info, trace, warn};
 use tokio::time;
@@ -94,8 +93,9 @@ where
     // Backwards compatibility with the one-sided connections, remove when no longer needed.
     legacy_connected: HashSet<SK::PublicKey>,
     legacy_manager: LegacyManager<SK::PublicKey, A, D>,
-    exits_for_spawned: HashMap<SK::PublicKey, AbortHandle>,
 }
+
+type ResultsForParent<PK, D> = UnboundedSender<(PK, Option<UnboundedSender<D>>, ConnectionType)>;
 
 impl<SK: SecretKey, D: Data, A: Data + Debug, ND: Dialer<A>, NL: Listener> Service<SK, D, A, ND, NL>
 where
@@ -123,7 +123,6 @@ where
                 secret_key,
                 legacy_connected: HashSet::new(),
                 legacy_manager: LegacyManager::new(),
-                exits_for_spawned: HashMap::new(),
             },
             ServiceInterface {
                 commands_for_service,
@@ -133,7 +132,7 @@ where
     }
 
     fn spawn_new_outgoing(
-        &mut self,
+        &self,
         public_key: SK::PublicKey,
         address: A,
         result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
@@ -141,18 +140,18 @@ where
         let secret_key = self.secret_key.clone();
         let dialer = self.dialer.clone();
         let next_to_interface = self.next_to_interface.clone();
-        self.spawn_task(
-            public_key.clone(),
-            "aleph/clique_network_outgoing",
-            outgoing(
-                secret_key,
-                public_key.clone(),
-                dialer,
-                address,
-                result_for_parent,
-                next_to_interface,
-            ),
-        );
+        self.spawn_handle
+            .spawn("aleph/clique_network_outgoing", None, async move {
+                outgoing(
+                    secret_key,
+                    public_key,
+                    dialer,
+                    address,
+                    result_for_parent,
+                    next_to_interface,
+                )
+                .await;
+            });
     }
 
     fn spawn_new_incoming(
@@ -174,19 +173,6 @@ where
                 )
                 .await;
             });
-    }
-
-    fn spawn_task<F>(&mut self, public_key: SK::PublicKey, name: &'static str, task: F)
-    where
-        F: Future<Output = ()> + Send + 'static,
-    {
-        let (handle, registration) = AbortHandle::new_pair();
-        self.spawn_handle.spawn(name, None, async move {
-            Abortable::new(task, registration).await.unwrap_or(());
-        });
-        self.exits_for_spawned
-            .insert(public_key, handle)
-            .map(|h| h.abort());
     }
 
     fn peer_address(&self, public_key: &SK::PublicKey) -> Option<A> {
@@ -261,9 +247,104 @@ where
         self.manager.remove_peer(public_key);
         self.legacy_manager.remove_peer(public_key);
         self.legacy_connected.remove(public_key);
-        self.exits_for_spawned
-            .remove(&public_key)
-            .map(|h| h.abort());
+    }
+
+    fn process_command(
+        &mut self,
+        command: ServiceCommand<SK::PublicKey, D, A>,
+        result_for_parent: &ResultsForParent<SK::PublicKey, D>,
+    ) {
+        use ServiceCommand::*;
+        match command {
+            // register new peer in manager or update its address if already there
+            // spawn a worker managing outgoing connection if the peer was not known
+            AddConnection(public_key, address) => {
+                // we add all the peers to the legacy manager so we don't lose the
+                // address, but only care about its opinion when it turns out we have to
+                // in particular the first time we add a peer we never know whether it
+                // requires legacy connecting, so we only attempt to connect to it if the
+                // new criterion is satisfied, otherwise we wait for it to connect to us
+                self.legacy_manager
+                    .add_peer(public_key.clone(), address.clone());
+                if self.manager.add_peer(public_key.clone(), address.clone()) {
+                    self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
+                };
+            }
+            // remove the peer from the manager all workers will be killed automatically, due to closed channels
+            DelConnection(public_key) => {
+                self.remove_connection(&public_key);
+            }
+            // pass the data to the manager
+            SendData(data, public_key) => match self.legacy_connected.contains(&public_key) {
+                true => match self.legacy_manager.send_to(&public_key, data) {
+                    Ok(_) => trace!(
+                        target: LOG_TARGET,
+                        "Sending data to {} through legacy.",
+                        public_key
+                    ),
+                    Err(e) => trace!(
+                        target: LOG_TARGET,
+                        "Failed sending to {} through legacy: {}",
+                        public_key,
+                        e
+                    ),
+                },
+                false => match self.manager.send_to(&public_key, data) {
+                    Ok(_) => trace!(target: LOG_TARGET, "Sending data to {}.", public_key),
+                    Err(e) => trace!(
+                        target: LOG_TARGET,
+                        "Failed sending to {}: {}",
+                        public_key,
+                        e
+                    ),
+                },
+            },
+        }
+    }
+
+    fn process_connection(
+        &mut self,
+        result_for_parent: &ResultsForParent<SK::PublicKey, D>,
+        public_key: SK::PublicKey,
+        maybe_data_for_network: Option<UnboundedSender<D>>,
+        connection_type: ConnectionType,
+    ) {
+        if self.check_for_legacy(&public_key, connection_type) {
+            match self.legacy_manager.peer_address(&public_key) {
+                Some(address) => {
+                    self.spawn_new_outgoing(public_key.clone(), address, result_for_parent.clone())
+                }
+                None => {
+                    // We received a result from a worker we are no longer interested
+                    // in.
+                    self.legacy_connected.remove(&public_key);
+                }
+            }
+        }
+        use AddResult::*;
+        match maybe_data_for_network {
+            Some(data_for_network) => {
+                match self.add_connection(public_key.clone(), data_for_network, connection_type) {
+                    Uninterested => warn!(
+                        target: LOG_TARGET,
+                        "Established connection with peer {} for unknown reasons.", public_key
+                    ),
+                    Added => info!(
+                        target: LOG_TARGET,
+                        "New connection with peer {}.", public_key
+                    ),
+                    Replaced => info!(
+                        target: LOG_TARGET,
+                        "Replaced connection with peer {}.", public_key
+                    ),
+                }
+            }
+            None => {
+                if let Some(address) = self.peer_address(&public_key) {
+                    self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
+                }
+            }
+        }
     }
 
     /// Run the service until a signal from exit.
@@ -271,7 +352,6 @@ where
         let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
         let (result_for_parent, mut worker_results) = mpsc::unbounded();
         let (authorizator, mut authorization_handler) = Authorizator::new();
-        use ServiceCommand::*;
         loop {
             let manager = &self.manager;
             tokio::select! {
@@ -280,74 +360,28 @@ where
                     Ok(stream) => self.spawn_new_incoming(stream, result_for_parent.clone(), authorizator.clone()),
                     Err(e) => warn!(target: LOG_TARGET, "Listener failed to accept connection: {}", e),
                 },
+
                 // got a new command from the interface
-                Some(command) = self.commands_from_interface.next() => match command {
-                    // register new peer in manager or update its address if already there
-                    // spawn a worker managing outgoing connection if the peer was not known
-                    AddConnection(public_key, address) => {
-                        // we add all the peers to the legacy manager so we don't lose the
-                        // address, but only care about its opinion when it turns out we have to
-                        // in particular the first time we add a peer we never know whether it
-                        // requires legacy connecting, so we only attempt to connect to it if the
-                        // new criterion is satisfied, otherwise we wait for it to connect to us
-                        self.legacy_manager.add_peer(public_key.clone(), address.clone());
-                        if self.manager.add_peer(public_key.clone(), address.clone()) {
-                            self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
-                        };
-                    },
-                    // remove the peer from the manager all workers will be killed automatically, due to closed channels
-                    DelConnection(public_key) => {
-                        self.remove_connection(&public_key);
-                    },
-                    // pass the data to the manager
-                    SendData(data, public_key) => {
-                        match self.legacy_connected.contains(&public_key) {
-                            true => match self.legacy_manager.send_to(&public_key, data) {
-                                Ok(_) => trace!(target: LOG_TARGET, "Sending data to {} through legacy.", public_key),
-                                Err(e) => trace!(target: LOG_TARGET, "Failed sending to {} through legacy: {}", public_key, e),
-                            },
-                            false => match self.manager.send_to(&public_key, data) {
-                                Ok(_) => trace!(target: LOG_TARGET, "Sending data to {}.", public_key),
-                                Err(e) => trace!(target: LOG_TARGET, "Failed sending to {}: {}", public_key, e),
-                            },
-                        }
-                    },
-                },
+                Some(command) = self.commands_from_interface.next() => self.process_command(command, &result_for_parent),
+
                 result = authorization_handler.handle_authorization(|pk| manager.is_authorized(&pk)) => {
-                    if let Err(_) = result {
+                    if result.is_err() {
                         warn!(target: LOG_TARGET, "Other side of the authorization request is already closed.");
                     }
                 },
+
                 // received information from a spawned worker managing a connection
                 // check if we still want to be connected to the peer, and if so, spawn a new worker or actually add proper connection
                 Some((public_key, maybe_data_for_network, connection_type)) = worker_results.next() => {
-                    if self.check_for_legacy(&public_key, connection_type) {
-                        match self.legacy_manager.peer_address(&public_key) {
-                            Some(address) => self.spawn_new_outgoing(public_key.clone(), address, result_for_parent.clone()),
-                            None => {
-                                // We received a result from a worker we are no longer interested
-                                // in.
-                                self.legacy_connected.remove(&public_key);
-                            },
-                        }
-                    }
-                    use AddResult::*;
-                    match maybe_data_for_network {
-                        Some(data_for_network) => match self.add_connection(public_key.clone(), data_for_network, connection_type) {
-                            Uninterested => warn!(target: LOG_TARGET, "Established connection with peer {} for unknown reasons.", public_key),
-                            Added => info!(target: LOG_TARGET, "New connection with peer {}.", public_key) ,
-                            Replaced => info!(target: LOG_TARGET, "Replaced connection with peer {}.", public_key) ,
-                        },
-                        None => if let Some(address) = self.peer_address(&public_key) {
-                            self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
-                        }
-                    }
+                    self.process_connection(&result_for_parent, public_key, maybe_data_for_network, connection_type);
                 },
+
                 // periodically reporting what we are trying to do
                 _ = status_ticker.tick() => {
                     info!(target: LOG_TARGET, "Clique Network status: {}", self.manager.status_report());
                     debug!(target: LOG_TARGET, "Clique Network legacy status: {}", self.legacy_manager.status_report());
-                }
+                },
+
                 // received exit signal, stop the network
                 // all workers will be killed automatically after the manager gets dropped
                 _ = &mut exit => break,
