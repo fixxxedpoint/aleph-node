@@ -6,13 +6,12 @@ use tokio::{
     time::{timeout, Duration},
 };
 
-use super::handshake::HandshakeError;
 use crate::network::clique::{
     authorization::Authorization,
     io::{receive_data, send_data},
     protocols::{
         handle_authorization,
-        handshake::{v0_handshake_incoming, v0_handshake_outgoing},
+        handshake::{v0_handshake_incoming, v0_handshake_outgoing, HandshakeError},
         ConnectionType, ProtocolError, ResultForService,
     },
     Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
@@ -214,13 +213,16 @@ mod tests {
     use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
     use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 
-    use super::{incoming, outgoing, Handshake, ProtocolError};
     use crate::network::clique::{
         mock::{
             key, new_authorizer, MockAuthorizer, MockPrelims, MockSecretKey, MockSplittable,
             MockWrappedSplittable,
         },
-        protocols::{handshake::HandshakeError, v1::handle_incoming, ConnectionType},
+        protocols::{
+            handshake::HandshakeError,
+            v1::{handle_incoming, incoming, outgoing, Handshake},
+            ConnectionType, ProtocolError,
+        },
         ConnectionInfo, Data, SecretKey, Splittable,
     };
 

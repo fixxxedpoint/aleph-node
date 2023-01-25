@@ -16,9 +16,9 @@ use log::info;
 use rand::Rng;
 use tokio::io::{duplex, AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 
-use super::{Authorization, AuthorizatorError};
 use crate::network::{
     clique::{
+        authorization::{Authorizator, AuthorizatorError},
         protocols::{ProtocolError, ResultForService},
         ConnectionInfo, Dialer, Listener, Network, PeerAddressInfo, PublicKey, SecretKey,
         Splittable, LOG_TARGET,

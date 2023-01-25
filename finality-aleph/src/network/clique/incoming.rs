@@ -3,8 +3,8 @@ use std::fmt::{Display, Error as FmtError, Formatter};
 use futures::channel::mpsc;
 use log::{debug, info};
 
-use super::authorization::Authorizator;
 use crate::network::clique::{
+    authorization::Authorizator,
     protocols::{protocol, ProtocolError, ProtocolNegotiationError, ResultForService},
     Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };

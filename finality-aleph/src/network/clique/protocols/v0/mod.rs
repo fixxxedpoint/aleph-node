@@ -165,10 +165,12 @@ pub async fn handle_authorization<SK: SecretKey, A: Authorization<SK::PublicKey>
 mod tests {
     use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
 
-    use super::{incoming, outgoing, ProtocolError};
     use crate::network::clique::{
-        mock::{key, new_authorizer, MockAuthorizer, MockPrelims, MockSplittable},
-        protocols::ConnectionType,
+        mock::{key, new_authorizer, MockPrelims, MockSplittable},
+        protocols::{
+            v0::{incoming, outgoing},
+            ConnectionType,
+        },
         Data,
     };
 
