@@ -621,8 +621,9 @@ mod tests {
         async fn handshake_outgoing<S: Splittable>(
             stream: S,
             _secret_key: MockSecretKey,
-            _public_key: MockSecretKey::PublicKey,
-        ) -> Result<(S::Sender, S::Receiver), HandshakeError<MockSecretKey::PublicKey>> {
+            _public_key: <MockSecretKey as SecretKey>::PublicKey,
+        ) -> Result<(S::Sender, S::Receiver), HandshakeError<<MockSecretKey as SecretKey>::PublicKey>>
+        {
             let (sender, receiver) = stream.split();
             Ok((sender, receiver))
         }

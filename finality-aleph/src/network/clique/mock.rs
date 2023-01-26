@@ -18,7 +18,7 @@ use tokio::io::{duplex, AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 
 use crate::network::{
     clique::{
-        authorization::{Authorizator, AuthorizatorError},
+        authorization::{Authorization, AuthorizatorError},
         protocols::{ProtocolError, ResultForService},
         ConnectionInfo, Dialer, Listener, Network, PeerAddressInfo, PublicKey, SecretKey,
         Splittable, LOG_TARGET,
@@ -625,14 +625,6 @@ pub struct MockAuthorizer<PK, C> {
 }
 
 impl<PK: Send + Sync, C> MockAuthorizer<PK, C> {
-    pub fn new() -> MockAuthorizer<PK, impl Fn(PK) -> bool> {
-        // MockAuthorizer {
-        //     check: |_: PK| true,
-        //     _phantom_data: PhantomData,
-        // }
-        MockAuthorizer::new_with_closure(|_: PK| true)
-    }
-
     pub fn new_with_closure(check: C) -> MockAuthorizer<PK, C> {
         MockAuthorizer {
             check,
