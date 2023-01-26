@@ -3,6 +3,7 @@ use futures::{
     StreamExt,
 };
 
+#[derive(Debug, PartialEq)]
 pub enum AuthorizatorError {
     MissingService,
     ServiceDisappeared,
@@ -93,5 +94,81 @@ impl<PK: Send> Authorization<PK> for Authorizator<PK> {
         receiver
             .await
             .map_err(|_| AuthorizatorError::ServiceDisappeared)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use futures::join;
+
+    use crate::network::clique::{
+        authorization::{Authorization, Authorizator, AuthorizatorError},
+        mock::{key, MockSecretKey},
+        SecretKey,
+    };
+
+    #[tokio::test]
+    async fn authorization_sanity_check() {
+        let (authorizator, mut request_handler) =
+            Authorizator::<<MockSecretKey as SecretKey>::PublicKey>::new();
+        let public_key = key().0;
+        let (authorizator_result, request_handler_result) = join!(
+            authorizator.is_authorized(public_key.clone()),
+            request_handler.handle_authorization(|_| true),
+        );
+
+        assert_eq!(
+            authorizator_result.expect("Authorizator should return Ok."),
+            true
+        );
+        assert_eq!(
+            request_handler_result.expect("Request handler should return Ok."),
+            ()
+        );
+
+        let (authorizator_result, request_handler_result) = join!(
+            authorizator.is_authorized(public_key),
+            request_handler.handle_authorization(|_| false),
+        );
+
+        assert_eq!(
+            authorizator_result.expect("Authorizator should return Ok."),
+            false
+        );
+        assert_eq!(
+            request_handler_result.expect("Request handler should return Ok."),
+            ()
+        );
+    }
+
+    #[tokio::test]
+    async fn authorizator_returns_error_when_handler_is_dropped() {
+        let (authorizator, request_handler) =
+            Authorizator::<<MockSecretKey as SecretKey>::PublicKey>::new();
+        let public_key = key().0;
+        drop(request_handler);
+        let result = authorizator.is_authorized(public_key.clone()).await;
+
+        assert_eq!(result, Err(AuthorizatorError::MissingService))
+    }
+
+    #[tokio::test]
+    async fn authorizator_returns_error_when_handler_disappeared() {
+        let (authorizator, mut request_handler) =
+            Authorizator::<<MockSecretKey as SecretKey>::PublicKey>::new();
+        let public_key = key().0;
+        let (authorizator_result, _) = join!(
+            authorizator.is_authorized(public_key.clone()),
+            tokio::spawn(async move {
+                request_handler
+                    .handle_authorization(|_| panic!("handler bye bye"))
+                    .await
+            }),
+        );
+
+        assert_eq!(
+            authorizator_result,
+            Err(AuthorizatorError::ServiceDisappeared)
+        )
     }
 }
