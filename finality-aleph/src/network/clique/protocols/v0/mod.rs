@@ -462,4 +462,37 @@ mod tests {
             Ok(_) => panic!("successfully finished when connection dead"),
         };
     }
+
+    #[tokio::test]
+    async fn do_not_call_sender_and_receiver_until_authorized() {
+        let writer = WrappingWriter::new_with_closure(Vec::new(), move || {
+            panic!("Writer should not be called.");
+        });
+        let reader =
+            WrappingReader::new_with_closure(IteratorWrapper([0].into_iter().cycle()), move || {
+                panic!("Reader should not be called.");
+            });
+        let stream = MockWrappedSplittable::new(reader, writer);
+        let (result_for_parent, _) = mpsc::unbounded();
+        let (data_for_user, _) = mpsc::unbounded::<Vec<i32>>();
+
+        let authorizer_called = Mutex::new(false);
+        let authorizer = MockAuthorizer::new_with_closure(|_| {
+            *authorizer_called.lock().unwrap() = true;
+            false
+        });
+        let (_, secret_key) = key();
+        // it should exit immediately after we reject authorization
+        // `NoHandshake` mocks the real handshake procedure. It does not call reader and writer.
+        let result = handle_incoming::<_, _, _, _, NoHandshake>(
+            stream,
+            secret_key,
+            authorizer,
+            result_for_parent,
+            data_for_user,
+        )
+        .await;
+        assert!(result.is_ok());
+        assert!(*authorizer_called.lock().unwrap());
+    }
 }

@@ -11,7 +11,7 @@ use crate::network::clique::{
     io::{receive_data, send_data},
     protocols::{
         handle_authorization,
-        handshake::{v0_handshake_incoming, v0_handshake_outgoing, HandshakeError},
+        handshake::{DefaultHandshake, Handshake},
         ConnectionType, ProtocolError, ResultForService,
     },
     Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
@@ -94,8 +94,25 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
+    handle_outgoing::<_, _, _, DefaultHandshake>(
+        stream,
+        secret_key,
+        public_key,
+        result_for_parent,
+        data_for_user,
+    )
+    .await
+}
+
+pub async fn handle_outgoing<SK: SecretKey, D: Data, S: Splittable, H: Handshake<SK>>(
+    stream: S,
+    secret_key: SK,
+    public_key: SK::PublicKey,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+    data_for_user: mpsc::UnboundedSender<D>,
+) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Extending hand to {}.", public_key);
-    let (sender, receiver) = v0_handshake_outgoing(stream, secret_key, public_key.clone()).await?;
+    let (sender, receiver) = H::handshake_outgoing(stream, secret_key, public_key.clone()).await?;
     info!(
         target: LOG_TARGET,
         "Outgoing handshake with {} finished successfully.", public_key
@@ -114,26 +131,6 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
         "Starting worker for communicating with {}.", public_key
     );
     manage_connection(sender, receiver, data_from_user, data_for_user).await
-}
-
-#[async_trait::async_trait]
-pub trait Handshake<SK: SecretKey> {
-    async fn handshake<S: Splittable>(
-        stream: S,
-        secret_key: SK,
-    ) -> Result<(S::Sender, S::Receiver, SK::PublicKey), HandshakeError<SK::PublicKey>>;
-}
-
-struct DefaultHandshake {}
-
-#[async_trait::async_trait]
-impl<SK: SecretKey> Handshake<SK> for DefaultHandshake {
-    async fn handshake<S: Splittable>(
-        stream: S,
-        secret_key: SK,
-    ) -> Result<(S::Sender, S::Receiver, SK::PublicKey), HandshakeError<SK::PublicKey>> {
-        v0_handshake_incoming(stream, secret_key).await
-    }
 }
 
 /// Performs the incoming handshake, and then manages a connection sending and receiving data.
@@ -170,7 +167,7 @@ pub async fn handle_incoming<
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Waiting for extended hand...");
-    let (sender, receiver, public_key) = H::handshake(stream, secret_key).await?;
+    let (sender, receiver, public_key) = H::handshake_incoming(stream, secret_key).await?;
     info!(
         target: LOG_TARGET,
         "Incoming handshake with {} finished successfully.", public_key
@@ -606,7 +603,7 @@ mod tests {
 
     #[async_trait::async_trait]
     impl Handshake<MockSecretKey> for NoHandshake {
-        async fn handshake<S: Splittable>(
+        async fn handshake_incoming<S: Splittable>(
             stream: S,
             _: MockSecretKey,
         ) -> Result<
@@ -619,6 +616,15 @@ mod tests {
         > {
             let (sender, receiver) = stream.split();
             Ok((sender, receiver, key().0))
+        }
+
+        async fn handshake_outgoing<S: Splittable>(
+            stream: S,
+            _secret_key: MockSecretKey,
+            _public_key: MockSecretKey::PublicKey,
+        ) -> Result<(S::Sender, S::Receiver), HandshakeError<MockSecretKey::PublicKey>> {
+            let (sender, receiver) = stream.split();
+            Ok((sender, receiver))
         }
     }
 
