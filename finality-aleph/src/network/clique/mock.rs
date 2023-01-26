@@ -19,7 +19,7 @@ use tokio::io::{duplex, AsyncRead, AsyncWrite, DuplexStream, ReadBuf};
 use crate::network::{
     clique::{
         authorization::{Authorization, AuthorizatorError},
-        protocols::{ProtocolError, ResultForService},
+        protocols::{Handshake, HandshakeError, ProtocolError, ResultForService},
         ConnectionInfo, Dialer, Listener, Network, PeerAddressInfo, PublicKey, SecretKey,
         Splittable, LOG_TARGET,
     },
@@ -641,5 +641,137 @@ pub fn new_authorizer<PK: Send + Sync>() -> MockAuthorizer<PK, impl Fn(PK) -> bo
 impl<PK: Send + Sync, C: Fn(PK) -> bool + Send + Sync> Authorization<PK> for MockAuthorizer<PK, C> {
     async fn is_authorized(&self, public_key: PK) -> Result<bool, AuthorizatorError> {
         Ok((self.check)(public_key))
+    }
+}
+
+pub struct NoHandshake;
+
+#[async_trait::async_trait]
+impl Handshake<MockSecretKey> for NoHandshake {
+    async fn handshake_incoming<S: Splittable>(
+        stream: S,
+        _: MockSecretKey,
+    ) -> Result<
+        (
+            S::Sender,
+            S::Receiver,
+            <MockSecretKey as SecretKey>::PublicKey,
+        ),
+        HandshakeError<<MockSecretKey as SecretKey>::PublicKey>,
+    > {
+        let (sender, receiver) = stream.split();
+        Ok((sender, receiver, key().0))
+    }
+
+    async fn handshake_outgoing<S: Splittable>(
+        stream: S,
+        _secret_key: MockSecretKey,
+        _public_key: <MockSecretKey as SecretKey>::PublicKey,
+    ) -> Result<(S::Sender, S::Receiver), HandshakeError<<MockSecretKey as SecretKey>::PublicKey>>
+    {
+        let (sender, receiver) = stream.split();
+        Ok((sender, receiver))
+    }
+}
+
+pub struct WrappingReader<A, R> {
+    action: A,
+    reader: R,
+}
+
+impl<A, R> WrappingReader<A, R> {
+    pub fn new_with_closure(reader: R, closure: A) -> Self {
+        Self {
+            action: closure,
+            reader,
+        }
+    }
+}
+
+impl<A: FnMut() + Unpin, R: AsyncRead + Unpin> AsyncRead for WrappingReader<A, R> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let self_mut = self.get_mut();
+        (self_mut.action)();
+        Pin::new(&mut self_mut.reader).poll_read(cx, buf)
+    }
+}
+
+impl<A, W> ConnectionInfo for WrappingReader<A, W> {
+    fn peer_address_info(&self) -> crate::network::clique::PeerAddressInfo {
+        String::from("WRAPPING_READER")
+    }
+}
+
+pub struct IteratorWrapper<I>(I);
+
+impl<I> IteratorWrapper<I> {
+    pub fn new(iterator: I) -> Self {
+        Self(iterator)
+    }
+}
+
+impl<I: Iterator<Item = u8> + Unpin> AsyncRead for IteratorWrapper<I> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        let iter = &mut self.get_mut().0;
+        let buffer = buf.initialize_unfilled();
+        let remaining = buffer.len();
+        for cell in buffer.iter_mut() {
+            match iter.next() {
+                Some(next) => *cell = next,
+                None => {
+                    return Poll::Pending;
+                }
+            }
+        }
+        buf.advance(remaining);
+        Poll::Ready(Result::Ok(()))
+    }
+}
+
+pub struct WrappingWriter<A, W> {
+    action: A,
+    writer: W,
+}
+
+impl<A, W> WrappingWriter<A, W> {
+    pub fn new_with_closure(writer: W, action: A) -> Self {
+        Self { action, writer }
+    }
+}
+
+impl<A: FnMut() + Unpin, W: AsyncWrite + Unpin> AsyncWrite for WrappingWriter<A, W> {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, std::io::Error>> {
+        let self_mut = self.get_mut();
+        (self_mut.action)();
+        AsyncWrite::poll_write(Pin::new(&mut self_mut.writer), cx, buf)
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), std::io::Error>> {
+        AsyncWrite::poll_flush(Pin::new(&mut self.get_mut().writer), cx)
+    }
+
+    fn poll_shutdown(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Result<(), std::io::Error>> {
+        AsyncWrite::poll_shutdown(Pin::new(&mut self.get_mut().writer), cx)
+    }
+}
+
+impl<A, W> ConnectionInfo for WrappingWriter<A, W> {
+    fn peer_address_info(&self) -> crate::network::clique::PeerAddressInfo {
+        String::from("WRAPPING_WRITER")
     }
 }

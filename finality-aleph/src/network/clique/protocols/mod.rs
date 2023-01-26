@@ -13,7 +13,7 @@ mod negotiation;
 mod v0;
 mod v1;
 
-use handshake::HandshakeError;
+pub use handshake::{Handshake, HandshakeError};
 pub use negotiation::{protocol, ProtocolNegotiationError};
 pub use v0::handle_authorization;
 
