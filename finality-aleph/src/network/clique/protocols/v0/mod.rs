@@ -5,16 +5,15 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use crate::network::clique::{
     authorization::{Authorization, AuthorizatorError},
     io::{receive_data, send_data},
-    protocols::{
-        handshake::{v0_handshake_incoming, v0_handshake_outgoing},
-        ConnectionType, ProtocolError, ResultForService,
-    },
+    protocols::{ConnectionType, ProtocolError, ResultForService},
     Data, PublicKey, SecretKey, Splittable, LOG_TARGET,
 };
 
 mod heartbeat;
 
 use heartbeat::{heartbeat_receiver, heartbeat_sender};
+
+use super::handshake::{DefaultHandshake, Handshake};
 
 /// Receives data from the parent service and sends it over the network.
 /// Exits when the parent channel is closed, or if the network connection is broken.
@@ -39,8 +38,18 @@ pub async fn outgoing<SK: SecretKey, D: Data, S: Splittable>(
     public_key: SK::PublicKey,
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
+    handle_outgoing::<_, _, _, DefaultHandshake>(stream, secret_key, public_key, result_for_parent)
+        .await
+}
+
+pub async fn handle_outgoing<SK: SecretKey, D: Data, S: Splittable, H: Handshake<SK>>(
+    stream: S,
+    secret_key: SK,
+    public_key: SK::PublicKey,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Extending hand to {}.", public_key);
-    let (sender, receiver) = v0_handshake_outgoing(stream, secret_key, public_key.clone()).await?;
+    let (sender, receiver) = H::handshake_outgoing(stream, secret_key, public_key.clone()).await?;
     info!(
         target: LOG_TARGET,
         "Outgoing handshake with {} finished successfully.", public_key
@@ -93,8 +102,31 @@ pub async fn incoming<SK: SecretKey, D: Data, S: Splittable, A: Authorization<SK
     result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
     data_for_user: mpsc::UnboundedSender<D>,
 ) -> Result<(), ProtocolError<SK::PublicKey>> {
+    handle_incoming::<_, _, _, _, DefaultHandshake>(
+        stream,
+        secret_key,
+        authorizator,
+        result_for_parent,
+        data_for_user,
+    )
+    .await
+}
+
+pub async fn handle_incoming<
+    SK: SecretKey,
+    D: Data,
+    S: Splittable,
+    A: Authorization<SK::PublicKey>,
+    H: Handshake<SK>,
+>(
+    stream: S,
+    secret_key: SK,
+    authorizator: A,
+    result_for_parent: mpsc::UnboundedSender<ResultForService<SK::PublicKey, D>>,
+    data_for_user: mpsc::UnboundedSender<D>,
+) -> Result<(), ProtocolError<SK::PublicKey>> {
     trace!(target: LOG_TARGET, "Waiting for extended hand...");
-    let (sender, receiver, public_key) = v0_handshake_incoming(stream, secret_key).await?;
+    let (sender, receiver, public_key) = H::handshake_incoming(stream, secret_key).await?;
     info!(
         target: LOG_TARGET,
         "Incoming handshake with {} finished successfully.", public_key
