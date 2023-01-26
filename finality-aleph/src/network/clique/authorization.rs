@@ -3,7 +3,7 @@ use futures::{
     StreamExt,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum AuthorizatorError {
     MissingService,
     ServiceDisappeared,
@@ -34,7 +34,7 @@ impl<PK> AuthorizationHandler<PK> {
 
     pub fn handle_authorization(
         self,
-        mut handler: impl FnMut(PK) -> bool,
+        handler: impl FnOnce(PK) -> bool,
     ) -> Result<(), AuthorizatorError> {
         let auth_result = handler(self.identifier);
         self.result_sender
@@ -55,7 +55,7 @@ impl<PK> AuthorizationRequestHandler<PK> {
         Self { receiver }
     }
 
-    pub async fn handle_authorization<F: FnMut(PK) -> bool>(
+    pub async fn handle_authorization<F: FnOnce(PK) -> bool>(
         &mut self,
         handler: F,
     ) -> Result<(), AuthorizatorError> {
@@ -74,8 +74,8 @@ pub struct Authorizator<PK> {
     sender: mpsc::UnboundedSender<AuthorizationHandler<PK>>,
 }
 
-/// `Authorizator` is responsible for public-key authorization.
-/// Each call to [is_authorized](Authorizator::is_authorized) should be followed by a call of
+/// `Authorizator` is responsible for authorization of public-keys for the validator-network component. Each call to
+/// [is_authorized](Authorizator::is_authorized) should be followed by a call of
 /// [handle_authorization](AuthorizationHandler::handle_authorization).
 impl<PK> Authorizator<PK> {
     pub fn new() -> (Self, AuthorizationRequestHandler<PK>) {
@@ -170,5 +170,15 @@ mod tests {
             authorizator_result,
             Err(AuthorizatorError::ServiceDisappeared)
         )
+    }
+
+    #[tokio::test]
+    async fn authorization_request_handler_returns_error_when_all_authorizators_are_missing() {
+        let (authorizator, mut request_handler) =
+            Authorizator::<<MockSecretKey as SecretKey>::PublicKey>::new();
+        drop(authorizator);
+        let result = request_handler.handle_authorization(|_| true).await;
+
+        assert_eq!(result, Err(AuthorizatorError::MissingService))
     }
 }

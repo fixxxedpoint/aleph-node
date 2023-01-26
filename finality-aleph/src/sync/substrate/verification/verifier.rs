@@ -12,7 +12,7 @@ use crate::{
 };
 
 /// A justification verifier within a single session.
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct SessionVerifier {
     authority_verifier: AuthorityVerifier,
     emergency_signer: Option<AuthorityId>,
