@@ -194,7 +194,7 @@ pub async fn handle_authorization<SK: SecretKey, A: Authorization<SK::PublicKey>
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use futures::{channel::mpsc, pin_mut, FutureExt, StreamExt};
     use parking_lot::Mutex;
 
@@ -538,9 +538,10 @@ mod tests {
             false
         });
         let (_, secret_key) = key();
-        // it should exit immediately after we reject authorization
-        // `NoHandshake` mocks the real handshake procedure. It does not call reader and writer.
-        let result = <H as HandleIncoming>::handle_incoming::<_, _, _, _, NoHandshake>(
+
+        // It should exit immediately after we reject authorization.
+        // `NoHandshake` mocks the real handshake procedure and it does not call reader nor writer.
+        let result = H::handle_incoming::<_, _, _, _, NoHandshake>(
             stream,
             secret_key,
             authorizer,
