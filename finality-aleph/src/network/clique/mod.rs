@@ -13,6 +13,7 @@ mod manager;
 pub mod mock;
 mod outgoing;
 mod protocols;
+mod rate_limiter;
 mod service;
 
 pub use crypto::{PublicKey, SecretKey};
