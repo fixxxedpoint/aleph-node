@@ -1,40 +1,15 @@
 use std::{
     pin::Pin,
-    task::Ready,
     time::{Duration, Instant},
 };
 
-use futures::{
-    future::{Pending, Ready},
-    Future,
-};
+use futures::Future;
 use tokio::io::AsyncRead;
 
 #[async_trait::async_trait]
 pub trait RateLimiter {
-    async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant);
+    async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant + Send);
 }
-
-// impl<F: FnMut(usize, impl Instant) -> usize> RateLimiter for F {
-//     async fn rate_limit(requested: usize, now: impl FnMut() -> Instant) -> usize {
-//         self(requested, now)
-//     }
-// }
-
-// pub struct RateLimitedAsyncRead<R, RL> {
-//     reader: R,
-//     rate_limiter: R,
-// }
-
-// impl<R: AsyncRead, RL: RateLimiter> AsyncRead for RateLimitedAsyncRead<R, RL> {
-//     fn poll_read(
-//         self: std::pin::Pin<&mut Self>,
-//         cx: &mut std::task::Context<'_>,
-//         buf: &mut tokio::io::ReadBuf<'_>,
-//     ) -> std::task::Poll<std::io::Result<()>> {
-//         cx.waker().
-//     }
-// }
 
 pub struct LeakyBucket {
     rate: f64,
@@ -51,31 +26,34 @@ impl LeakyBucket {
         }
     }
 
-    fn calculate_delay(&self, now: Instant, amount: usize) -> Duration {
+    fn calculate_delay(&self, amount: usize) -> Duration {
         Duration::from_secs_f64(amount as f64 / self.rate)
     }
 
     fn update_units(&mut self, now: Instant) -> usize {
         let passed_time = now.duration_since(self.last_update);
         let new_units = passed_time.as_secs_f64() * self.rate;
-        self.available += new_units;
+        self.available += new_units as usize;
         self.last_update = now;
         new_units as usize
     }
 }
 
+#[async_trait::async_trait]
 impl RateLimiter for LeakyBucket {
-    async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant) {
+    async fn rate_limit(&mut self, requested: usize, mut now: impl FnMut() -> Instant + Send) {
         let to_return = std::cmp::min(self.available, requested);
         if to_return != requested {
             let now = now();
             let new_units = self.update_units(now);
             if new_units + to_return < requested {
-                let delay = self.calculate_delay(now, requested - to_return);
+                let delay = self.calculate_delay(requested - to_return);
                 let till_when = now + delay;
-                tokio::time::sleep_until(till_when).await;
+                tokio::time::sleep_until(till_when.into()).await;
+                self.update_units(till_when);
             }
-            return rate_limit(requested, till_when).await;
+            let last_update = self.last_update;
+            return self.rate_limit(requested, || last_update).await;
         }
         self.available -= requested;
     }
@@ -88,21 +66,29 @@ pub struct RateLimitedAsyncRead<RL, A> {
 }
 
 impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
-    async fn read(buf: &mut tokio::io::ReadBuf<'_>) {}
+    pub fn new(read: A, rate_limiter: RL) -> Self {
+        Self {
+            rate_limiter,
+            read,
+            last_read_size: None,
+        }
+    }
 }
 
-impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<RL, A> {
+impl<RL: RateLimiter + Unpin, A: AsyncRead + Unpin> AsyncRead for RateLimitedAsyncRead<RL, A> {
     fn poll_read(
-        self: std::pin::Pin<&mut Self>,
+        mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         if let Some(last_read_size) = self.last_read_size {
             let now = || Instant::now();
 
-            let rate_task = self.rate_limiter.rate_limit(last_read_size, now);
-            if let Pending = Pin::new(&mut rate_task).poll(cx) {
-                return Pending;
+            {
+                let mut rate_task = self.rate_limiter.rate_limit(last_read_size, now);
+                if Pin::new(&mut rate_task).poll(cx).is_pending() {
+                    return std::task::Poll::Pending;
+                }
             }
             self.last_read_size = None;
         }
