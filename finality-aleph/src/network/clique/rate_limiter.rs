@@ -1,26 +1,30 @@
 use std::{
     pin::Pin,
+    task::Ready,
     time::{Duration, Instant},
 };
 
-use futures::Future;
+use futures::{
+    future::{Pending, Ready},
+    Future,
+};
 use tokio::io::AsyncRead;
 
 #[async_trait::async_trait]
 pub trait RateLimiter {
-    async fn rate_limit(&mut self, requested: usize, now: Instant) -> usize;
+    async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant);
 }
 
-impl<F: FnMut(usize, Instant) -> usize> RateLimiter for F {
-    fn rate_limit(requested: usize, now: Instant) -> usize {
-        self(requested, now)
-    }
-}
+// impl<F: FnMut(usize, impl Instant) -> usize> RateLimiter for F {
+//     async fn rate_limit(requested: usize, now: impl FnMut() -> Instant) -> usize {
+//         self(requested, now)
+//     }
+// }
 
-pub struct RateLimitedAsyncRead<R, RL> {
-    reader: R,
-    rate_limiter: R,
-}
+// pub struct RateLimitedAsyncRead<R, RL> {
+//     reader: R,
+//     rate_limiter: R,
+// }
 
 // impl<R: AsyncRead, RL: RateLimiter> AsyncRead for RateLimitedAsyncRead<R, RL> {
 //     fn poll_read(
@@ -32,13 +36,13 @@ pub struct RateLimitedAsyncRead<R, RL> {
 //     }
 // }
 
-pub struct LeackyBucket {
+pub struct LeakyBucket {
     rate: f64,
     available: usize,
     last_update: Instant,
 }
 
-impl LeackyBucket {
+impl LeakyBucket {
     pub fn new(rate: f64, initial: usize, now: Instant) -> Self {
         Self {
             rate,
@@ -55,39 +59,36 @@ impl LeackyBucket {
         let passed_time = now.duration_since(self.last_update);
         let new_units = passed_time.as_secs_f64() * self.rate;
         self.available += new_units;
+        self.last_update = now;
         new_units as usize
     }
 }
 
-impl RateLimiter for LeackyBucket {
-    async fn rate_limit(&mut self, requested: usize, now: Instant) -> usize {
+impl RateLimiter for LeakyBucket {
+    async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant) {
         let to_return = std::cmp::min(self.available, requested);
         if to_return != requested {
+            let now = now();
             let new_units = self.update_units(now);
-            if new_units + to_return >= requested {
-                self.available -= requested;
-                return requested;
+            if new_units + to_return < requested {
+                let delay = self.calculate_delay(now, requested - to_return);
+                let till_when = now + delay;
+                tokio::time::sleep_until(till_when).await;
             }
-            let delay = self.calculate_delay(now, requested - to_return);
-            let till_when = now + delay;
-            tokio::time::sleep_until(till_when).await;
             return rate_limit(requested, till_when).await;
         }
-        self.available -= to_return;
-        to_return
+        self.available -= requested;
     }
 }
 
 pub struct RateLimitedAsyncRead<RL, A> {
     rate_limiter: RL,
     read: A,
-    last_timestamp: Option<Instant>,
+    last_read_size: Option<usize>,
 }
 
 impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
-    async fn read(buf: &mut tokio::io::ReadBuf<'_>) {
-        
-    }
+    async fn read(buf: &mut tokio::io::ReadBuf<'_>) {}
 }
 
 impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<RL, A> {
@@ -96,9 +97,22 @@ impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<R
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        let result = self.read(buf);
-        Future::poll(self, cx)
-        rate_limiter.poll();
-        self.rate_limiter.rate_limit(requested, now)
+        if let Some(last_read_size) = self.last_read_size {
+            let now = || Instant::now();
+
+            let rate_task = self.rate_limiter.rate_limit(last_read_size, now);
+            if let Pending = Pin::new(&mut rate_task).poll(cx) {
+                return Pending;
+            }
+            self.last_read_size = None;
+        }
+        let filled_before = buf.filled().len();
+        let result = Pin::new(&mut self.read).poll_read(cx, buf);
+        let filled_after = buf.filled().len();
+        let diff = filled_after - filled_before;
+        if diff > 0 {
+            self.last_read_size = Some(diff);
+        }
+        result
     }
 }
