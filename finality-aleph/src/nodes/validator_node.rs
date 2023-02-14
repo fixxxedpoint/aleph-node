@@ -14,7 +14,7 @@ use crate::{
     network::{
         clique::Service,
         session::{ConnectionManager, ConnectionManagerConfig},
-        tcp::{new_tcp_network, KEY_TYPE},
+        tcp::{new_rate_limited_network, KEY_TYPE},
         GossipService, SubstrateNetwork,
     },
     nodes::{setup_justification_handler, JustificationParams},
@@ -74,7 +74,7 @@ where
         keystore.clone(),
     )
     .await;
-    let (dialer, listener, network_identity) = new_tcp_network(
+    let (dialer, listener, network_identity) = new_rate_limited_network(
         ("0.0.0.0", validator_port),
         external_addresses,
         &network_authority_pen,

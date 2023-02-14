@@ -1,4 +1,4 @@
-use std::{io::Error as IoError, iter, net::ToSocketAddrs as _};
+use std::{io::Error as IoError, iter, net::ToSocketAddrs as _, time::Instant};
 
 use aleph_primitives::AuthorityId;
 use codec::{Decode, Encode};
@@ -12,7 +12,10 @@ use tokio::net::{
 use crate::{
     crypto::{verify, AuthorityPen, Signature},
     network::{
-        clique::{ConnectionInfo, Dialer, Listener, PublicKey, SecretKey, Splittable},
+        clique::{
+            rate_limiter::{LeakyBucket, RateLimitingDialer, RateLimitingListener},
+            ConnectionInfo, Dialer, Listener, PublicKey, SecretKey, Splittable,
+        },
         AddressingInformation, NetworkIdentity, PeerId,
     },
 };
@@ -250,6 +253,32 @@ pub async fn new_tcp_network<A: ToSocketAddrs>(
     let listener = TcpListener::bind(listening_addresses).await?;
     let identity = SignedTcpAddressingInformation::new(external_addresses, authority_pen).await?;
     Ok((TcpDialer {}, listener, identity))
+}
+
+pub async fn new_rate_limited_network<A: ToSocketAddrs>(
+    listening_addresses: A,
+    external_addresses: Vec<String>,
+    authority_pen: &AuthorityPen,
+) -> Result<
+    (
+        impl Dialer<SignedTcpAddressingInformation>,
+        impl Listener,
+        impl NetworkIdentity<
+            AddressingInformation = SignedTcpAddressingInformation,
+            PeerId = AuthorityId,
+        >,
+    ),
+    Error,
+> {
+    const BIT_RATE: f64 = 4096.0;
+    let rate_limiter = LeakyBucket::new(BIT_RATE, 0, Instant::now());
+    let (dialer, listener, identity) =
+        new_tcp_network(listening_addresses, external_addresses, authority_pen).await?;
+    Ok((
+        RateLimitingDialer::new(dialer, rate_limiter.clone()),
+        RateLimitingListener::new(listener, rate_limiter),
+        identity,
+    ))
 }
 
 #[cfg(test)]

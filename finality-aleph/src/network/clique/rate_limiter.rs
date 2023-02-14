@@ -14,6 +14,7 @@ pub trait RateLimiter {
     async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant + Send);
 }
 
+#[derive(Clone)]
 pub struct LeakyBucket {
     rate: f64,
     available: usize,
@@ -44,21 +45,24 @@ impl LeakyBucket {
 
 #[async_trait::async_trait]
 impl RateLimiter for LeakyBucket {
-    async fn rate_limit(&mut self, requested: usize, mut now: impl FnMut() -> Instant + Send) {
-        let to_return = std::cmp::min(self.available, requested);
-        if to_return != requested {
-            let now = now();
-            let new_units = self.update_units(now);
-            if new_units + to_return < requested {
-                let delay = self.calculate_delay(requested - to_return);
-                let till_when = now + delay;
-                tokio::time::sleep_until(till_when.into()).await;
-                self.update_units(till_when);
+    async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant + Send) {
+        let mut now = Some(now);
+        loop {
+            let to_return = std::cmp::min(self.available, requested);
+            if to_return != requested {
+                let now_value = now.take().map(|mut now| now()).unwrap_or(self.last_update);
+                let new_units = self.update_units(now_value);
+                if new_units + to_return < requested {
+                    let delay = self.calculate_delay(requested - to_return);
+                    let till_when = now_value + delay;
+                    tokio::time::sleep_until(till_when.into()).await;
+                    self.update_units(till_when);
+                }
+                continue;
             }
-            let last_update = self.last_update;
-            return self.rate_limit(requested, || last_update).await;
+            self.available -= requested;
+            break;
         }
-        self.available -= requested;
     }
 }
 
