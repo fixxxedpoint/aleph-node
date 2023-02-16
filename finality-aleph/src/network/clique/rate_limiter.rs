@@ -34,35 +34,31 @@ impl LeakyBucket {
         Duration::from_secs_f64(amount as f64 / self.rate)
     }
 
-    fn update_units(&mut self, now: Instant) -> usize {
-        let passed_time = now.duration_since(self.last_update);
-        let new_units = passed_time.as_secs_f64() * self.rate;
+    fn update_units(&mut self, now: Instant, time_since_last_update: Duration) -> usize {
+        let new_units = time_since_last_update.as_secs_f64() * self.rate;
         self.available += new_units as usize;
         self.last_update = now;
-        new_units as usize
+        self.available
     }
 }
 
 #[async_trait::async_trait]
 impl RateLimiter for LeakyBucket {
-    async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant + Send) {
-        let mut now = Some(now);
-        loop {
-            let to_return = std::cmp::min(self.available, requested);
-            if to_return != requested {
-                let now_value = now.take().map(|mut now| now()).unwrap_or(self.last_update);
-                let new_units = self.update_units(now_value);
-                if new_units + to_return < requested {
-                    let delay = self.calculate_delay(requested - to_return);
-                    let till_when = now_value + delay;
-                    tokio::time::sleep_until(till_when.into()).await;
-                    self.update_units(till_when);
-                }
-                continue;
+    async fn rate_limit(&mut self, requested: usize, mut now: impl FnMut() -> Instant + Send) {
+        if self.available < requested {
+            let mut now = now();
+            assert!(
+                now >= self.last_update,
+                "Provided value for `now` should be at least equal to `self.last_update`."
+            );
+            let mut last_duration = now.duration_since(self.last_update);
+            while self.update_units(now, last_duration) < requested {
+                last_duration = self.calculate_delay(requested - self.available);
+                now = now + last_duration;
+                tokio::time::sleep_until(now.into()).await;
             }
-            self.available -= requested;
-            break;
         }
+        self.available -= requested;
     }
 }
 
