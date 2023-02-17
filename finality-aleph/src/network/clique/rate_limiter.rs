@@ -63,9 +63,9 @@ impl RateLimiter for LeakyBucket {
 }
 
 pub struct RateLimitedAsyncRead<RL, A> {
+    last_read_size: Option<usize>,
     rate_limiter: RL,
     read: A,
-    last_read_size: Option<usize>,
 }
 
 impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
@@ -99,9 +99,7 @@ impl<RL: RateLimiter + Unpin, A: AsyncRead + Unpin> AsyncRead for RateLimitedAsy
         let result = Pin::new(&mut self.read).poll_read(cx, buf);
         let filled_after = buf.filled().len();
         let diff = filled_after - filled_before;
-        if diff > 0 {
-            self.last_read_size = Some(diff);
-        }
+        self.last_read_size = Some(diff);
         result
     }
 }
