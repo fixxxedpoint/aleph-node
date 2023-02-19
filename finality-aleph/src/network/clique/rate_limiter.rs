@@ -35,8 +35,8 @@ impl LeakyBucket {
     }
 
     fn update_units(&mut self, now: Instant, time_since_last_update: Duration) -> usize {
-        let new_units = time_since_last_update.as_secs_f64() * self.rate;
-        self.available += new_units as usize;
+        let new_units = (time_since_last_update.as_secs_f64() * self.rate).floor() as usize;
+        self.available = self.available.saturating_add(new_units);
         self.last_update = now;
         self.available
     }

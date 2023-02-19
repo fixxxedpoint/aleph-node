@@ -74,7 +74,17 @@ where
         keystore.clone(),
     )
     .await;
+
+    const BIT_RATE_PER_NODE: &str = "BIT_RATE_PER_NODE";
+    // 4KiB/s per connection should be enough
+    let bit_rate_per_node = std::env::var(BIT_RATE_PER_NODE)
+        .map(|value| value.parse().ok())
+        .ok()
+        .flatten()
+        .unwrap_or(4.0 * 1024.0);
+
     let (dialer, listener, network_identity) = new_rate_limited_network(
+        bit_rate_per_node,
         ("0.0.0.0", validator_port),
         external_addresses,
         &network_authority_pen,

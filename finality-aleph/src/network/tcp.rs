@@ -256,6 +256,7 @@ pub async fn new_tcp_network<A: ToSocketAddrs>(
 }
 
 pub async fn new_rate_limited_network<A: ToSocketAddrs>(
+    bits_per_second_per_node: f64,
     listening_addresses: A,
     external_addresses: Vec<String>,
     authority_pen: &AuthorityPen,
@@ -270,8 +271,7 @@ pub async fn new_rate_limited_network<A: ToSocketAddrs>(
     ),
     Error,
 > {
-    const BIT_RATE: f64 = 4096.0;
-    let rate_limiter = LeakyBucket::new(BIT_RATE, 0, Instant::now());
+    let rate_limiter = LeakyBucket::new(bits_per_second_per_node, 0, Instant::now());
     let (dialer, listener, identity) =
         new_tcp_network(listening_addresses, external_addresses, authority_pen).await?;
     Ok((
