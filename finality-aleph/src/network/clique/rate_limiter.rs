@@ -63,7 +63,7 @@ impl RateLimiter for LeakyBucket {
 }
 
 pub struct RateLimitedAsyncRead<RL, A> {
-    last_read_size: Option<usize>,
+    last_read_size: usize,
     rate_limiter: RL,
     read: A,
 }
@@ -73,7 +73,7 @@ impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
         Self {
             rate_limiter,
             read,
-            last_read_size: None,
+            last_read_size: 0,
         }
     }
 }
@@ -84,22 +84,20 @@ impl<RL: RateLimiter + Unpin, A: AsyncRead + Unpin> AsyncRead for RateLimitedAsy
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        if let Some(last_read_size) = self.last_read_size {
-            let now = || Instant::now();
-
-            {
-                let mut rate_task = self.rate_limiter.rate_limit(last_read_size, now);
-                if Pin::new(&mut rate_task).poll(cx).is_pending() {
-                    return std::task::Poll::Pending;
-                }
+        let now = || Instant::now();
+        {
+            let last_read_size = self.last_read_size;
+            let mut rate_task = self.rate_limiter.rate_limit(last_read_size, now);
+            if Pin::new(&mut rate_task).poll(cx).is_pending() {
+                return std::task::Poll::Pending;
             }
-            self.last_read_size = None;
         }
+
         let filled_before = buf.filled().len();
         let result = Pin::new(&mut self.read).poll_read(cx, buf);
         let filled_after = buf.filled().len();
         let diff = filled_after - filled_before;
-        self.last_read_size = Some(diff);
+        self.last_read_size = diff;
         result
     }
 }
