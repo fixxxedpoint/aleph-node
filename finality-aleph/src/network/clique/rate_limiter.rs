@@ -16,14 +16,14 @@ pub trait RateLimiter {
 }
 
 #[derive(Clone)]
-pub struct LeakyBucket {
+pub struct TokenBucket {
     rate: f64,
     available: usize,
     last_update: Instant,
 }
 
 // TODO fix me! it should have a max value so there is no possibility of bursts
-impl LeakyBucket {
+impl TokenBucket {
     pub fn new(rate: f64, initial: usize, now: Instant) -> Self {
         Self {
             rate,
@@ -45,7 +45,7 @@ impl LeakyBucket {
 }
 
 #[async_trait::async_trait]
-impl RateLimiter for LeakyBucket {
+impl RateLimiter for TokenBucket {
     async fn rate_limit(&mut self, requested: usize, mut now: impl FnMut() -> Instant + Send) {
         if self.available < requested {
             let mut now_value = now();

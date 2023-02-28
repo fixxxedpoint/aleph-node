@@ -13,7 +13,7 @@ use crate::{
     crypto::{verify, AuthorityPen, Signature},
     network::{
         clique::{
-            rate_limiter::{LeakyBucket, RateLimitingDialer, RateLimitingListener},
+            rate_limiter::{RateLimitingDialer, RateLimitingListener, TokenBucket},
             ConnectionInfo, Dialer, Listener, PublicKey, SecretKey, Splittable,
         },
         AddressingInformation, NetworkIdentity, PeerId,
@@ -271,7 +271,7 @@ pub async fn new_rate_limited_network<A: ToSocketAddrs>(
     ),
     Error,
 > {
-    let rate_limiter = LeakyBucket::new(bits_per_second_per_node, 0, Instant::now());
+    let rate_limiter = TokenBucket::new(bits_per_second_per_node, 0, Instant::now());
     let (dialer, listener, identity) =
         new_tcp_network(listening_addresses, external_addresses, authority_pen).await?;
     Ok((
