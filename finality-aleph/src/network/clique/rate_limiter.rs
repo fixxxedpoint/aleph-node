@@ -1,4 +1,5 @@
 use std::{
+    cmp::min,
     pin::Pin,
     time::{Duration, Instant},
 };
@@ -21,6 +22,7 @@ pub struct LeakyBucket {
     last_update: Instant,
 }
 
+// TODO fix me! it should have a max value so there is no possibility of bursts
 impl LeakyBucket {
     pub fn new(rate: f64, initial: usize, now: Instant) -> Self {
         Self {
@@ -59,45 +61,54 @@ impl RateLimiter for LeakyBucket {
             }
         }
         self.available -= requested;
+        self.available = min(self.available, (self.rate * 2.0) as usize);
     }
 }
 
 pub struct RateLimitedAsyncRead<RL, A> {
-    last_read_size: usize,
     rate_limiter: RL,
+    rate_limiter_task: Box<dyn Future<Output = RL> + Send + Unpin>,
     read: A,
 }
 
-impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
+impl<RL: RateLimiter + Send + Clone + 'static, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
     pub fn new(read: A, rate_limiter: RL) -> Self {
         Self {
-            rate_limiter,
+            rate_limiter: rate_limiter.clone(),
+            rate_limiter_task: Box::new(futures::future::ready(rate_limiter)),
             read,
-            last_read_size: 0,
         }
     }
 }
 
-impl<RL: RateLimiter + Unpin, A: AsyncRead + Unpin> AsyncRead for RateLimitedAsyncRead<RL, A> {
+impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin> AsyncRead
+    for RateLimitedAsyncRead<RL, A>
+{
     fn poll_read(
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        let now = || Instant::now();
+        let mut rate_limiter = if let std::task::Poll::Ready(rate_limiter) =
+            Pin::new(&mut self.rate_limiter_task).poll(cx)
         {
-            let last_read_size = self.last_read_size;
-            let mut rate_task = self.rate_limiter.rate_limit(last_read_size, now);
-            if Pin::new(&mut rate_task).poll(cx).is_pending() {
-                return std::task::Poll::Pending;
-            }
-        }
+            rate_limiter
+        } else {
+            return std::task::Poll::Pending;
+        };
 
         let filled_before = buf.filled().len();
         let result = Pin::new(&mut self.read).poll_read(cx, buf);
         let filled_after = buf.filled().len();
-        let diff = filled_after - filled_before;
-        self.last_read_size = diff;
+        let last_read_size = filled_after - filled_before;
+
+        let now = || Instant::now();
+        let task = Box::pin(async move {
+            rate_limiter.rate_limit(last_read_size, now).await;
+            rate_limiter
+        });
+        self.rate_limiter_task = Box::new(task);
+
         result
     }
 }
@@ -126,7 +137,9 @@ impl<RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite for RateLimitedA
     }
 }
 
-impl<R: Splittable, RL: RateLimiter + Unpin + Send> Splittable for RateLimitedAsyncRead<RL, R> {
+impl<R: Splittable, RL: RateLimiter + Unpin + Send + Clone + 'static> Splittable
+    for RateLimitedAsyncRead<RL, R>
+{
     type Sender = R::Sender;
     type Receiver = RateLimitedAsyncRead<RL, R::Receiver>;
 
