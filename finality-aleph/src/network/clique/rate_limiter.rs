@@ -48,16 +48,17 @@ impl LeakyBucket {
 impl RateLimiter for LeakyBucket {
     async fn rate_limit(&mut self, requested: usize, mut now: impl FnMut() -> Instant + Send) {
         if self.available < requested {
-            let mut now = now();
+            let mut now_value = now();
             assert!(
-                now >= self.last_update,
+                now_value >= self.last_update,
                 "Provided value for `now` should be at least equal to `self.last_update`."
             );
-            let mut last_duration = now.duration_since(self.last_update);
-            while self.update_units(now, last_duration) < requested {
+            let mut last_duration = now_value.duration_since(self.last_update);
+            while self.update_units(now_value, last_duration) < requested {
                 last_duration = self.calculate_delay(requested - self.available);
-                now = now + last_duration;
-                tokio::time::sleep_until(now.into()).await;
+                now_value = now_value + last_duration;
+                tokio::time::sleep_until(now_value.into()).await;
+                now_value = now();
             }
         }
         self.available -= requested;
