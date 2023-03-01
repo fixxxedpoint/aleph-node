@@ -76,7 +76,7 @@ impl RateLimiter for TokenBucket {
 
 pub struct RateLimitedAsyncRead<RL, A> {
     rate_limiter: RL,
-    rate_limiter_task: Box<dyn Future<Output = RL> + Send + Unpin>,
+    rate_limiter_task: Pin<Box<dyn Future<Output = RL> + Send>>,
     read: A,
 }
 
@@ -84,7 +84,7 @@ impl<RL: RateLimiter + Send + Clone + 'static, A: AsyncRead> RateLimitedAsyncRea
     pub fn new(read: A, rate_limiter: RL) -> Self {
         Self {
             rate_limiter: rate_limiter.clone(),
-            rate_limiter_task: Box::new(futures::future::ready(rate_limiter)),
+            rate_limiter_task: Box::pin(futures::future::ready(rate_limiter)),
             read,
         }
     }
@@ -99,7 +99,7 @@ impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin> AsyncRead
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         let mut rate_limiter = if let std::task::Poll::Ready(rate_limiter) =
-            Pin::new(&mut self.rate_limiter_task).poll(cx)
+            self.rate_limiter_task.as_mut().poll(cx)
         {
             rate_limiter
         } else {
@@ -116,7 +116,7 @@ impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin> AsyncRead
             rate_limiter.rate_limit(last_read_size, now).await;
             rate_limiter
         });
-        self.rate_limiter_task = Box::new(task);
+        self.rate_limiter_task = task;
 
         result
     }
