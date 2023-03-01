@@ -18,6 +18,7 @@ pub trait RateLimiter {
 #[derive(Clone)]
 pub struct TokenBucket {
     rate: f64,
+    tokens_limit: usize,
     available: usize,
     last_update: Instant,
 }
@@ -27,6 +28,7 @@ impl TokenBucket {
     pub fn new(rate: f64, initial: usize, now: Instant) -> Self {
         Self {
             rate,
+            tokens_limit: (rate * 2.0) as usize,
             available: initial,
             last_update: now,
         }
@@ -62,7 +64,7 @@ impl RateLimiter for TokenBucket {
             }
         }
         self.available -= requested;
-        self.available = min(self.available, (self.rate * 2.0) as usize);
+        self.available = min(self.available, self.tokens_limit);
     }
 }
 
