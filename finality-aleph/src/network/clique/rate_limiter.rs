@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     cmp::min,
     pin::Pin,
     time::{Duration, Instant},
@@ -15,12 +16,22 @@ pub trait RateLimiter {
     async fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant + Send);
 }
 
-#[derive(Clone)]
 pub struct TokenBucket {
     rate: f64,
     tokens_limit: usize,
     available: usize,
     last_update: Instant,
+}
+
+impl Clone for TokenBucket {
+    fn clone(&self) -> Self {
+        Self {
+            rate: self.rate.clone(),
+            tokens_limit: self.tokens_limit.clone(),
+            available: 0,
+            last_update: Instant::now(),
+        }
+    }
 }
 
 // TODO fix me! it should have a max value so there is no possibility of bursts
@@ -74,23 +85,31 @@ impl RateLimiter for TokenBucket {
     }
 }
 
+struct TaskHolder<RL> {
+    stored: RL,
+}
+
 pub struct RateLimitedAsyncRead<RL, A> {
-    rate_limiter: RL,
-    rate_limiter_task: Pin<Box<dyn Future<Output = RL> + Send>>,
+    // rate_limiter: RL,
+    rate_limiter_task: Pin<Box<dyn Future<Output = ()> + Send>>,
+    rate_limiter: RefCell<RL>,
+    // rate_limiter_holder: TaskHolder<(RL, Pin<Box<dyn Future<Output = ()> + Send>>)>,
     read: A,
 }
 
 impl<RL: RateLimiter + Send + Clone + 'static, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
     pub fn new(read: A, rate_limiter: RL) -> Self {
         Self {
-            rate_limiter: rate_limiter.clone(),
-            rate_limiter_task: Box::pin(futures::future::ready(rate_limiter)),
+            // rate_limiter: rate_limiter.clone(),
+            rate_limiter_holder: TaskHolder {
+                stored: (rate_limiter, Box::pin(futures::future::ready(()))),
+            },
             read,
         }
     }
 }
 
-impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin> AsyncRead
+impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin + Send> AsyncRead
     for RateLimitedAsyncRead<RL, A>
 {
     fn poll_read(
@@ -98,25 +117,31 @@ impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin> AsyncRead
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        let mut rate_limiter = if let std::task::Poll::Ready(rate_limiter) =
-            self.rate_limiter_task.as_mut().poll(cx)
+        if self
+            .rate_limiter_holder
+            .stored
+            .1
+            .as_mut()
+            .poll(cx)
+            .is_pending()
         {
-            rate_limiter
-        } else {
             return std::task::Poll::Pending;
-        };
+        }
 
         let filled_before = buf.filled().len();
         let result = Pin::new(&mut self.read).poll_read(cx, buf);
+        if result.is_pending() {
+            return std::task::Poll::Pending;
+        }
         let filled_after = buf.filled().len();
         let last_read_size = filled_after - filled_before;
 
-        let now = || Instant::now();
-        let task = Box::pin(async move {
-            rate_limiter.rate_limit(last_read_size, now).await;
-            rate_limiter
-        });
-        self.rate_limiter_task = task;
+        let task = self
+            .rate_limiter_holder
+            .stored
+            .0
+            .rate_limit(last_read_size, || Instant::now());
+        self.rate_limiter_holder.stored.1 = Box::pin(task);
 
         result
     }
@@ -154,7 +179,7 @@ impl<R: Splittable, RL: RateLimiter + Unpin + Send + Clone + 'static> Splittable
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let (sender, receiver) = self.read.split();
-        let receiver = RateLimitedAsyncRead::new(receiver, self.rate_limiter);
+        let receiver = RateLimitedAsyncRead::new(receiver, self.rate_limiter_holder.stored.0);
         (sender, receiver)
     }
 }
