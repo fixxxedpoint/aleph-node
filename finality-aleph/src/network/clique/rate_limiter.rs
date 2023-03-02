@@ -2,10 +2,12 @@ use std::{
     cell::RefCell,
     cmp::min,
     pin::Pin,
+    sync::Arc,
     time::{Duration, Instant},
 };
 
-use futures::Future;
+use futures::{future::ready, Future};
+use parking_lot::Mutex;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use super::{ConnectionInfo, Listener, Splittable};
@@ -90,26 +92,26 @@ struct TaskHolder<RL> {
 }
 
 pub struct RateLimitedAsyncRead<RL, A> {
-    // rate_limiter: RL,
+    rate_limiter: Arc<Mutex<RL>>,
     rate_limiter_task: Pin<Box<dyn Future<Output = ()> + Send>>,
-    rate_limiter: RefCell<RL>,
-    // rate_limiter_holder: TaskHolder<(RL, Pin<Box<dyn Future<Output = ()> + Send>>)>,
     read: A,
 }
 
-impl<RL: RateLimiter + Send + Clone + 'static, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
+impl<RL: RateLimiter + Send + Clone, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
     pub fn new(read: A, rate_limiter: RL) -> Self {
         Self {
+            rate_limiter: Arc::new(Mutex::new(rate_limiter)),
+            rate_limiter_task: Box::pin(ready(())),
             // rate_limiter: rate_limiter.clone(),
-            rate_limiter_holder: TaskHolder {
-                stored: (rate_limiter, Box::pin(futures::future::ready(()))),
-            },
+            // rate_limiter_holder: TaskHolder {
+            //     stored: (rate_limiter, Box::pin(futures::future::ready(()))),
+            // },
             read,
         }
     }
 }
 
-impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin + Send> AsyncRead
+impl<RL: RateLimiter + Send + Unpin, A: AsyncRead + Unpin + Send> AsyncRead
     for RateLimitedAsyncRead<RL, A>
 {
     fn poll_read(
@@ -117,14 +119,7 @@ impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin + Send> Asyn
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        if self
-            .rate_limiter_holder
-            .stored
-            .1
-            .as_mut()
-            .poll(cx)
-            .is_pending()
-        {
+        if self.rate_limiter_task.as_mut().poll(cx).is_pending() {
             return std::task::Poll::Pending;
         }
 
@@ -136,12 +131,13 @@ impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead + Unpin + Send> Asyn
         let filled_after = buf.filled().len();
         let last_read_size = filled_after - filled_before;
 
-        let task = self
-            .rate_limiter_holder
-            .stored
-            .0
-            .rate_limit(last_read_size, || Instant::now());
-        self.rate_limiter_holder.stored.1 = Box::pin(task);
+        let task = Box::pin({
+            let rate_limiter = Arc::clone(&self.rate_limiter);
+            let mut rate_limiter = rate_limiter.lock();
+            rate_limiter.rate_limit(last_read_size, || Instant::now())
+        });
+
+        self.rate_limiter_task = task;
 
         result
     }
@@ -171,7 +167,7 @@ impl<RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite for RateLimitedA
     }
 }
 
-impl<R: Splittable, RL: RateLimiter + Unpin + Send + Clone + 'static> Splittable
+impl<R: Splittable, RL: RateLimiter + Unpin + Send + Clone> Splittable
     for RateLimitedAsyncRead<RL, R>
 {
     type Sender = R::Sender;
@@ -179,7 +175,7 @@ impl<R: Splittable, RL: RateLimiter + Unpin + Send + Clone + 'static> Splittable
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let (sender, receiver) = self.read.split();
-        let receiver = RateLimitedAsyncRead::new(receiver, self.rate_limiter_holder.stored.0);
+        let receiver = RateLimitedAsyncRead::new(receiver, self.rate_limiter.into_inner());
         (sender, receiver)
     }
 }
