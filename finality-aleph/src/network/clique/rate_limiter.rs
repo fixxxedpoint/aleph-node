@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{future::ready, Future};
+use futures::Future;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     time::Sleep,
@@ -18,7 +18,7 @@ pub trait RateLimiter {
         &mut self,
         requested: usize,
         now: impl FnMut() -> Instant + Send,
-    ) -> Result<(), Duration>;
+    ) -> Option<Duration>;
 }
 
 #[derive(Clone)]
@@ -52,12 +52,11 @@ impl TokenBucket {
 }
 
 impl RateLimiter for TokenBucket {
-    // TODO remove sleep from this method and make it non-async. Sleep should be called by a caller. It should return how long we need to wait (perhaps as a result).
     fn rate_limit(
         &mut self,
         requested: usize,
         mut now: impl FnMut() -> Instant + Send,
-    ) -> Result<(), Duration> {
+    ) -> Option<Duration> {
         if self.available < requested {
             let now_value = now();
             assert!(
@@ -70,12 +69,12 @@ impl RateLimiter for TokenBucket {
 
             if self.update_units(now_value, last_duration) < requested {
                 let required_delay = self.calculate_delay(requested - self.available);
-                return Err(required_delay);
+                return Some(required_delay);
             }
         }
         self.available -= requested;
-        // self.available = min(self.available, self.tokens_limit);
-        Ok(())
+        self.available = min(self.available, self.tokens_limit);
+        None
     }
 }
 
@@ -85,29 +84,22 @@ pub struct RateLimitedAsyncRead<RL, A> {
     read: Pin<Box<A>>,
 }
 
-impl<RL: RateLimiter + Send + Clone + 'static, A: AsyncRead + Unpin> RateLimitedAsyncRead<RL, A> {
+impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
     pub fn new(read: A, rate_limiter: RL) -> Self {
         Self {
-            rate_limiter: rate_limiter.clone(),
+            rate_limiter,
             rate_limiter_sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
             read: Box::pin(read),
         }
     }
 }
 
-impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead> AsyncRead
-    for RateLimitedAsyncRead<RL, A>
-{
+impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<RL, A> {
     fn poll_read(
-        mut self: std::pin::Pin<&mut Self>,
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        // if (&mut self.rate_limiter_sleep)
-        //     .as_mut()
-        //     .poll(cx)
-        //     .is_pending()
-        // {
         let deref_self = self.get_mut();
         if deref_self.rate_limiter_sleep.as_mut().poll(cx).is_pending() {
             return std::task::Poll::Pending;
@@ -121,7 +113,6 @@ impl<RL: RateLimiter + Send + Unpin + 'static, A: AsyncRead> AsyncRead
         let rate_limit_sleep_time = deref_self
             .rate_limiter
             .rate_limit(last_read_size, || Instant::now())
-            .err()
             .unwrap_or(Duration::ZERO);
 
         deref_self
@@ -138,7 +129,7 @@ impl<RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite for RateLimitedA
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        self.get_mut().read.as_mut().poll_write(cx, buf)
+        self.read.as_mut().poll_write(cx, buf)
     }
 
     fn poll_flush(
@@ -156,9 +147,7 @@ impl<RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite for RateLimitedA
     }
 }
 
-impl<R: Splittable, RL: RateLimiter + Send + Clone + Unpin + 'static> Splittable
-    for RateLimitedAsyncRead<RL, R>
-{
+impl<R: Splittable, RL: RateLimiter + Send + Unpin> Splittable for RateLimitedAsyncRead<RL, R> {
     type Sender = R::Sender;
     type Receiver = RateLimitedAsyncRead<RL, R::Receiver>;
 
