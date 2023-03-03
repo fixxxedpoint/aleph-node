@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt, iter, pin::Pin, sync::Arc};
+use std::{collections::HashMap, fmt, iter, pin::Pin, sync::Arc, time::Instant};
 
 use async_trait::async_trait;
 use futures::stream::{Stream, StreamExt};
@@ -17,6 +17,7 @@ use sp_api::NumberFor;
 use sp_consensus::SyncOracle;
 use sp_runtime::traits::Block;
 
+use super::clique::rate_limiter::RateLimiter;
 use crate::network::{
     gossip::{Event, EventStream, NetworkSender, Protocol, RawNetwork},
     RequestBlocks,
@@ -246,6 +247,35 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
                 None => return None,
             }
         }
+    }
+}
+
+pub struct RateLimitedNetworkEventStream<B: Block, H: ExHashT, RL: RateLimiter> {
+    stream: NetworkEventStream<B, H>,
+    rate_limiter: RL,
+    next_wait: Option<Instant>,
+}
+
+#[async_trait]
+impl<B: Block, H: ExHashT, RL: RateLimiter + Send> EventStream<PeerId>
+    for RateLimitedNetworkEventStream<B, H, RL>
+{
+    async fn next_event(&mut self) -> Option<Event<PeerId>> {
+        if let Some(next_wait) = self.next_wait {
+            tokio::time::sleep_until(next_wait.into()).await;
+        }
+        self.next_wait = None;
+
+        let event = self.stream.next_event().await?;
+        if let Event::Messages(_, messages) = &event {
+            let size_received = messages.iter().map(|(_, bytes)| bytes.len()).sum();
+            // TODO try calling now only once if necessary
+            let next_wait = self
+                .rate_limiter
+                .rate_limit(size_received, || Instant::now());
+            self.next_wait = next_wait.map(|wait| Instant::now() + wait);
+        }
+        Some(event)
     }
 }
 
