@@ -1,7 +1,19 @@
-use std::{collections::HashMap, fmt, iter, pin::Pin, sync::Arc, time::Instant};
+use std::{
+    collections::HashMap,
+    fmt,
+    iter::{self, Sum},
+    pin::Pin,
+    rc::Rc,
+    sync::Arc,
+    task::Ready,
+    time::Instant,
+};
 
 use async_trait::async_trait;
-use futures::stream::{Stream, StreamExt};
+use futures::{
+    stream::{Stream, StreamExt},
+    Future,
+};
 use log::{error, trace};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
@@ -250,10 +262,85 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
     }
 }
 
-pub struct RateLimitedNetworkEventStream<B: Block, H: ExHashT, RL: RateLimiter> {
+pub struct RateLimitedNetworkEventStream<B: Block, H: ExHashT, RL> {
     stream: NetworkEventStream<B, H>,
     rate_limiter: RL,
     next_wait: Option<Instant>,
+}
+
+struct SleepingRateLimiter<RL> {
+    rate_limiter: RL,
+    // next_wait: Option<Instant>,
+    // next_sleep: Option<Sleep>,
+    rate_limiter_sleep: Pin<Box<Sleep>>,
+}
+
+impl<RL: RateLimiter> SleepingRateLimiter<RL> {
+    pub fn rate_limit(mut self, read_size: usize) -> RateLimiterTask<RL> {
+        // if let Some(next_wait) = self.next_wait {
+        //     tokio::time::sleep_until(next_wait).await;
+        //     self.next_wait = None;
+        // }
+
+        let mut now = None;
+        let now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
+        let mut next_wait = self.rate_limiter.rate_limit(size_received, now_closure);
+        next_wait = next_wait.map(|wait| now_closure() + wait);
+        let mut next_sleep = self.rate_limiter_sleep;
+        next_sleep.set(tokio::time::sleep_until(next_wait));
+
+        RateLimiterTask {
+            rate_limiter: Some(self.rate_limiter),
+            rate_limiter_sleep: Some(next_sleep),
+        }
+        // self.next_wait = next_wait.map(|wait| now_closure() + wait);
+    }
+
+    fn new(rate_limiter: RL, rate_limiter_task: Pin<Box<Sleep>>) -> Self {
+        Self {
+            rate_limiter,
+            rate_limiter_sleep,
+        }
+    }
+}
+
+// impl<RL> Future for SleepingRateLimiter<RL> {
+//     type Output = ();
+
+//     fn poll(
+//         self: Pin<&mut Self>,
+//         cx: &mut std::task::Context<'_>,
+//     ) -> std::task::Poll<Self::Output> {
+//         self.rate_limiter_sleep.as_mut().poll(cx)
+//     }
+// }
+
+struct RateLimiterTask<RL> {
+    rate_limiter: Option<RL>,
+    rate_limiter_sleep: Option<Pin<Box<Sleep>>>,
+}
+
+impl<RL> Future for RateLimiterTask<RL> {
+    type Output = SleepingRateLimiter<RL>;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        if self
+            .rate_limiter_sleep
+            .map(|limiter| limiter.as_mut().poll(cx).is_pending())
+            .unwrap_or(true)
+        {
+            return std::task::Poll::Pending;
+        }
+        match (self.rate_limiter.take(), self.rate_limiter_sleep.take()) {
+            (Some(rate_limiter), Some(rate_limiter_task)) => {
+                Ready(SleepingRateLimiter::new(rate_limiter, rate_limiter_task))
+            }
+            _ => std::task::Poll::Pending,
+        }
+    }
 }
 
 #[async_trait]
@@ -268,12 +355,24 @@ impl<B: Block, H: ExHashT, RL: RateLimiter + Send> EventStream<PeerId>
 
         let event = self.stream.next_event().await?;
         if let Event::Messages(_, messages) = &event {
-            let size_received = messages.iter().map(|(_, bytes)| bytes.len()).sum();
-            // TODO try calling now only once if necessary
-            let next_wait = self
-                .rate_limiter
-                .rate_limit(size_received, || Instant::now());
-            self.next_wait = next_wait.map(|wait| Instant::now() + wait);
+            struct SaturatingUsize(usize);
+            impl Sum<SaturatingUsize> for SaturatingUsize {
+                fn sum<I: Iterator<Item = SaturatingUsize>>(iter: I) -> Self {
+                    let mut sum = 0;
+                    iter.fold(sum, |sum, item| sum.saturating_add(item.0));
+                    SaturatingUsize(sum)
+                }
+            }
+
+            let size_received = messages
+                .iter()
+                .map(|(_, bytes)| SaturatingUsize(bytes.len()))
+                .sum()
+                .0;
+            let mut now = None;
+            let now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
+            let next_wait = self.rate_limiter.rate_limit(size_received, now_closure);
+            self.next_wait = next_wait.map(|wait| now_closure() + wait);
         }
         Some(event)
     }
