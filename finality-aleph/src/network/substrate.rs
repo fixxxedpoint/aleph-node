@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     fmt,
     iter::{self, Sum},
+    marker::PhantomData,
     pin::Pin,
     sync::Arc,
     time::{Duration, Instant},
@@ -261,14 +262,34 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
     }
 }
 
-pub struct RateLimitedNetworkEventStream<B: Block, H: ExHashT, RL> {
-    stream: NetworkEventStream<B, H>,
+pub struct RateLimitedNetworkEventStream<P, ES: EventStream<P>, RL> {
+    stream: ES,
     rate_limiter: Option<SleepingRateLimiter<RL>>,
+    _phantom_data: PhantomData<P>,
 }
 
-struct SleepingRateLimiter<RL> {
+impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
+    pub fn new(stream: ES, rate_limiter: RL) -> Self {
+        Self {
+            stream,
+            rate_limiter: Some(SleepingRateLimiter::new(rate_limiter)),
+            _phantom_data: PhantomData,
+        }
+    }
+}
+
+pub struct SleepingRateLimiter<RL> {
     rate_limiter: RL,
     rate_limiter_sleep: Pin<Box<Sleep>>,
+}
+
+impl<RL> SleepingRateLimiter<RL> {
+    fn new(rate_limiter: RL) -> Self {
+        Self {
+            rate_limiter,
+            rate_limiter_sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
+        }
+    }
 }
 
 impl<RL: RateLimiter> SleepingRateLimiter<RL> {
@@ -285,16 +306,9 @@ impl<RL: RateLimiter> SleepingRateLimiter<RL> {
             rate_limiter_sleep: Some(next_sleep),
         }
     }
-
-    fn new(rate_limiter: RL, rate_limiter_sleep: Pin<Box<Sleep>>) -> Self {
-        Self {
-            rate_limiter,
-            rate_limiter_sleep,
-        }
-    }
 }
 
-struct RateLimiterTask<RL> {
+pub struct RateLimiterTask<RL> {
     rate_limiter: Option<RL>,
     rate_limiter_sleep: Option<Pin<Box<Sleep>>>,
 }
@@ -331,10 +345,10 @@ impl<RL: RateLimiter + Unpin> Future for RateLimiterTask<RL> {
 }
 
 #[async_trait]
-impl<B: Block, H: ExHashT, RL: RateLimiter + Unpin + Send> EventStream<PeerId>
-    for RateLimitedNetworkEventStream<B, H, RL>
+impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send + Sync>
+    EventStream<P> for RateLimitedNetworkEventStream<P, ES, RL>
 {
-    async fn next_event(&mut self) -> Option<Event<PeerId>> {
+    async fn next_event(&mut self) -> Option<Event<P>> {
         let event = self.stream.next_event().await?;
         if let Event::Messages(_, messages) = &event {
             struct SaturatingUsize(usize);
@@ -352,11 +366,43 @@ impl<B: Block, H: ExHashT, RL: RateLimiter + Unpin + Send> EventStream<PeerId>
                 .sum::<SaturatingUsize>()
                 .0;
 
-            if let Some(rate_limiter) = self.rate_limiter.take() {
-                self.rate_limiter = Some(rate_limiter.rate_limit(size_received).await);
-            }
+            let rate_limiter = self.rate_limiter.take()?;
+            self.rate_limiter = Some(rate_limiter.rate_limit(size_received).await);
         }
         Some(event)
+    }
+}
+
+#[derive(Clone)]
+pub struct RateLimitedRawNetwork<RN, RL> {
+    raw_network: RN,
+    rate_limiter: RL,
+}
+
+impl<RN: RawNetwork, RL: RateLimiter + Clone + Send + Sync + Unpin + 'static> RawNetwork
+    for RateLimitedRawNetwork<RN, RL>
+where
+    RN::EventStream: Send,
+    RN::PeerId: Sync,
+{
+    type SenderError = RN::SenderError;
+    type NetworkSender = RN::NetworkSender;
+    type PeerId = RN::PeerId;
+    type EventStream = RateLimitedNetworkEventStream<RN::PeerId, RN::EventStream, RL>;
+
+    fn event_stream(&self) -> Self::EventStream {
+        RateLimitedNetworkEventStream::new(
+            self.raw_network.event_stream(),
+            self.rate_limiter.clone(),
+        )
+    }
+
+    fn sender(
+        &self,
+        peer_id: Self::PeerId,
+        protocol: Protocol,
+    ) -> Result<Self::NetworkSender, Self::SenderError> {
+        self.raw_network.sender(peer_id, protocol)
     }
 }
 
