@@ -1,10 +1,8 @@
 use std::{
-    cell::RefCell,
     collections::HashMap,
     fmt,
     iter::{self, Sum},
     pin::Pin,
-    rc::Rc,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -270,7 +268,7 @@ pub struct RateLimitedNetworkEventStream<B: Block, H: ExHashT, RL> {
 
 struct SleepingRateLimiter<RL> {
     rate_limiter: RL,
-    rate_limiter_sleep: Rc<RefCell<Pin<Box<Sleep>>>>,
+    rate_limiter_sleep: Pin<Box<Sleep>>,
 }
 
 impl<RL: RateLimiter> SleepingRateLimiter<RL> {
@@ -279,75 +277,61 @@ impl<RL: RateLimiter> SleepingRateLimiter<RL> {
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
         let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
         let next_wait = now_closure() + next_wait.unwrap_or(Duration::ZERO);
-        let mut next_sleep = Rc::clone(&self.rate_limiter_sleep);
-        next_sleep
-            .get_mut()
-            .as_mut()
-            .set(tokio::time::sleep_until(next_wait.into()));
+        let mut next_sleep = self.rate_limiter_sleep;
+        next_sleep.set(tokio::time::sleep_until(next_wait.into()));
 
         RateLimiterTask {
-            rate_limiter: Some(self),
-            rate_limiter_sleep: Rc::clone(&next_sleep),
+            rate_limiter: Some(self.rate_limiter),
+            rate_limiter_sleep: Some(next_sleep),
         }
     }
 
     fn new(rate_limiter: RL, rate_limiter_sleep: Pin<Box<Sleep>>) -> Self {
         Self {
             rate_limiter,
-            rate_limiter_sleep: Rc::new(RefCell::new(rate_limiter_sleep)),
+            rate_limiter_sleep,
         }
     }
-
-    // fn rate_limiter_sleep(&self) -> &Sleep {
-    //     self.rate_limiter_sleep.as_ref()
-    // }
 }
 
 struct RateLimiterTask<RL> {
-    rate_limiter: Option<SleepingRateLimiter<RL>>,
-    rate_limiter_sleep: Rc<RefCell<Pin<Box<Sleep>>>>,
+    rate_limiter: Option<RL>,
+    rate_limiter_sleep: Option<Pin<Box<Sleep>>>,
 }
 
-impl<RL: RateLimiter> Future for RateLimiterTask<RL> {
+impl<RL: RateLimiter + Unpin> Future for RateLimiterTask<RL> {
     type Output = SleepingRateLimiter<RL>;
 
     fn poll(
-        mut self: Pin<&mut Self>,
+        self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        // if self
-        //     .rate_limiter_sleep
-        //     .map(|limiter| limiter.as_mut().poll(cx).is_pending())
-        //     .unwrap_or(true)
-        // {
-        //     return std::task::Poll::Pending;
-        // }
-        // if let Some()
-        // match (self.rate_limiter.take(), self.rate_limiter_sleep.take()) {
-        //     (Some(rate_limiter), Some(rate_limiter_task)) => {
-        //         std::task::Poll::Ready(SleepingRateLimiter::new(rate_limiter, rate_limiter_task))
-        //     }
-        //     _ => std::task::Poll::Pending,
-        // }
-
-        if self
-            .rate_limiter_sleep
-            .get_mut()
-            .as_mut()
-            .poll(cx)
-            .is_pending()
-        {
-            return std::task::Poll::Pending;
+        let deref_self = self.get_mut();
+        match &mut deref_self.rate_limiter_sleep {
+            Some(rate_limiter_sleep) => {
+                if rate_limiter_sleep.as_mut().poll(cx).is_pending() {
+                    return std::task::Poll::Pending;
+                }
+            }
+            None => return std::task::Poll::Pending,
         }
-        match self.rate_limiter.take() {
-            Some(rate_limiter) => std::task::Poll::Ready(rate_limiter),
+        match (
+            deref_self.rate_limiter.take(),
+            deref_self.rate_limiter_sleep.take(),
+        ) {
+            (Some(rate_limiter), Some(rate_limiter_sleep)) => {
+                std::task::Poll::Ready(SleepingRateLimiter {
+                    rate_limiter,
+                    rate_limiter_sleep,
+                })
+            }
             _ => std::task::Poll::Pending,
         }
     }
 }
 
 #[async_trait]
-impl<B: Block, H: ExHashT, RL: RateLimiter + Send> EventStream<PeerId>
+impl<B: Block, H: ExHashT, RL: RateLimiter + Unpin + Send> EventStream<PeerId>
     for RateLimitedNetworkEventStream<B, H, RL>
 {
     async fn next_event(&mut self) -> Option<Event<PeerId>> {
@@ -356,7 +340,7 @@ impl<B: Block, H: ExHashT, RL: RateLimiter + Send> EventStream<PeerId>
             struct SaturatingUsize(usize);
             impl Sum<SaturatingUsize> for SaturatingUsize {
                 fn sum<I: Iterator<Item = SaturatingUsize>>(iter: I) -> Self {
-                    let mut sum = 0;
+                    let sum = 0;
                     iter.fold(sum, |sum: usize, item| sum.saturating_add(item.0));
                     SaturatingUsize(sum)
                 }
