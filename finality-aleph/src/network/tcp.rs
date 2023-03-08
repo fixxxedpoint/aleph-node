@@ -1,4 +1,4 @@
-use std::{io::Error as IoError, iter, net::ToSocketAddrs as _, time::Instant};
+use std::{io::Error as IoError, iter, net::ToSocketAddrs as _};
 
 use aleph_primitives::AuthorityId;
 use codec::{Decode, Encode};
@@ -9,11 +9,12 @@ use tokio::net::{
     TcpListener, TcpStream, ToSocketAddrs,
 };
 
+use super::clique::rate_limiter::RateLimiter;
 use crate::{
     crypto::{verify, AuthorityPen, Signature},
     network::{
         clique::{
-            rate_limiter::{RateLimitingDialer, RateLimitingListener, TokenBucket},
+            rate_limiter::{RateLimitingDialer, RateLimitingListener},
             ConnectionInfo, Dialer, Listener, PublicKey, SecretKey, Splittable,
         },
         AddressingInformation, NetworkIdentity, PeerId,
@@ -255,8 +256,11 @@ pub async fn new_tcp_network<A: ToSocketAddrs>(
     Ok((TcpDialer {}, listener, identity))
 }
 
-pub async fn new_rate_limited_network<A: ToSocketAddrs>(
-    bits_per_second_per_node: f64,
+pub async fn new_rate_limited_network<
+    A: ToSocketAddrs,
+    RL: RateLimiter + Clone + Send + Unpin + 'static,
+>(
+    rate_limiter: RL,
     listening_addresses: A,
     external_addresses: Vec<String>,
     authority_pen: &AuthorityPen,
@@ -271,7 +275,6 @@ pub async fn new_rate_limited_network<A: ToSocketAddrs>(
     ),
     Error,
 > {
-    let rate_limiter = TokenBucket::new(bits_per_second_per_node, 0, Instant::now());
     let (dialer, listener, identity) =
         new_tcp_network(listening_addresses, external_addresses, authority_pen).await?;
     Ok((

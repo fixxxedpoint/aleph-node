@@ -86,7 +86,7 @@ where
     let rate_limiter = TokenBucket::new_default(bit_rate_per_node);
 
     let (dialer, listener, network_identity) = new_rate_limited_network(
-        bit_rate_per_node,
+        rate_limiter.clone(),
         ("0.0.0.0", validator_port),
         external_addresses,
         &network_authority_pen,
