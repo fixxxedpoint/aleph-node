@@ -13,7 +13,7 @@ use futures::{
     stream::{Stream, StreamExt},
     Future,
 };
-use log::{error, trace};
+use log::{error, info, trace};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
     multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
@@ -265,6 +265,7 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
 pub struct RateLimitedNetworkEventStream<P, ES: EventStream<P>, RL> {
     stream: ES,
     rate_limiter: SleepingRateLimiter<RL>,
+    last_read_size: usize,
     _phantom_data: PhantomData<P>,
 }
 
@@ -273,6 +274,7 @@ impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
         Self {
             stream,
             rate_limiter: SleepingRateLimiter::new(rate_limiter),
+            last_read_size: 0,
             _phantom_data: PhantomData,
         }
     }
@@ -280,6 +282,7 @@ impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
 
 pub struct SleepingRateLimiter<RL> {
     rate_limiter: RL,
+    default_until: Instant,
     sleep: Pin<Box<Sleep>>,
 }
 
@@ -287,6 +290,7 @@ impl<RL> SleepingRateLimiter<RL> {
     fn new(rate_limiter: RL) -> Self {
         Self {
             rate_limiter,
+            default_until: Instant::now(),
             sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
         }
     }
@@ -297,8 +301,11 @@ impl<RL: RateLimiter> SleepingRateLimiter<RL> {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
         let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
-        let next_wait = now_closure() + next_wait.unwrap_or(Duration::ZERO);
+        let next_wait = next_wait
+            .map(|next_wait| now_closure() + next_wait)
+            .unwrap_or(self.default_until);
 
+        info!(target: "aleph-network", "rate_limit of {} - waiting until {:?}", read_size, next_wait);
         self.sleep.set(tokio::time::sleep_until(next_wait.into()));
 
         RateLimiterTask {
@@ -318,7 +325,7 @@ impl<'a> Future for RateLimiterTask<'a> {
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        (&mut self.rate_limiter_sleep).as_mut().poll(cx)
+        self.rate_limiter_sleep.as_mut().poll(cx)
     }
 }
 
@@ -327,13 +334,15 @@ impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send +
     EventStream<P> for RateLimitedNetworkEventStream<P, ES, RL>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
+        self.rate_limiter.rate_limit(self.last_read_size).await;
+        self.last_read_size = 0;
+
         let event = self.stream.next_event().await?;
         if let Event::Messages(_, messages) = &event {
             struct SaturatingUsize(usize);
             impl Sum<SaturatingUsize> for SaturatingUsize {
                 fn sum<I: Iterator<Item = SaturatingUsize>>(iter: I) -> Self {
-                    let sum = 0;
-                    iter.fold(sum, |sum: usize, item| sum.saturating_add(item.0));
+                    let sum = iter.fold(0, |sum: usize, item| sum.saturating_add(item.0));
                     SaturatingUsize(sum)
                 }
             }
@@ -344,7 +353,7 @@ impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send +
                 .sum::<SaturatingUsize>()
                 .0;
 
-            self.rate_limiter.rate_limit(size_received).await;
+            self.last_read_size = size_received;
         }
         Some(event)
     }
