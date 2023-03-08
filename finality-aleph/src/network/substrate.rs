@@ -264,7 +264,7 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
 
 pub struct RateLimitedNetworkEventStream<P, ES: EventStream<P>, RL> {
     stream: ES,
-    rate_limiter: Option<SleepingRateLimiter<RL>>,
+    rate_limiter: SleepingRateLimiter<RL>,
     _phantom_data: PhantomData<P>,
 }
 
@@ -272,7 +272,7 @@ impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
     pub fn new(stream: ES, rate_limiter: RL) -> Self {
         Self {
             stream,
-            rate_limiter: Some(SleepingRateLimiter::new(rate_limiter)),
+            rate_limiter: SleepingRateLimiter::new(rate_limiter),
             _phantom_data: PhantomData,
         }
     }
@@ -280,67 +280,45 @@ impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
 
 pub struct SleepingRateLimiter<RL> {
     rate_limiter: RL,
-    rate_limiter_sleep: Pin<Box<Sleep>>,
+    sleep: Pin<Box<Sleep>>,
 }
 
 impl<RL> SleepingRateLimiter<RL> {
     fn new(rate_limiter: RL) -> Self {
         Self {
             rate_limiter,
-            rate_limiter_sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
+            sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
         }
     }
 }
 
 impl<RL: RateLimiter> SleepingRateLimiter<RL> {
-    pub fn rate_limit(mut self, read_size: usize) -> RateLimiterTask<RL> {
+    pub fn rate_limit(&mut self, read_size: usize) -> RateLimiterTask {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
         let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
         let next_wait = now_closure() + next_wait.unwrap_or(Duration::ZERO);
-        let mut next_sleep = self.rate_limiter_sleep;
-        next_sleep.set(tokio::time::sleep_until(next_wait.into()));
+
+        self.sleep.set(tokio::time::sleep_until(next_wait.into()));
 
         RateLimiterTask {
-            rate_limiter: Some(self.rate_limiter),
-            rate_limiter_sleep: Some(next_sleep),
+            rate_limiter_sleep: &mut self.sleep,
         }
     }
 }
 
-pub struct RateLimiterTask<RL> {
-    rate_limiter: Option<RL>,
-    rate_limiter_sleep: Option<Pin<Box<Sleep>>>,
+pub struct RateLimiterTask<'a> {
+    rate_limiter_sleep: &'a mut Pin<Box<Sleep>>,
 }
 
-impl<RL: RateLimiter + Unpin> Future for RateLimiterTask<RL> {
-    type Output = SleepingRateLimiter<RL>;
+impl<'a> Future for RateLimiterTask<'a> {
+    type Output = ();
 
     fn poll(
-        self: Pin<&mut Self>,
+        mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Self::Output> {
-        let deref_self = self.get_mut();
-        match &mut deref_self.rate_limiter_sleep {
-            Some(rate_limiter_sleep) => {
-                if rate_limiter_sleep.as_mut().poll(cx).is_pending() {
-                    return std::task::Poll::Pending;
-                }
-            }
-            None => return std::task::Poll::Pending,
-        }
-        match (
-            deref_self.rate_limiter.take(),
-            deref_self.rate_limiter_sleep.take(),
-        ) {
-            (Some(rate_limiter), Some(rate_limiter_sleep)) => {
-                std::task::Poll::Ready(SleepingRateLimiter {
-                    rate_limiter,
-                    rate_limiter_sleep,
-                })
-            }
-            _ => std::task::Poll::Pending,
-        }
+        (&mut self.rate_limiter_sleep).as_mut().poll(cx)
     }
 }
 
@@ -366,8 +344,7 @@ impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send +
                 .sum::<SaturatingUsize>()
                 .0;
 
-            let rate_limiter = self.rate_limiter.take()?;
-            self.rate_limiter = Some(rate_limiter.rate_limit(size_received).await);
+            self.rate_limiter.rate_limit(size_received).await;
         }
         Some(event)
     }
