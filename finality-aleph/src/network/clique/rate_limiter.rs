@@ -39,6 +39,10 @@ impl TokenBucket {
         }
     }
 
+    pub fn new_default(rate: f64) -> Self {
+        Self::new(rate, 0, Instant::now())
+    }
+
     fn calculate_delay(&self, amount: usize) -> Duration {
         Duration::from_secs_f64(amount as f64 / self.rate)
     }

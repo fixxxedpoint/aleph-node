@@ -12,10 +12,10 @@ use sp_runtime::traits::Block;
 use crate::{
     crypto::AuthorityPen,
     network::{
-        clique::Service,
+        clique::{rate_limiter::TokenBucket, Service},
         session::{ConnectionManager, ConnectionManagerConfig},
         tcp::{new_rate_limited_network, KEY_TYPE},
-        GossipService, SubstrateNetwork,
+        GossipService, RateLimitedRawNetwork, SubstrateNetwork,
     },
     nodes::{setup_justification_handler, JustificationParams},
     party::{
@@ -83,6 +83,8 @@ where
         .flatten()
         .unwrap_or(4.0 * 1024.0);
 
+    let rate_limiter = TokenBucket::new_default(bit_rate_per_node);
+
     let (dialer, listener, network_identity) = new_rate_limited_network(
         bit_rate_per_node,
         ("0.0.0.0", validator_port),
@@ -103,10 +105,11 @@ where
         validator_network_service.run(exit).await
     });
 
-    let (gossip_network_service, authentication_network, _block_sync_network) = GossipService::new(
-        SubstrateNetwork::new(network.clone(), protocol_naming),
-        spawn_handle.clone(),
-    );
+    let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
+    let rate_limited_substrate_network =
+        RateLimitedRawNetwork::new(substrate_network, rate_limiter);
+    let (gossip_network_service, authentication_network, _block_sync_network) =
+        GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
     let gossip_network_task = async move { gossip_network_service.run().await };
 
     let block_requester = network.clone();

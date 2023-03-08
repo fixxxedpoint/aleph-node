@@ -379,6 +379,15 @@ pub struct RateLimitedRawNetwork<RN, RL> {
     rate_limiter: RL,
 }
 
+impl<RN, RL> RateLimitedRawNetwork<RN, RL> {
+    pub fn new(network: RN, rate_limiter: RL) -> Self {
+        Self {
+            raw_network: network,
+            rate_limiter,
+        }
+    }
+}
+
 impl<RN: RawNetwork, RL: RateLimiter + Clone + Send + Sync + Unpin + 'static> RawNetwork
     for RateLimitedRawNetwork<RN, RL>
 where

@@ -19,7 +19,7 @@ pub mod tcp;
 #[cfg(test)]
 pub use gossip::mock::{MockEvent, MockRawNetwork};
 pub use gossip::{Network as GossipNetwork, Protocol, Service as GossipService};
-pub use substrate::{ProtocolNaming, SubstrateNetwork};
+pub use substrate::{ProtocolNaming, RateLimitedRawNetwork, SubstrateNetwork};
 
 /// Represents the id of an arbitrary node.
 pub trait PeerId: PartialEq + Eq + Clone + Debug + Display + Hash + Codec + Send {
