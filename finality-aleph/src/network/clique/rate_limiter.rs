@@ -26,6 +26,7 @@ pub struct TokenBucket {
     rate: f64,
     tokens_limit: usize,
     available: usize,
+    requested: usize,
     last_update: Instant,
 }
 
@@ -35,6 +36,7 @@ impl TokenBucket {
             rate,
             tokens_limit: rate as usize,
             available: initial,
+            requested: 0,
             last_update: now,
         }
     }
@@ -51,6 +53,10 @@ impl TokenBucket {
         let new_units = (time_since_last_update.as_secs_f64() * self.rate).floor() as usize;
         self.available = self.available.saturating_add(new_units);
         self.last_update = now;
+
+        let used = min(self.available, self.requested);
+        self.available -= used;
+        self.requested -= used;
         self.available
     }
 }
@@ -61,7 +67,8 @@ impl RateLimiter for TokenBucket {
         requested: usize,
         mut now: impl FnMut() -> Instant + Send,
     ) -> Option<Duration> {
-        if self.available < requested {
+        self.requested = self.requested.saturating_add(requested);
+        if self.available < self.requested {
             let now_value = now();
             assert!(
                 now_value >= self.last_update,
@@ -70,14 +77,15 @@ impl RateLimiter for TokenBucket {
                 self.last_update
             );
             let last_duration = now_value.duration_since(self.last_update);
-
-            if self.update_units(now_value, last_duration) < requested {
-                let required_delay = self.calculate_delay(requested - self.available);
+            if self.update_units(now_value, last_duration) < self.requested {
+                let required_delay =
+                    self.calculate_delay(self.requested - self.available) - last_duration;
                 return Some(required_delay);
             }
         }
-        self.available -= requested;
+        self.available -= self.requested;
         self.available = min(self.available, self.tokens_limit);
+        self.requested = 0;
         None
     }
 }
@@ -226,5 +234,71 @@ impl<L: Listener + Send, RL: RateLimiter + Clone + Send + Unpin + 'static> Liste
             connection,
             self.rate_limiter.clone(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::{Duration, Instant};
+
+    use super::{RateLimiter, TokenBucket};
+
+    #[test]
+    fn no_slowdown_while_within_rate_limit() {
+        let now = Instant::now();
+        const LIMIT_PER_SECOND: f64 = 10_f64;
+        let mut rate_limiter = TokenBucket::new(LIMIT_PER_SECOND, 0, now.clone());
+
+        assert_eq!(
+            rate_limiter.rate_limit(9, || now + Duration::from_secs(1)),
+            None
+        );
+        assert_eq!(
+            rate_limiter.rate_limit(5, || now + Duration::from_secs(2)),
+            None
+        );
+        assert_eq!(
+            rate_limiter.rate_limit(1, || now + Duration::from_secs(3)),
+            None
+        );
+        assert_eq!(
+            rate_limiter.rate_limit(0, || panic!("`now()` shouldn't be called")),
+            None
+        );
+        assert_eq!(
+            rate_limiter.rate_limit(0, || panic!("`now()` shouldn't be called")),
+            None
+        );
+        assert_eq!(
+            rate_limiter.rate_limit(9, || now + Duration::from_secs(3)),
+            None
+        );
+    }
+
+    #[test]
+    fn slowdown_when_limit_reached() {
+        let now = Instant::now();
+        const LIMIT_PER_SECOND: f64 = 10_f64;
+        let mut rate_limiter = TokenBucket::new(LIMIT_PER_SECOND, 0, now.clone());
+
+        assert_eq!(
+            rate_limiter.rate_limit(10, || now + Duration::from_secs(1)),
+            None
+        );
+
+        // we should wait some after reaching the limit
+        assert!(rate_limiter
+            .rate_limit(1, || now + Duration::from_secs(1))
+            .is_some());
+
+        let sleep = rate_limiter
+            .rate_limit(19, || now + Duration::from_secs(1))
+            .expect("we should already reach the limit");
+
+        assert_eq!(
+            sleep,
+            Duration::from_secs(2),
+            "we should wait exactly 2 seconds"
+        );
     }
 }
