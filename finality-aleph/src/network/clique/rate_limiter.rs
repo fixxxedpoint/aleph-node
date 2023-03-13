@@ -14,11 +14,7 @@ use super::{ConnectionInfo, Listener, Splittable};
 use crate::network::{clique::Dialer, Data};
 
 pub trait RateLimiter {
-    fn rate_limit(
-        &mut self,
-        requested: usize,
-        now: impl FnMut() -> Instant + Send,
-    ) -> Option<Duration>;
+    fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant) -> Option<Duration>;
 }
 
 #[derive(Clone)]
@@ -65,7 +61,7 @@ impl RateLimiter for TokenBucket {
     fn rate_limit(
         &mut self,
         requested: usize,
-        mut now: impl FnMut() -> Instant + Send,
+        mut now: impl FnMut() -> Instant,
     ) -> Option<Duration> {
         self.requested = self.requested.saturating_add(requested);
         if self.available < self.requested {
