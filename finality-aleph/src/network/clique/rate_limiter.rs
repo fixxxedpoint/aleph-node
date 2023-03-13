@@ -78,8 +78,7 @@ impl RateLimiter for TokenBucket {
             );
             let last_duration = now_value.duration_since(self.last_update);
             if self.update_units(now_value, last_duration) < self.requested {
-                let required_delay =
-                    self.calculate_delay(self.requested - self.available) - last_duration;
+                let required_delay = self.calculate_delay(self.requested - self.available);
                 return Some(required_delay);
             }
         }
@@ -299,6 +298,27 @@ mod tests {
             sleep,
             Duration::from_secs(2),
             "we should wait exactly 2 seconds"
+        );
+    }
+
+    #[test]
+    fn buildup_tokens_but_no_more_than_limit() {
+        let now = Instant::now();
+        const LIMIT_PER_SECOND: f64 = 10_f64;
+        let mut rate_limiter = TokenBucket::new(LIMIT_PER_SECOND, 0, now.clone());
+
+        assert_eq!(
+            rate_limiter.rate_limit(10, || now + Duration::from_secs(2)),
+            None
+        );
+
+        assert_eq!(
+            rate_limiter.rate_limit(40, || now + Duration::from_secs(10)),
+            None,
+        );
+        assert_eq!(
+            rate_limiter.rate_limit(40, || now + Duration::from_secs(11)),
+            Some(Duration::from_secs(2))
         );
     }
 }
