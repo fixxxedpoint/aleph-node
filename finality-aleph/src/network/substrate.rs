@@ -334,7 +334,6 @@ impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send +
     EventStream<P> for RateLimitedNetworkEventStream<P, ES, RL>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
-        // TODO this is experimental package droping while awaiting
         if let Some(rate_sleep) = self.rate_limiter.rate_limit(self.last_read_size) {
             let mut rate_sleep = rate_sleep.fuse();
             loop {
@@ -346,29 +345,30 @@ impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send +
         }
         self.last_read_size = 0;
 
-        // self.rate_limiter.rate_limit(self.last_read_size).await;
-        // self.last_read_size = 0;
-
         let event = self.stream.next_event().await?;
         if let Event::Messages(_, messages) = &event {
-            struct SaturatingUsize(usize);
-            impl Sum<SaturatingUsize> for SaturatingUsize {
-                fn sum<I: Iterator<Item = SaturatingUsize>>(iter: I) -> Self {
-                    let sum = iter.fold(0, |sum: usize, item| sum.saturating_add(item.0));
-                    SaturatingUsize(sum)
-                }
-            }
-
-            let size_received = messages
-                .iter()
-                .map(|(_, bytes)| SaturatingUsize(bytes.len()))
-                .sum::<SaturatingUsize>()
-                .0;
+            let size_received = size(messages);
 
             self.last_read_size = size_received;
         }
         Some(event)
     }
+}
+
+fn size(messages: &Vec<(Protocol, bytes::Bytes)>) -> usize {
+    struct SaturatingUsize(usize);
+    impl Sum<SaturatingUsize> for SaturatingUsize {
+        fn sum<I: Iterator<Item = SaturatingUsize>>(iter: I) -> Self {
+            let sum = iter.fold(0, |sum: usize, item| sum.saturating_add(item.0));
+            SaturatingUsize(sum)
+        }
+    }
+    let size_received = messages
+        .iter()
+        .map(|(_, bytes)| SaturatingUsize(bytes.len()))
+        .sum::<SaturatingUsize>()
+        .0;
+    size_received
 }
 
 #[derive(Clone)]
