@@ -11,7 +11,7 @@ use std::{
 use async_trait::async_trait;
 use futures::{
     stream::{Stream, StreamExt},
-    Future,
+    Future, FutureExt,
 };
 use log::{error, info, trace};
 use sc_consensus::JustificationSyncLink;
@@ -282,7 +282,6 @@ impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
 
 pub struct SleepingRateLimiter<RL> {
     rate_limiter: RL,
-    default_until: Instant,
     sleep: Pin<Box<Sleep>>,
 }
 
@@ -290,27 +289,28 @@ impl<RL> SleepingRateLimiter<RL> {
     fn new(rate_limiter: RL) -> Self {
         Self {
             rate_limiter,
-            default_until: Instant::now(),
             sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
         }
     }
 }
 
 impl<RL: RateLimiter> SleepingRateLimiter<RL> {
-    pub fn rate_limit(&mut self, read_size: usize) -> RateLimiterTask {
+    pub fn rate_limit(&mut self, read_size: usize) -> Option<RateLimiterTask> {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
         let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
-        let next_wait = next_wait
-            .map(|next_wait| now_closure() + next_wait)
-            .unwrap_or(self.default_until);
+        let next_wait = if let Some(next_wait) = next_wait {
+            now_closure() + next_wait
+        } else {
+            return None;
+        };
 
         info!(target: "aleph-network", "rate_limit of {} - waiting until {:?}", read_size, next_wait);
         self.sleep.set(tokio::time::sleep_until(next_wait.into()));
 
-        RateLimiterTask {
+        Some(RateLimiterTask {
             rate_limiter_sleep: &mut self.sleep,
-        }
+        })
     }
 }
 
@@ -334,8 +334,20 @@ impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send +
     EventStream<P> for RateLimitedNetworkEventStream<P, ES, RL>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
-        self.rate_limiter.rate_limit(self.last_read_size).await;
+        // TODO this is experimental package droping while awaiting
+        if let Some(rate_sleep) = self.rate_limiter.rate_limit(self.last_read_size) {
+            let mut rate_sleep = rate_sleep.fuse();
+            loop {
+                tokio::select! {
+                    _ = &mut rate_sleep => break,
+                    _ = self.stream.next_event() => {},
+                }
+            }
+        }
         self.last_read_size = 0;
+
+        // self.rate_limiter.rate_limit(self.last_read_size).await;
+        // self.last_read_size = 0;
 
         let event = self.stream.next_event().await?;
         if let Event::Messages(_, messages) = &event {
