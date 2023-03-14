@@ -204,18 +204,15 @@ impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
 }
 
 impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<RL, A> {
-    fn poll_read<'b>(
-        self: std::pin::Pin<&'b mut Self>,
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         let deref_self = self.get_mut();
-        let rate_limiter = if let std::task::Poll::Ready(rate_limiter) =
-            Pin::new(&mut deref_self.rate_limiter).poll(cx)
-        {
-            rate_limiter
-        } else {
-            return std::task::Poll::Pending;
+        let rate_limiter = match Pin::new(&mut deref_self.rate_limiter).poll(cx) {
+            std::task::Poll::Ready(rate_limiter) => rate_limiter,
+            std::task::Poll::Pending => return std::task::Poll::Pending,
         };
 
         let filled_before = buf.filled().len();
