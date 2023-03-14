@@ -1,8 +1,6 @@
 use std::{
-    cell::RefCell,
     cmp::min,
     pin::Pin,
-    rc::Rc,
     time::{Duration, Instant},
 };
 
@@ -102,7 +100,7 @@ impl<RL> SleepingRateLimiter<RL> {
 }
 
 impl<RL: RateLimiter> SleepingRateLimiter<RL> {
-    pub fn rate_limit(&mut self, read_size: usize) -> Option<RateLimiterTask> {
+    fn set_sleep(&mut self, read_size: usize) -> Option<&mut Pin<Box<Sleep>>> {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
         let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
@@ -114,19 +112,27 @@ impl<RL: RateLimiter> SleepingRateLimiter<RL> {
 
         info!(target: "aleph-network", "rate_limit of {} - waiting until {:?}", read_size, next_wait);
         self.sleep.set(tokio::time::sleep_until(next_wait.into()));
+        Some(&mut self.sleep)
+    }
+
+    pub fn rate_limit(&mut self, read_size: usize) -> Option<RateLimiterTask> {
+        let sleep = self.set_sleep(read_size)?;
 
         Some(RateLimiterTask {
-            rate_limiter_sleep: &mut self.sleep,
+            rate_limiter_sleep: sleep,
         })
     }
 
-    pub fn into_inner(self) -> RL {
-        self.rate_limiter
+    pub fn rate_limit_into(mut self, read_size: usize) -> OwningRateLimiterTask<RL> {
+        self.set_sleep(read_size);
+        OwningRateLimiterTask {
+            rate_limiter: Some(self),
+        }
     }
 }
 
 pub struct RateLimiterTask<'a> {
-    rate_limiter_sleep: Rc<RefCell<Pin<Box<Sleep>>>>,
+    rate_limiter_sleep: &'a mut Pin<Box<Sleep>>,
 }
 
 impl<'a> Future for RateLimiterTask<'a> {
@@ -140,49 +146,90 @@ impl<'a> Future for RateLimiterTask<'a> {
     }
 }
 
-pub struct RateLimitedAsyncRead<'a, RL, A> {
-    rate_limiter: SleepingRateLimiter<RL>,
-    rate_limiter_sleep: Option<RateLimiterTask<'a>>,
+pub struct OwningRateLimiterTask<RL> {
+    rate_limiter: Option<SleepingRateLimiter<RL>>,
+}
+
+impl<RL> OwningRateLimiterTask<RL> {
+    pub fn new(rate_limiter: SleepingRateLimiter<RL>) -> Self {
+        Self {
+            rate_limiter: Some(rate_limiter),
+        }
+    }
+
+    pub fn into_inner(self) -> RL {
+        self.rate_limiter
+            .expect("`rate_limiter` should not be empty")
+            .rate_limiter
+    }
+}
+
+impl<RL: Unpin> Future for OwningRateLimiterTask<RL> {
+    type Output = SleepingRateLimiter<RL>;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let self_deref = self.get_mut();
+        let rate_limiter = if let Some(rate_limiter) = &mut self_deref.rate_limiter {
+            rate_limiter
+        } else {
+            return std::task::Poll::Pending;
+        };
+
+        if rate_limiter.sleep.as_mut().poll(cx).is_pending() {
+            return std::task::Poll::Pending;
+        }
+
+        match self_deref.rate_limiter.take() {
+            Some(rate_limiter) => std::task::Poll::Ready(rate_limiter),
+            None => std::task::Poll::Pending,
+        }
+    }
+}
+
+pub struct RateLimitedAsyncRead<RL, A> {
+    rate_limiter: OwningRateLimiterTask<RL>,
     read: Pin<Box<A>>,
 }
 
-impl<'a, RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<'a, RL, A> {
+impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
     pub fn new(read: A, rate_limiter: RL) -> Self {
         Self {
-            rate_limiter: SleepingRateLimiter::new(rate_limiter),
-            rate_limiter_sleep: None,
+            rate_limiter: OwningRateLimiterTask::new(SleepingRateLimiter::new(rate_limiter)),
             read: Box::pin(read),
         }
     }
 }
 
-impl<'a, RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<'a, RL, A> {
+impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<RL, A> {
     fn poll_read<'b>(
         self: std::pin::Pin<&'b mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         let deref_self = self.get_mut();
-        if let Some(rate_limiter_sleep) = &mut deref_self.rate_limiter_sleep {
-            if Pin::new(rate_limiter_sleep).poll(cx).is_pending() {
-                return std::task::Poll::Pending;
-            }
-        }
+        let rate_limiter = if let std::task::Poll::Ready(rate_limiter) =
+            Pin::new(&mut deref_self.rate_limiter).poll(cx)
+        {
+            rate_limiter
+        } else {
+            return std::task::Poll::Pending;
+        };
 
         let filled_before = buf.filled().len();
         let result = deref_self.read.as_mut().poll_read(cx, buf);
         let filled_after = buf.filled().len();
         let last_read_size = filled_after - filled_before;
 
-        deref_self.rate_limiter_sleep = deref_self.rate_limiter.rate_limit(last_read_size);
+        deref_self.rate_limiter = rate_limiter.rate_limit_into(last_read_size);
 
         result
     }
 }
 
-impl<'a, RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite
-    for RateLimitedAsyncRead<'a, RL, A>
-{
+impl<RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncRead<RL, A> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -206,20 +253,19 @@ impl<'a, RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite
     }
 }
 
-impl<'a, R: Splittable, RL: RateLimiter + Send + Unpin> Splittable
-    for RateLimitedAsyncRead<'a, RL, R>
-{
+impl<R: Splittable, RL: RateLimiter + Send + Unpin> Splittable for RateLimitedAsyncRead<RL, R> {
     type Sender = R::Sender;
-    type Receiver = RateLimitedAsyncRead<'a, RL, R::Receiver>;
+    type Receiver = RateLimitedAsyncRead<RL, R::Receiver>;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let (sender, receiver) = Pin::<Box<R>>::into_inner(self.read).split();
-        let receiver = RateLimitedAsyncRead::new(receiver, self.rate_limiter.into_inner());
+        let rate_limiter_task = self.rate_limiter;
+        let receiver = RateLimitedAsyncRead::new(receiver, rate_limiter_task.into_inner());
         (sender, receiver)
     }
 }
 
-impl<'a, A: ConnectionInfo, RL: Send> ConnectionInfo for RateLimitedAsyncRead<'a, RL, A> {
+impl<A: ConnectionInfo, RL: Send> ConnectionInfo for RateLimitedAsyncRead<RL, A> {
     fn peer_address_info(&self) -> super::PeerAddressInfo {
         self.read.peer_address_info()
     }
@@ -244,7 +290,7 @@ impl<D, RL: RateLimiter> RateLimitingDialer<D, RL> {
 impl<RL: RateLimiter + Clone + Send + Unpin + 'static, A: Data, D: Dialer<A>> Dialer<A>
     for RateLimitingDialer<D, RL>
 {
-    type Connection = RateLimitedAsyncRead<'static, RL, D::Connection>;
+    type Connection = RateLimitedAsyncRead<RL, D::Connection>;
     type Error = D::Error;
 
     async fn connect(&mut self, address: A) -> Result<Self::Connection, Self::Error> {
@@ -274,7 +320,7 @@ impl<L, RL> RateLimitingListener<L, RL> {
 impl<L: Listener + Send, RL: RateLimiter + Clone + Send + Unpin + 'static> Listener
     for RateLimitingListener<L, RL>
 {
-    type Connection = RateLimitedAsyncRead<'static, RL, L::Connection>;
+    type Connection = RateLimitedAsyncRead<RL, L::Connection>;
     type Error = L::Error;
 
     async fn accept(&mut self) -> Result<Self::Connection, Self::Error> {

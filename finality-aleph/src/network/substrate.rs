@@ -5,15 +5,14 @@ use std::{
     marker::PhantomData,
     pin::Pin,
     sync::Arc,
-    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
 use futures::{
     stream::{Stream, StreamExt},
-    Future, FutureExt,
+    FutureExt,
 };
-use log::{error, info, trace};
+use log::{error, trace};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
     multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
@@ -27,10 +26,9 @@ use sc_network_common::{
 use sp_api::NumberFor;
 use sp_consensus::SyncOracle;
 use sp_runtime::traits::Block;
-use tokio::time::Sleep;
 
-use super::clique::rate_limiter::RateLimiter;
 use crate::network::{
+    clique::rate_limiter::{RateLimiter, SleepingRateLimiter},
     gossip::{Event, EventStream, NetworkSender, Protocol, RawNetwork},
     RequestBlocks,
 };
@@ -277,55 +275,6 @@ impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
             last_read_size: 0,
             _phantom_data: PhantomData,
         }
-    }
-}
-
-pub struct SleepingRateLimiter<RL> {
-    rate_limiter: RL,
-    sleep: Pin<Box<Sleep>>,
-}
-
-impl<RL> SleepingRateLimiter<RL> {
-    fn new(rate_limiter: RL) -> Self {
-        Self {
-            rate_limiter,
-            sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
-        }
-    }
-}
-
-impl<RL: RateLimiter> SleepingRateLimiter<RL> {
-    pub fn rate_limit(&mut self, read_size: usize) -> Option<RateLimiterTask> {
-        let mut now = None;
-        let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
-        let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
-        let next_wait = if let Some(next_wait) = next_wait {
-            now_closure() + next_wait
-        } else {
-            return None;
-        };
-
-        info!(target: "aleph-network", "rate_limit of {} - waiting until {:?}", read_size, next_wait);
-        self.sleep.set(tokio::time::sleep_until(next_wait.into()));
-
-        Some(RateLimiterTask {
-            rate_limiter_sleep: &mut self.sleep,
-        })
-    }
-}
-
-pub struct RateLimiterTask<'a> {
-    rate_limiter_sleep: &'a mut Pin<Box<Sleep>>,
-}
-
-impl<'a> Future for RateLimiterTask<'a> {
-    type Output = ();
-
-    fn poll(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        self.rate_limiter_sleep.as_mut().poll(cx)
     }
 }
 
