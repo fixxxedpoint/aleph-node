@@ -55,6 +55,7 @@ impl TokenBucket {
         let used = min(self.available, self.requested);
         self.available -= used;
         self.requested -= used;
+        self.available = min(self.available, self.tokens_limit);
         self.available
     }
 }
@@ -121,6 +122,12 @@ impl<RL: RateLimiter> SleepingRateLimiter<RL> {
         Some(RateLimiterTask {
             rate_limiter_sleep: sleep,
         })
+    }
+
+    pub fn current_sleep(&mut self) -> RateLimiterTask {
+        RateLimiterTask {
+            rate_limiter_sleep: &mut self.sleep,
+        }
     }
 
     pub fn rate_limit_into(mut self, read_size: usize) -> OwningRateLimiterTask<RL> {
@@ -338,8 +345,8 @@ mod tests {
     #[test]
     fn no_slowdown_while_within_rate_limit() {
         let now = Instant::now();
-        const LIMIT_PER_SECOND: f64 = 10_f64;
-        let mut rate_limiter = TokenBucket::new(LIMIT_PER_SECOND, 0, now.clone());
+        let limit_per_second = 10_f64;
+        let mut rate_limiter = TokenBucket::new(limit_per_second, 0, now.clone());
 
         assert_eq!(
             rate_limiter.rate_limit(9, || now + Duration::from_secs(1)),
@@ -370,8 +377,8 @@ mod tests {
     #[test]
     fn slowdown_when_limit_reached() {
         let now = Instant::now();
-        const LIMIT_PER_SECOND: f64 = 10_f64;
-        let mut rate_limiter = TokenBucket::new(LIMIT_PER_SECOND, 0, now.clone());
+        let limit_per_second = 10_f64;
+        let mut rate_limiter = TokenBucket::new(limit_per_second, 0, now.clone());
 
         assert_eq!(
             rate_limiter.rate_limit(10, || now + Duration::from_secs(1)),
@@ -397,8 +404,8 @@ mod tests {
     #[test]
     fn buildup_tokens_but_no_more_than_limit() {
         let now = Instant::now();
-        const LIMIT_PER_SECOND: f64 = 10_f64;
-        let mut rate_limiter = TokenBucket::new(LIMIT_PER_SECOND, 0, now.clone());
+        let limit_per_second = 10_f64;
+        let mut rate_limiter = TokenBucket::new(limit_per_second, 0, now.clone());
 
         assert_eq!(
             rate_limiter.rate_limit(10, || now + Duration::from_secs(2)),
@@ -407,11 +414,38 @@ mod tests {
 
         assert_eq!(
             rate_limiter.rate_limit(40, || now + Duration::from_secs(10)),
-            None,
+            Some(Duration::from_secs(3)),
         );
         assert_eq!(
             rate_limiter.rate_limit(40, || now + Duration::from_secs(11)),
+            Some(Duration::from_secs(6))
+        );
+    }
+
+    #[test]
+    fn multiple_calls_buildup_wait_time() {
+        let now = Instant::now();
+        let limit_per_second = 10_f64;
+        let mut rate_limiter = TokenBucket::new(limit_per_second, 0, now.clone());
+
+        assert_eq!(
+            rate_limiter.rate_limit(10, || now + Duration::from_secs(3)),
+            None
+        );
+
+        assert_eq!(
+            rate_limiter.rate_limit(10, || now + Duration::from_secs(3)),
+            Some(Duration::from_secs(1))
+        );
+
+        assert_eq!(
+            rate_limiter.rate_limit(10, || now + Duration::from_secs(3)),
             Some(Duration::from_secs(2))
+        );
+
+        assert_eq!(
+            rate_limiter.rate_limit(50, || now + Duration::from_secs(3)),
+            Some(Duration::from_secs(7))
         );
     }
 }
