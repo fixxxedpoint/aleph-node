@@ -129,13 +129,6 @@ impl<RL: RateLimiter> SleepingRateLimiter<RL> {
     pub fn current_sleep(&mut self) -> RateLimiterTask {
         RateLimiterTask::new(&mut self.sleep, &mut self.finished)
     }
-
-    pub fn rate_limit_into(mut self, read_size: usize) -> OwningRateLimiterTask<RL> {
-        self.set_sleep(read_size);
-        OwningRateLimiterTask {
-            rate_limiter: Some(self),
-        }
-    }
 }
 
 pub struct RateLimiterTask<'a> {
@@ -167,49 +160,6 @@ impl<'a> Future for RateLimiterTask<'a> {
             std::task::Poll::Ready(())
         } else {
             std::task::Poll::Pending
-        }
-    }
-}
-
-pub struct OwningRateLimiterTask<RL> {
-    rate_limiter: Option<SleepingRateLimiter<RL>>,
-}
-
-impl<RL> OwningRateLimiterTask<RL> {
-    pub fn new(rate_limiter: SleepingRateLimiter<RL>) -> Self {
-        Self {
-            rate_limiter: Some(rate_limiter),
-        }
-    }
-
-    pub fn into_inner(self) -> RL {
-        self.rate_limiter
-            .expect("`rate_limiter` should not be empty")
-            .rate_limiter
-    }
-}
-
-impl<RL: Unpin> Future for OwningRateLimiterTask<RL> {
-    type Output = SleepingRateLimiter<RL>;
-
-    fn poll(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let self_deref = self.get_mut();
-        let rate_limiter = if let Some(rate_limiter) = &mut self_deref.rate_limiter {
-            rate_limiter
-        } else {
-            return std::task::Poll::Pending;
-        };
-
-        if rate_limiter.sleep.as_mut().poll(cx).is_pending() {
-            return std::task::Poll::Pending;
-        }
-
-        match self_deref.rate_limiter.take() {
-            Some(rate_limiter) => std::task::Poll::Ready(rate_limiter),
-            None => std::task::Poll::Pending,
         }
     }
 }
