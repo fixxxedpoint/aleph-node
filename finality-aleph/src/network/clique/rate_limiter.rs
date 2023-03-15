@@ -5,7 +5,6 @@ use std::{
 };
 
 use futures::Future;
-use log::info;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     time::Sleep,
@@ -117,7 +116,6 @@ impl<RL: RateLimiter> SleepingRateLimiter<RL> {
             return None;
         };
 
-        info!(target: "aleph-network", "rate_limit of {} - waiting until {:?}", read_size, next_wait);
         self.sleep.set(tokio::time::sleep_until(next_wait.into()));
         Some(RateLimiterTask::new(&mut self.sleep, &mut self.finished))
     }
