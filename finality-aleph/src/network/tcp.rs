@@ -5,7 +5,7 @@ use codec::{Decode, Encode};
 use derive_more::{AsRef, Display};
 use log::info;
 use network_clique::{
-    rate_limiter::{RateLimiter, RateLimitingDialer, RateLimitingListener},
+    rate_limiter::{RateLimitingDialer, RateLimitingListener, TokenBucket},
     Dialer, Listener, PeerId, PublicKey, SecretKey,
 };
 use sp_core::crypto::KeyTypeId;
@@ -210,11 +210,8 @@ pub async fn new_tcp_network<A: ToSocketAddrs>(
     Ok((TcpDialer {}, listener, identity))
 }
 
-pub async fn new_rate_limited_network<
-    A: ToSocketAddrs,
-    RL: RateLimiter + Clone + Send + Unpin + 'static,
->(
-    rate_limiter: RL,
+pub async fn new_rate_limited_network<A: ToSocketAddrs>(
+    rate_limiter: TokenBucket,
     listening_addresses: A,
     external_addresses: Vec<String>,
     authority_pen: &AuthorityPen,

@@ -14,7 +14,7 @@ use futures::{
     FutureExt,
 };
 use log::{error, trace};
-use network_clique::rate_limiter::{RateLimiter, SleepingRateLimiter};
+use network_clique::rate_limiter::{SleepingRateLimiter, TokenBucket};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
     multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
@@ -256,15 +256,15 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
     }
 }
 
-pub struct RateLimitedNetworkEventStream<P, ES: EventStream<P>, RL> {
+pub struct RateLimitedNetworkEventStream<P, ES: EventStream<P>> {
     stream: ES,
-    rate_limiter: SleepingRateLimiter<RL>,
+    rate_limiter: SleepingRateLimiter,
     last_read_size: usize,
     _phantom_data: PhantomData<P>,
 }
 
-impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
-    pub fn new(stream: ES, rate_limiter: RL) -> Self {
+impl<P, ES: EventStream<P>> RateLimitedNetworkEventStream<P, ES> {
+    pub fn new(stream: ES, rate_limiter: TokenBucket) -> Self {
         Self {
             stream,
             rate_limiter: SleepingRateLimiter::new(rate_limiter),
@@ -275,8 +275,8 @@ impl<P, ES: EventStream<P>, RL> RateLimitedNetworkEventStream<P, ES, RL> {
 }
 
 #[async_trait]
-impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send + Sync>
-    EventStream<P> for RateLimitedNetworkEventStream<P, ES, RL>
+impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
+    for RateLimitedNetworkEventStream<P, ES>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
         if let Some(rate_sleep) = self.rate_limiter.rate_limit(self.last_read_size) {
@@ -320,13 +320,13 @@ fn size(messages: &Vec<(Protocol, bytes::Bytes)>) -> usize {
 }
 
 #[derive(Clone)]
-pub struct RateLimitedRawNetwork<RN, RL> {
+pub struct RateLimitedRawNetwork<RN> {
     raw_network: RN,
-    rate_limiter: RL,
+    rate_limiter: TokenBucket,
 }
 
-impl<RN, RL> RateLimitedRawNetwork<RN, RL> {
-    pub fn new(network: RN, rate_limiter: RL) -> Self {
+impl<RN> RateLimitedRawNetwork<RN> {
+    pub fn new(network: RN, rate_limiter: TokenBucket) -> Self {
         Self {
             raw_network: network,
             rate_limiter,
@@ -334,8 +334,7 @@ impl<RN, RL> RateLimitedRawNetwork<RN, RL> {
     }
 }
 
-impl<RN: RawNetwork, RL: RateLimiter + Clone + Send + Sync + Unpin + 'static> RawNetwork
-    for RateLimitedRawNetwork<RN, RL>
+impl<RN: RawNetwork> RawNetwork for RateLimitedRawNetwork<RN>
 where
     RN::EventStream: Send,
     RN::PeerId: Sync,
@@ -343,7 +342,7 @@ where
     type SenderError = RN::SenderError;
     type NetworkSender = RN::NetworkSender;
     type PeerId = RN::PeerId;
-    type EventStream = RateLimitedNetworkEventStream<RN::PeerId, RN::EventStream, RL>;
+    type EventStream = RateLimitedNetworkEventStream<RN::PeerId, RN::EventStream>;
 
     fn event_stream(&self) -> Self::EventStream {
         RateLimitedNetworkEventStream::new(

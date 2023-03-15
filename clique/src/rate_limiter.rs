@@ -12,10 +12,6 @@ use tokio::{
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, Splittable};
 
-pub trait RateLimiter {
-    fn rate_limit(&mut self, requested: usize, now: impl FnMut() -> Instant) -> Option<Duration>;
-}
-
 #[derive(Clone)]
 pub struct TokenBucket {
     rate: f64,
@@ -56,10 +52,8 @@ impl TokenBucket {
         self.available = min(self.available, self.tokens_limit);
         self.available
     }
-}
 
-impl RateLimiter for TokenBucket {
-    fn rate_limit(
+    pub fn rate_limit(
         &mut self,
         requested: usize,
         mut now: impl FnMut() -> Instant,
@@ -84,14 +78,14 @@ impl RateLimiter for TokenBucket {
     }
 }
 
-pub struct SleepingRateLimiter<RL> {
-    rate_limiter: RL,
+pub struct SleepingRateLimiter {
+    rate_limiter: TokenBucket,
     sleep: Pin<Box<Sleep>>,
     finished: bool,
 }
 
-impl<RL> SleepingRateLimiter<RL> {
-    pub fn new(rate_limiter: RL) -> Self {
+impl SleepingRateLimiter {
+    pub fn new(rate_limiter: TokenBucket) -> Self {
         Self {
             rate_limiter,
             sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
@@ -99,12 +93,12 @@ impl<RL> SleepingRateLimiter<RL> {
         }
     }
 
-    fn into_inner(self) -> RL {
+    fn into_inner(self) -> TokenBucket {
         self.rate_limiter
     }
 }
 
-impl<RL: RateLimiter> SleepingRateLimiter<RL> {
+impl SleepingRateLimiter {
     fn set_sleep(&mut self, read_size: usize) -> Option<RateLimiterTask> {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
@@ -161,13 +155,13 @@ impl<'a> Future for RateLimiterTask<'a> {
     }
 }
 
-pub struct RateLimitedAsyncRead<RL, A> {
-    rate_limiter: SleepingRateLimiter<RL>,
+pub struct RateLimitedAsyncRead<A> {
+    rate_limiter: SleepingRateLimiter,
     read: Pin<Box<A>>,
 }
 
-impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
-    pub fn new(read: A, rate_limiter: RL) -> Self {
+impl<A: AsyncRead> RateLimitedAsyncRead<A> {
+    pub fn new(read: A, rate_limiter: TokenBucket) -> Self {
         Self {
             rate_limiter: SleepingRateLimiter::new(rate_limiter),
             read: Box::pin(read),
@@ -175,7 +169,7 @@ impl<RL: RateLimiter, A: AsyncRead> RateLimitedAsyncRead<RL, A> {
     }
 }
 
-impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<RL, A> {
+impl<A: AsyncRead> AsyncRead for RateLimitedAsyncRead<A> {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -198,7 +192,7 @@ impl<RL: RateLimiter + Unpin, A: AsyncRead> AsyncRead for RateLimitedAsyncRead<R
     }
 }
 
-impl<RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncRead<RL, A> {
+impl<A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncRead<A> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -222,9 +216,9 @@ impl<RL: RateLimiter + Unpin, A: AsyncWrite + Unpin> AsyncWrite for RateLimitedA
     }
 }
 
-impl<R: Splittable, RL: RateLimiter + Send + Unpin> Splittable for RateLimitedAsyncRead<RL, R> {
+impl<R: Splittable> Splittable for RateLimitedAsyncRead<R> {
     type Sender = R::Sender;
-    type Receiver = RateLimitedAsyncRead<RL, R::Receiver>;
+    type Receiver = RateLimitedAsyncRead<R::Receiver>;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let (sender, receiver) = Pin::<Box<R>>::into_inner(self.read).split();
@@ -234,20 +228,20 @@ impl<R: Splittable, RL: RateLimiter + Send + Unpin> Splittable for RateLimitedAs
     }
 }
 
-impl<A: ConnectionInfo, RL: Send> ConnectionInfo for RateLimitedAsyncRead<RL, A> {
+impl<A: ConnectionInfo> ConnectionInfo for RateLimitedAsyncRead<A> {
     fn peer_address_info(&self) -> super::PeerAddressInfo {
         self.read.peer_address_info()
     }
 }
 
 #[derive(Clone)]
-pub struct RateLimitingDialer<D, RL: RateLimiter> {
+pub struct RateLimitingDialer<D> {
     dialer: D,
-    rate_limiter: RL,
+    rate_limiter: TokenBucket,
 }
 
-impl<D, RL: RateLimiter> RateLimitingDialer<D, RL> {
-    pub fn new(dialer: D, rate_limiter: RL) -> Self {
+impl<D> RateLimitingDialer<D> {
+    pub fn new(dialer: D, rate_limiter: TokenBucket) -> Self {
         Self {
             dialer,
             rate_limiter,
@@ -256,10 +250,8 @@ impl<D, RL: RateLimiter> RateLimitingDialer<D, RL> {
 }
 
 #[async_trait::async_trait]
-impl<RL: RateLimiter + Clone + Send + Unpin + 'static, A: Data, D: Dialer<A>> Dialer<A>
-    for RateLimitingDialer<D, RL>
-{
-    type Connection = RateLimitedAsyncRead<RL, D::Connection>;
+impl<A: Data, D: Dialer<A>> Dialer<A> for RateLimitingDialer<D> {
+    type Connection = RateLimitedAsyncRead<D::Connection>;
     type Error = D::Error;
 
     async fn connect(&mut self, address: A) -> Result<Self::Connection, Self::Error> {
@@ -271,13 +263,13 @@ impl<RL: RateLimiter + Clone + Send + Unpin + 'static, A: Data, D: Dialer<A>> Di
     }
 }
 
-pub struct RateLimitingListener<L, RL> {
+pub struct RateLimitingListener<L> {
     listener: L,
-    rate_limiter: RL,
+    rate_limiter: TokenBucket,
 }
 
-impl<L, RL> RateLimitingListener<L, RL> {
-    pub fn new(listener: L, rate_limiter: RL) -> Self {
+impl<L> RateLimitingListener<L> {
+    pub fn new(listener: L, rate_limiter: TokenBucket) -> Self {
         Self {
             listener,
             rate_limiter,
@@ -286,10 +278,8 @@ impl<L, RL> RateLimitingListener<L, RL> {
 }
 
 #[async_trait::async_trait]
-impl<L: Listener + Send, RL: RateLimiter + Clone + Send + Unpin + 'static> Listener
-    for RateLimitingListener<L, RL>
-{
-    type Connection = RateLimitedAsyncRead<RL, L::Connection>;
+impl<L: Listener + Send> Listener for RateLimitingListener<L> {
+    type Connection = RateLimitedAsyncRead<L::Connection>;
     type Error = L::Error;
 
     async fn accept(&mut self) -> Result<Self::Connection, Self::Error> {
@@ -305,7 +295,7 @@ impl<L: Listener + Send, RL: RateLimiter + Clone + Send + Unpin + 'static> Liste
 mod tests {
     use std::time::{Duration, Instant};
 
-    use super::{RateLimiter, TokenBucket};
+    use super::TokenBucket;
 
     #[test]
     fn no_slowdown_while_within_rate_limit() {
