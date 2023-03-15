@@ -9,6 +9,7 @@ use std::{
 
 use async_trait::async_trait;
 use futures::{
+    select,
     stream::{Stream, StreamExt},
     FutureExt,
 };
@@ -285,11 +286,14 @@ impl<P: Send + Sync, ES: EventStream<P> + Send, RL: RateLimiter + Unpin + Send +
     async fn next_event(&mut self) -> Option<Event<P>> {
         if let Some(rate_sleep) = self.rate_limiter.rate_limit(self.last_read_size) {
             let mut rate_sleep = rate_sleep.fuse();
-            loop {
-                tokio::select! {
-                    _ = &mut rate_sleep => break,
-                    _ = self.stream.next_event() => {},
+            let mut exit = false;
+            while !exit {
+                select! {
+                    _ = &mut rate_sleep => exit = true,
+                    default => {},
                 }
+                // clean buffer
+                while self.stream.next_event().now_or_never().is_some() {}
             }
         }
         self.last_read_size = 0;
