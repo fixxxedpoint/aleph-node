@@ -14,6 +14,7 @@ use futures::{
     FutureExt,
 };
 use log::{error, trace};
+use network_clique::rate_limiter::{RateLimiter, SleepingRateLimiter};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
     multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
@@ -25,11 +26,9 @@ use sc_network_common::{
     ExHashT,
 };
 use sp_api::NumberFor;
-use sp_consensus::SyncOracle;
 use sp_runtime::traits::Block;
 
 use crate::network::{
-    clique::rate_limiter::{RateLimiter, SleepingRateLimiter},
     gossip::{Event, EventStream, NetworkSender, Protocol, RawNetwork},
     RequestBlocks,
 };
@@ -50,10 +49,6 @@ impl<B: Block, H: ExHashT> RequestBlocks<B> for Arc<NetworkService<B, H>> {
     /// Clear all pending justification requests.
     fn clear_justification_requests(&self) {
         NetworkService::clear_justification_requests(self)
-    }
-
-    fn is_major_syncing(&self) -> bool {
-        NetworkService::is_major_syncing(self)
     }
 }
 

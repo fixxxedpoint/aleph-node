@@ -1,3 +1,4 @@
+---
 name: Build, send and deploy postsync hook image.
 
 on:
@@ -8,6 +9,7 @@ on:
     paths:
       - 'bin/cliain/**'
       - 'docker-runtime-hook/**'
+      - .github/workflows/build-send-postsync-hook-runtime-image.yml
 
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
@@ -16,19 +18,19 @@ concurrency:
 jobs:
   build:
     name: Save cliain binary as an artifact
-    runs-on: ubuntu-20.04
+    runs-on: self-hosted
     env:
       CARGO_INCREMENTAL: 0
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: GIT | Get branch info & current commit sha.
         id: vars
         shell: bash
         run: |
-          echo "##[set-output name=branch;]$(echo ${GITHUB_REF##*/})"
-          echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+          echo "branch=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+          echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
       - name: Install rust toolchain
         uses: actions-rs/toolchain@v1
@@ -47,7 +49,8 @@ jobs:
 
       - name: Build runtime-update-hook
         run: |
-          docker build -f docker-runtime-hook/Dockerfile . -t runtime-update-hook:${{ steps.vars.outputs.sha_short }}
+          docker build -f docker-runtime-hook/Dockerfile . \
+          -t runtime-update-hook:${{ steps.vars.outputs.sha_short }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -58,7 +61,7 @@ jobs:
 
       - name: Login to Public Amazon ECR
         id: login-public-ecr
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           registry: public.ecr.aws
           username: ${{ secrets.AWS_MAINNET_ACCESS_KEY_ID }}
@@ -69,7 +72,8 @@ jobs:
       - name: Push postsync hook current Image to Public ECR
         env:
           CURRENT_IMAGE: runtime-update-hook:${{ steps.vars.outputs.sha_short }}
-          ECR_PUSH_IMAGE: public.ecr.aws/p6e8q1z1/runtime-update-hook:${{ steps.vars.outputs.sha_short }}
+          ECR_PUSH_IMAGE:
+            public.ecr.aws/p6e8q1z1/runtime-update-hook:${{ steps.vars.outputs.sha_short }}
           ECR_LATEST: public.ecr.aws/p6e8q1z1/runtime-update-hook:latest
         run: |
           docker tag ${{ env.CURRENT_IMAGE }} ${{ env.ECR_PUSH_IMAGE }}
@@ -79,7 +83,7 @@ jobs:
           docker push ${{ env.ECR_LATEST }}
 
       - name: GIT | Checkout aleph-apps repo
-        uses: actions/checkout@master
+        uses: actions/checkout@v3
         with:
           repository: Cardinal-Cryptography/aleph-apps
           token: ${{ secrets.CI_GH_TOKEN }}
@@ -92,7 +96,8 @@ jobs:
 
       - name: Update postsync hook docker image
         env:
-          RELEASE_IMAGE: public.ecr.aws/p6e8q1z1/runtime-update-hook:${{ steps.vars.outputs.sha_short }}
+          RELEASE_IMAGE:
+            public.ecr.aws/p6e8q1z1/runtime-update-hook:${{ steps.vars.outputs.sha_short }}
           REGIONS_AWS: 'eu-central-1'
         run: |
             # Deploy new image version for postsync hook
@@ -100,13 +105,10 @@ jobs:
             kustomize edit set image "send-runtime-hook-image-placeholder=${{ env.RELEASE_IMAGE }}"
 
       - name: GIT | Commit changes to aleph-apps repository.
-        uses: EndBug/add-and-commit@v5.1.0
+        uses: EndBug/add-and-commit@v9.1.1
         with:
           author_name: AlephZero Automation
           author_email: alephzero@10clouds.com
           message: "Updating postsync hook image tag to: ${{ steps.vars.outputs.sha_short }}"
           add: "*.yaml"
           cwd: "aleph-apps"
-          branch: main
-        env:
-          GITHUB_TOKEN: ${{ secrets.CI_GH_TOKEN }}
