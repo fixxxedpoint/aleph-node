@@ -58,7 +58,7 @@ impl TokenBucket {
         requested: usize,
         mut now: impl FnMut() -> Instant,
     ) -> Option<Duration> {
-        if self.available < requested {
+        if self.requested > 0 || self.available < requested {
             let now_value = now();
             assert!(
                 now_value >= self.last_update,
@@ -89,7 +89,7 @@ impl SleepingRateLimiter {
         Self {
             rate_limiter,
             sleep: Box::pin(tokio::time::sleep(Duration::ZERO)),
-            finished: false,
+            finished: true,
         }
     }
 
@@ -102,12 +102,9 @@ impl SleepingRateLimiter {
     fn set_sleep(&mut self, read_size: usize) -> Option<RateLimiterTask> {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
-        let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
-        let next_wait = if let Some(next_wait) = next_wait {
-            now_closure() + next_wait
-        } else {
-            return None;
-        };
+        let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure)?;
+        let next_wait = now_closure() + next_wait;
+        self.finished = false;
 
         self.sleep.set(tokio::time::sleep_until(next_wait.into()));
         Some(RateLimiterTask::new(&mut self.sleep, &mut self.finished))

@@ -13,7 +13,7 @@ use futures::{
     stream::{Stream, StreamExt},
     FutureExt,
 };
-use log::{error, trace};
+use log::{error, info, trace};
 use network_clique::rate_limiter::{SleepingRateLimiter, TokenBucket};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
@@ -279,16 +279,21 @@ impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
     for RateLimitedNetworkEventStream<P, ES>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
+        info!(
+            target: "aleph-network",
+            "Calling rate-limiter with `last_read_size={}`", self.last_read_size
+        );
         if let Some(rate_sleep) = self.rate_limiter.rate_limit(self.last_read_size) {
+            info!(
+                target: "aleph-network",
+                "rate-limiter calls to sleep, {}", self.last_read_size
+            );
             let mut rate_sleep = rate_sleep.fuse();
-            let mut exit = false;
-            while !exit {
+            loop {
                 select! {
-                    _ = &mut rate_sleep => exit = true,
-                    default => {},
+                    _ = &mut rate_sleep => break,
+                    _ = self.stream.next_event().fuse() => {},
                 }
-                // clean buffer
-                while self.stream.next_event().now_or_never().is_some() {}
             }
         }
         self.last_read_size = 0;

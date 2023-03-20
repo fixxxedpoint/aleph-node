@@ -83,7 +83,7 @@ where
         .map(|value| value.parse().ok())
         .ok()
         .flatten()
-        .unwrap_or(4.0 * 1024.0);
+        .unwrap_or(256.0 * 1024.0);
 
     let rate_limiter = TokenBucket::new_default(bit_rate_per_node);
 
