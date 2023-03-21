@@ -10,8 +10,6 @@ use tokio::{
     time::Sleep,
 };
 
-use crate::{ConnectionInfo, Data, Dialer, Listener, Splittable};
-
 #[derive(Clone)]
 pub struct TokenBucket {
     rate: f64,
@@ -148,139 +146,47 @@ impl<'a> Future for RateLimiterTask<'a> {
     }
 }
 
-pub struct RateLimitedAsyncRead<A> {
-    rate_limiter: SleepingRateLimiter,
-    read: Pin<Box<A>>,
+const VALIDATOR_NETWORK_BIT_RATE_PER_NODE: &str = "BIT_RATE_PER_NODE";
+const DEFAULT_VALIDATOR_NETWORK_PER_NODE_BIT_RATE: f64 = 1024.0 * 1024.0;
+
+const GOSSIP_NETWORK_BIT_RATE: &str = "GOSSIP_NETWOR_BIT_RATE";
+const DEFAULT_GOSSIP_NETWORK_BIT_RATE: f64 = 1024.0 * 1024.0;
+
+/// This options are intentionally hidden behind environment variables. It should not be needed to modify those.
+pub struct AlephEnv {
+    /// Maximum bitrate per node (bytes per second) of the alephbft validator network.
+    alephbft_bit_rate: f64,
+
+    /// Maximum bitrate for the gossip network (bytes per second) used for broadcasting network identities.
+    gossip_network_bit_rate: f64,
 }
 
-impl<A: AsyncRead> RateLimitedAsyncRead<A> {
-    pub fn new(read: A, rate_limiter: TokenBucket) -> Self {
+impl AlephEnv {
+    pub fn new() -> Self {
+        let validator_network_bit_rate_per_node = var(VALIDATOR_NETWORK_BIT_RATE_PER_NODE)
+            .map(|value| value.parse().ok())
+            .ok()
+            .flatten()
+            .unwrap_or(DEFAULT_VALIDATOR_NETWORK_PER_NODE_BIT_RATE);
+
+        let gossip_network_bit_rate = var(GOSSIP_NETWORK_BIT_RATE)
+            .map(|value| value.parse().ok())
+            .ok()
+            .flatten()
+            .unwrap_or(DEFAULT_GOSSIP_NETWORK_BIT_RATE);
+
         Self {
-            rate_limiter: SleepingRateLimiter::new(rate_limiter),
-            read: Box::pin(read),
+            alephbft_bit_rate: validator_network_bit_rate_per_node,
+            gossip_network_bit_rate,
         }
     }
-}
 
-impl<A: AsyncRead> AsyncRead for RateLimitedAsyncRead<A> {
-    fn poll_read(
-        self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> std::task::Poll<std::io::Result<()>> {
-        let deref_self = self.get_mut();
-        match Pin::new(&mut deref_self.rate_limiter.current_sleep()).poll(cx) {
-            std::task::Poll::Ready(rate_limiter) => rate_limiter,
-            std::task::Poll::Pending => return std::task::Poll::Pending,
-        };
-
-        let filled_before = buf.filled().len();
-        let result = deref_self.read.as_mut().poll_read(cx, buf);
-        let filled_after = buf.filled().len();
-        let last_read_size = filled_after - filled_before;
-
-        deref_self.rate_limiter.rate_limit(last_read_size);
-
-        result
-    }
-}
-
-impl<A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncRead<A> {
-    fn poll_write(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-        buf: &[u8],
-    ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        self.read.as_mut().poll_write(cx, buf)
+    pub fn alephbft_bit_rate(&self) -> f64 {
+        self.alephbft_bit_rate
     }
 
-    fn poll_flush(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        self.read.as_mut().poll_flush(cx)
-    }
-
-    fn poll_shutdown(
-        mut self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Result<(), std::io::Error>> {
-        self.read.as_mut().poll_shutdown(cx)
-    }
-}
-
-impl<R: Splittable> Splittable for RateLimitedAsyncRead<R> {
-    type Sender = R::Sender;
-    type Receiver = RateLimitedAsyncRead<R::Receiver>;
-
-    fn split(self) -> (Self::Sender, Self::Receiver) {
-        let (sender, receiver) = Pin::<Box<R>>::into_inner(self.read).split();
-        let rate_limiter = self.rate_limiter;
-        let receiver = RateLimitedAsyncRead::new(receiver, rate_limiter.into_inner());
-        (sender, receiver)
-    }
-}
-
-impl<A: ConnectionInfo> ConnectionInfo for RateLimitedAsyncRead<A> {
-    fn peer_address_info(&self) -> super::PeerAddressInfo {
-        self.read.peer_address_info()
-    }
-}
-
-#[derive(Clone)]
-pub struct RateLimitingDialer<D> {
-    dialer: D,
-    rate_limiter: TokenBucket,
-}
-
-impl<D> RateLimitingDialer<D> {
-    pub fn new(dialer: D, rate_limiter: TokenBucket) -> Self {
-        Self {
-            dialer,
-            rate_limiter,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl<A: Data, D: Dialer<A>> Dialer<A> for RateLimitingDialer<D> {
-    type Connection = RateLimitedAsyncRead<D::Connection>;
-    type Error = D::Error;
-
-    async fn connect(&mut self, address: A) -> Result<Self::Connection, Self::Error> {
-        let connection = self.dialer.connect(address).await?;
-        Ok(RateLimitedAsyncRead::new(
-            connection,
-            self.rate_limiter.clone(),
-        ))
-    }
-}
-
-pub struct RateLimitingListener<L> {
-    listener: L,
-    rate_limiter: TokenBucket,
-}
-
-impl<L> RateLimitingListener<L> {
-    pub fn new(listener: L, rate_limiter: TokenBucket) -> Self {
-        Self {
-            listener,
-            rate_limiter,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl<L: Listener + Send> Listener for RateLimitingListener<L> {
-    type Connection = RateLimitedAsyncRead<L::Connection>;
-    type Error = L::Error;
-
-    async fn accept(&mut self) -> Result<Self::Connection, Self::Error> {
-        let connection = self.listener.accept().await?;
-        Ok(RateLimitedAsyncRead::new(
-            connection,
-            self.rate_limiter.clone(),
-        ))
+    pub fn gossip_network_bit_rate(&self) -> f64 {
+        self.gossip_network_bit_rate
     }
 }
 

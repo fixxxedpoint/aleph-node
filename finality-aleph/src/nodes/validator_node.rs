@@ -77,15 +77,16 @@ where
     )
     .await;
 
+    let rate_limiter_config = AlephEnv::new();
     const BIT_RATE_PER_NODE: &str = "BIT_RATE_PER_NODE";
-    // 4KiB/s per connection should be enough
+    // 256KiB/s per connection should be enough
     let bit_rate_per_node = std::env::var(BIT_RATE_PER_NODE)
         .map(|value| value.parse().ok())
         .ok()
         .flatten()
         .unwrap_or(256.0 * 1024.0);
 
-    let rate_limiter = TokenBucket::new_default(bit_rate_per_node);
+    let rate_limiter = TokenBucket::new(bit_rate_per_node);
 
     let (dialer, listener, network_identity) = new_rate_limited_network(
         rate_limiter.clone(),

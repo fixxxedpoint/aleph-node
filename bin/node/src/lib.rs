@@ -11,3 +11,5 @@ mod service;
 pub use cli::{Cli, Subcommand};
 pub use executor::ExecutorDispatch;
 pub use service::{new_authority, new_full, new_partial};
+
+pub use crate::aleph_cli::AlephEnv;
