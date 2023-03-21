@@ -22,18 +22,14 @@ pub struct TokenBucket {
 }
 
 impl TokenBucket {
-    pub fn new(rate: f64, initial: usize, now: Instant) -> Self {
+    pub fn new(rate: f64) -> Self {
         Self {
             rate,
             tokens_limit: rate as usize,
-            available: initial,
+            available: 0,
             requested: 0,
-            last_update: now,
+            last_update: Instant::now(),
         }
-    }
-
-    pub fn new_default(rate: f64) -> Self {
-        Self::new(rate, 0, Instant::now())
     }
 
     fn calculate_delay(&self) -> Duration {
@@ -107,7 +103,7 @@ impl SleepingRateLimiter {
         self.finished = false;
 
         self.sleep.set(tokio::time::sleep_until(next_wait.into()));
-        Some(RateLimiterTask::new(&mut self.sleep, &mut self.finished))
+        Some(self.current_sleep())
     }
 
     pub fn rate_limit(&mut self, read_size: usize) -> Option<RateLimiterTask> {
@@ -337,7 +333,7 @@ mod tests {
             None
         );
 
-        // we should wait some after reaching the limit
+        // we should wait some time after reaching the limit
         assert!(rate_limiter
             .rate_limit(1, || now + Duration::from_secs(1))
             .is_some());
