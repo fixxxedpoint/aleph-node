@@ -1,8 +1,20 @@
-use std::{collections::HashMap, fmt, iter, pin::Pin, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt,
+    iter::{self, Sum},
+    marker::PhantomData,
+    pin::Pin,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
-use futures::stream::{Stream, StreamExt};
-use log::{error, trace};
+use futures::{
+    select,
+    stream::{Stream, StreamExt},
+    FutureExt,
+};
+use log::{error, info, trace};
+use network_clique::rate_limiter::{SleepingRateLimiter, TokenBucket};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
     multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
@@ -241,6 +253,115 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
                 None => return None,
             }
         }
+    }
+}
+
+pub struct RateLimitedNetworkEventStream<P, ES: EventStream<P>> {
+    stream: ES,
+    rate_limiter: SleepingRateLimiter,
+    last_read_size: usize,
+    _phantom_data: PhantomData<P>,
+}
+
+impl<P, ES: EventStream<P>> RateLimitedNetworkEventStream<P, ES> {
+    pub fn new(stream: ES, rate_limiter: TokenBucket) -> Self {
+        Self {
+            stream,
+            rate_limiter: SleepingRateLimiter::new(rate_limiter),
+            last_read_size: 0,
+            _phantom_data: PhantomData,
+        }
+    }
+}
+
+#[async_trait]
+impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
+    for RateLimitedNetworkEventStream<P, ES>
+{
+    async fn next_event(&mut self) -> Option<Event<P>> {
+        info!(
+            target: "aleph-network",
+            "Calling rate-limiter with `last_read_size={}`", self.last_read_size
+        );
+        if let Some(rate_sleep) = self.rate_limiter.rate_limit(self.last_read_size) {
+            info!(
+                target: "aleph-network",
+                "rate-limiter calls to sleep, {}", self.last_read_size
+            );
+            let mut rate_sleep = rate_sleep.fuse();
+            loop {
+                select! {
+                    _ = &mut rate_sleep => break,
+                    _ = self.stream.next_event().fuse() => {},
+                }
+            }
+        }
+        self.last_read_size = 0;
+
+        let event = self.stream.next_event().await?;
+        if let Event::Messages(_, messages) = &event {
+            let size_received = size(messages);
+
+            self.last_read_size = size_received;
+        }
+        Some(event)
+    }
+}
+
+fn size(messages: &Vec<(Protocol, bytes::Bytes)>) -> usize {
+    struct SaturatingUsize(usize);
+    impl Sum<SaturatingUsize> for SaturatingUsize {
+        fn sum<I: Iterator<Item = SaturatingUsize>>(iter: I) -> Self {
+            let sum = iter.fold(0, |sum: usize, item| sum.saturating_add(item.0));
+            SaturatingUsize(sum)
+        }
+    }
+    let size_received = messages
+        .iter()
+        .map(|(_, bytes)| SaturatingUsize(bytes.len()))
+        .sum::<SaturatingUsize>()
+        .0;
+    size_received
+}
+
+#[derive(Clone)]
+pub struct RateLimitedRawNetwork<RN> {
+    raw_network: RN,
+    rate_limiter: TokenBucket,
+}
+
+impl<RN> RateLimitedRawNetwork<RN> {
+    pub fn new(network: RN, rate_limiter: TokenBucket) -> Self {
+        Self {
+            raw_network: network,
+            rate_limiter,
+        }
+    }
+}
+
+impl<RN: RawNetwork> RawNetwork for RateLimitedRawNetwork<RN>
+where
+    RN::EventStream: Send,
+    RN::PeerId: Sync,
+{
+    type SenderError = RN::SenderError;
+    type NetworkSender = RN::NetworkSender;
+    type PeerId = RN::PeerId;
+    type EventStream = RateLimitedNetworkEventStream<RN::PeerId, RN::EventStream>;
+
+    fn event_stream(&self) -> Self::EventStream {
+        RateLimitedNetworkEventStream::new(
+            self.raw_network.event_stream(),
+            self.rate_limiter.clone(),
+        )
+    }
+
+    fn sender(
+        &self,
+        peer_id: Self::PeerId,
+        protocol: Protocol,
+    ) -> Result<Self::NetworkSender, Self::SenderError> {
+        self.raw_network.sender(peer_id, protocol)
     }
 }
 

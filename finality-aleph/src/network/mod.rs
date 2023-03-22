@@ -14,7 +14,7 @@ pub mod tcp;
 pub use gossip::mock::{MockEvent, MockRawNetwork};
 pub use gossip::{Network as GossipNetwork, Protocol, Service as GossipService};
 use network_clique::{AddressingInformation, NetworkIdentity, PeerId};
-pub use substrate::{ProtocolNaming, SubstrateNetwork};
+pub use substrate::{ProtocolNaming, RateLimitedRawNetwork, SubstrateNetwork};
 
 /// Abstraction for requesting justifications for finalized blocks and stale blocks.
 pub trait RequestBlocks<B: Block>: Clone + Send + Sync + 'static {
