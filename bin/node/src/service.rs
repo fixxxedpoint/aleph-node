@@ -9,7 +9,8 @@ use aleph_primitives::{AlephSessionApi, MAX_BLOCK_SIZE};
 use aleph_runtime::{self, opaque::Block, RuntimeApi};
 use finality_aleph::{
     run_nonvalidator_node, run_validator_node, AlephBlockImport, AlephConfig,
-    JustificationNotification, Metrics, MillisecsPerBlock, Protocol, ProtocolNaming, SessionPeriod,
+    JustificationNotification, Metrics, MillisecsPerBlock, Protocol, ProtocolNaming,
+    RateLimiterConfig, SessionPeriod,
 };
 use futures::channel::mpsc;
 use log::warn;
@@ -393,6 +394,7 @@ pub fn new_authority(
         panic!("Cannot run a validator node without external addresses, stopping.");
     }
     let blockchain_backend = BlockchainBackendImpl { backend };
+    let rate_limiter_config = RateLimiterConfig::new();
     let aleph_config = AlephConfig {
         network,
         client,
@@ -409,6 +411,7 @@ pub fn new_authority(
         external_addresses: aleph_config.external_addresses(),
         validator_port: aleph_config.validator_port(),
         protocol_naming,
+        rate_limiter_config,
     };
     task_manager.spawn_essential_handle().spawn_blocking(
         "aleph",
@@ -473,6 +476,7 @@ pub fn new_full(
     );
 
     let blockchain_backend = BlockchainBackendImpl { backend };
+    let rate_limiter_config = RateLimiterConfig::new();
     let aleph_config = AlephConfig {
         network,
         client,
@@ -489,6 +493,7 @@ pub fn new_full(
         external_addresses: aleph_config.external_addresses(),
         validator_port: aleph_config.validator_port(),
         protocol_naming,
+        rate_limiter_config,
     };
 
     task_manager.spawn_essential_handle().spawn_blocking(

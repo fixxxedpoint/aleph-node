@@ -1,6 +1,6 @@
 extern crate core;
 
-use std::{fmt::Debug, path::PathBuf, sync::Arc};
+use std::{env::var, fmt::Debug, path::PathBuf, sync::Arc};
 
 use codec::{Decode, Encode, Output};
 use derive_more::Display;
@@ -239,6 +239,44 @@ impl<H, N> From<(H, N)> for HashNum<H, N> {
 
 pub type BlockHashNum<B> = HashNum<<B as Block>::Hash, NumberFor<B>>;
 
+const VALIDATOR_NETWORK_BIT_RATE_PER_NODE: &str = "BIT_RATE_PER_NODE";
+
+const DEFAULT_VALIDATOR_NETWORK_PER_NODE_BIT_RATE: f64 = 1024.0 * 1024.0;
+
+const GOSSIP_NETWORK_BIT_RATE: &str = "GOSSIP_NETWOR_BIT_RATE";
+
+const DEFAULT_GOSSIP_NETWORK_BIT_RATE: f64 = 1024.0 * 1024.0;
+
+/// This options are intentionally hidden behind environment variables. It should not be needed to modify those.
+pub struct RateLimiterConfig {
+    /// Maximum bitrate per node (bytes per second) of the alephbft validator network.
+    pub alephbft_bit_rate_per_connection: f64,
+
+    /// Maximum bitrate for the gossip network (bytes per second) used for broadcasting network identities.
+    pub gossip_network_bit_rate: f64,
+}
+
+impl RateLimiterConfig {
+    pub fn new() -> Self {
+        let validator_network_bit_rate_per_node = var(VALIDATOR_NETWORK_BIT_RATE_PER_NODE)
+            .map(|value| value.parse().ok())
+            .ok()
+            .flatten()
+            .unwrap_or(DEFAULT_VALIDATOR_NETWORK_PER_NODE_BIT_RATE);
+
+        let gossip_network_bit_rate = var(GOSSIP_NETWORK_BIT_RATE)
+            .map(|value| value.parse().ok())
+            .ok()
+            .flatten()
+            .unwrap_or(DEFAULT_GOSSIP_NETWORK_BIT_RATE);
+
+        Self {
+            alephbft_bit_rate_per_connection: validator_network_bit_rate_per_node,
+            gossip_network_bit_rate,
+        }
+    }
+}
+
 pub struct AlephConfig<B: Block, H: ExHashT, C, SC, BB> {
     pub network: Arc<NetworkService<B, H>>,
     pub client: Arc<C>,
@@ -255,6 +293,7 @@ pub struct AlephConfig<B: Block, H: ExHashT, C, SC, BB> {
     pub external_addresses: Vec<String>,
     pub validator_port: u16,
     pub protocol_naming: ProtocolNaming,
+    pub rate_limiter_config: RateLimiterConfig,
 }
 
 pub trait BlockchainBackend<B: Block> {

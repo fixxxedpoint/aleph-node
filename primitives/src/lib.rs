@@ -29,7 +29,6 @@ mod app {
     use sp_application_crypto::{app_crypto, ed25519};
     app_crypto!(ed25519, crate::KEY_TYPE);
 }
-pub mod rate_limiter;
 
 sp_application_crypto::with_pair! {
     pub type AuthorityPair = app::Pair;

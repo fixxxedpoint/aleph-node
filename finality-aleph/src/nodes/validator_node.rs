@@ -65,6 +65,7 @@ where
         external_addresses,
         validator_port,
         protocol_naming,
+        rate_limiter_config,
         ..
     } = aleph_config;
 
@@ -77,19 +78,11 @@ where
     )
     .await;
 
-    let rate_limiter_config = AlephEnv::new();
-    const BIT_RATE_PER_NODE: &str = "BIT_RATE_PER_NODE";
-    // 256KiB/s per connection should be enough
-    let bit_rate_per_node = std::env::var(BIT_RATE_PER_NODE)
-        .map(|value| value.parse().ok())
-        .ok()
-        .flatten()
-        .unwrap_or(256.0 * 1024.0);
-
-    let rate_limiter = TokenBucket::new(bit_rate_per_node);
+    let alephbft_rate_limiter =
+        TokenBucket::new(rate_limiter_config.alephbft_bit_rate_per_connection);
 
     let (dialer, listener, network_identity) = new_rate_limited_network(
-        rate_limiter.clone(),
+        alephbft_rate_limiter,
         ("0.0.0.0", validator_port),
         external_addresses,
         &network_authority_pen,
@@ -108,9 +101,11 @@ where
         validator_network_service.run(exit).await
     });
 
+    let gossip_network_rate_limiter = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
+
     let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
     let rate_limited_substrate_network =
-        RateLimitedRawNetwork::new(substrate_network, rate_limiter);
+        RateLimitedRawNetwork::new(substrate_network, gossip_network_rate_limiter);
     let (gossip_network_service, authentication_network, _block_sync_network) =
         GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
     let gossip_network_task = async move { gossip_network_service.run().await };
