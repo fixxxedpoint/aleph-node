@@ -5,8 +5,8 @@ use codec::{Decode, Encode};
 use derive_more::{AsRef, Display};
 use log::info;
 use network_clique::{
-    rate_limiter::{RateLimitingDialer, RateLimitingListener, TokenBucket},
-    Dialer, Listener, PeerId, PublicKey, SecretKey,
+    rate_limiter::TokenBucket, Dialer, Listener, PeerId, PublicKey, RateLimitingDialer,
+    RateLimitingListener, SecretKey,
 };
 use sp_core::crypto::KeyTypeId;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs};
