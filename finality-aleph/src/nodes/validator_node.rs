@@ -4,7 +4,7 @@ use aleph_primitives::BlockNumber;
 use bip39::{Language, Mnemonic, MnemonicType};
 use futures::channel::oneshot;
 use log::{debug, error};
-use network_clique::Service;
+use network_clique::{rate_limiter::TokenBucket, Service};
 use sc_client_api::Backend;
 use sc_network_common::ExHashT;
 use sp_consensus::SelectChain;
@@ -15,8 +15,8 @@ use crate::{
     crypto::AuthorityPen,
     network::{
         session::{ConnectionManager, ConnectionManagerConfig},
-        tcp::{new_tcp_network, KEY_TYPE},
-        GossipService, SubstrateNetwork,
+        tcp::{new_rate_limited_network, KEY_TYPE},
+        GossipService, RateLimitedRawNetwork, SubstrateNetwork,
     },
     nodes::{setup_justification_handler, JustificationParams},
     party::{
@@ -65,6 +65,7 @@ where
         external_addresses,
         validator_port,
         protocol_naming,
+        rate_limiter_config,
         ..
     } = aleph_config;
 
@@ -76,7 +77,12 @@ where
         keystore.clone(),
     )
     .await;
-    let (dialer, listener, network_identity) = new_tcp_network(
+
+    let alephbft_rate_limiter =
+        TokenBucket::new(rate_limiter_config.alephbft_bit_rate_per_connection);
+
+    let (dialer, listener, network_identity) = new_rate_limited_network(
+        alephbft_rate_limiter,
         ("0.0.0.0", validator_port),
         external_addresses,
         &network_authority_pen,
@@ -95,10 +101,13 @@ where
         validator_network_service.run(exit).await
     });
 
-    let (gossip_network_service, authentication_network, _block_sync_network) = GossipService::new(
-        SubstrateNetwork::new(network.clone(), protocol_naming),
-        spawn_handle.clone(),
-    );
+    let gossip_network_rate_limiter = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
+
+    let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
+    let rate_limited_substrate_network =
+        RateLimitedRawNetwork::new(substrate_network, gossip_network_rate_limiter);
+    let (gossip_network_service, authentication_network, _block_sync_network) =
+        GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
     let gossip_network_task = async move { gossip_network_service.run().await };
 
     let block_requester = network.clone();
