@@ -90,10 +90,13 @@ impl SleepingRateLimiter {
 }
 
 impl SleepingRateLimiter {
-    fn set_sleep(&mut self, read_size: usize) -> Option<RateLimiterTask> {
+    fn set_sleep(&mut self, read_size: usize) -> RateLimiterTask {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
-        let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure)?;
+        let next_wait = self
+            .rate_limiter
+            .rate_limit(read_size, &mut now_closure)
+            .unwrap_or(Duration::ZERO);
         let next_wait = now_closure() + next_wait;
 
         self.finished = false;
@@ -101,12 +104,12 @@ impl SleepingRateLimiter {
         self.current_sleep()
     }
 
-    pub fn rate_limit(&mut self, read_size: usize) -> Option<RateLimiterTask> {
+    pub fn rate_limit(&mut self, read_size: usize) -> RateLimiterTask {
         self.set_sleep(read_size)
     }
 
-    pub fn current_sleep(&mut self) -> Option<RateLimiterTask> {
-        (!self.finished).then(|| RateLimiterTask::new(&mut self.sleep, &mut self.finished))
+    pub fn current_sleep(&mut self) -> RateLimiterTask {
+        RateLimiterTask::new(&mut self.sleep, &mut self.finished)
     }
 }
 

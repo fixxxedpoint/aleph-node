@@ -1,11 +1,4 @@
-use std::{
-    collections::HashMap,
-    fmt,
-    iter::{self, Sum},
-    marker::PhantomData,
-    pin::Pin,
-    sync::Arc,
-};
+use std::{collections::HashMap, fmt, iter, marker::PhantomData, pin::Pin, sync::Arc};
 
 use async_trait::async_trait;
 use futures::{
@@ -13,7 +6,7 @@ use futures::{
     stream::{Stream, StreamExt},
     FutureExt,
 };
-use log::{error, info, trace};
+use log::{error, trace};
 use network_clique::rate_limiter::{SleepingRateLimiter, TokenBucket};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
@@ -279,21 +272,11 @@ impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
     for RateLimitedNetworkEventStream<P, ES>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
-        info!(
-            target: "aleph-network",
-            "Calling rate-limiter with `last_read_size={}`", self.last_read_size
-        );
-        if let Some(rate_sleep) = self.rate_limiter.rate_limit(self.last_read_size) {
-            info!(
-                target: "aleph-network",
-                "rate-limiter calls to sleep, {}", self.last_read_size
-            );
-            let mut rate_sleep = rate_sleep.fuse();
-            loop {
-                select! {
-                    _ = &mut rate_sleep => break,
-                    _ = self.stream.next_event().fuse() => {},
-                }
+        let mut rate_sleep = self.rate_limiter.rate_limit(self.last_read_size).fuse();
+        loop {
+            select! {
+                _ = &mut rate_sleep => break,
+                _ = self.stream.next_event().fuse() => {},
             }
         }
         self.last_read_size = 0;
@@ -309,19 +292,7 @@ impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
 }
 
 fn size(messages: &Vec<(Protocol, bytes::Bytes)>) -> usize {
-    struct SaturatingUsize(usize);
-    impl Sum<SaturatingUsize> for SaturatingUsize {
-        fn sum<I: Iterator<Item = SaturatingUsize>>(iter: I) -> Self {
-            let sum = iter.fold(0, |sum: usize, item| sum.saturating_add(item.0));
-            SaturatingUsize(sum)
-        }
-    }
-    let size_received = messages
-        .iter()
-        .map(|(_, bytes)| SaturatingUsize(bytes.len()))
-        .sum::<SaturatingUsize>()
-        .0;
-    size_received
+    messages.iter().map(|(_, bytes)| bytes.len()).sum()
 }
 
 #[derive(Clone)]

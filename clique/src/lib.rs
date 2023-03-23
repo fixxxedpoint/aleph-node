@@ -207,14 +207,10 @@ impl<A: AsyncRead> AsyncRead for RateLimitedAsyncRead<A> {
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
         let deref_self = self.get_mut();
-        match deref_self
-            .rate_limiter
-            .current_sleep()
-            .map(|mut sleep| Pin::new(&mut sleep).poll(cx))
-        {
-            Some(std::task::Poll::Pending) => return std::task::Poll::Pending,
+        match Pin::new(&mut deref_self.rate_limiter.current_sleep()).poll(cx) {
+            std::task::Poll::Pending => return std::task::Poll::Pending,
             _ => {}
-        };
+        }
 
         let filled_before = buf.filled().len();
         let result = deref_self.read.as_mut().poll_read(cx, buf);
