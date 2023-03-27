@@ -18,10 +18,11 @@ pub struct TokenBucket {
 
 impl TokenBucket {
     pub fn new(rate: f64) -> Self {
+        let tokens_limit = rate as usize;
         Self {
             rate,
-            tokens_limit: rate as usize,
-            available: 0,
+            tokens_limit,
+            available: tokens_limit,
             requested: 0,
             last_update: Instant::now(),
         }
