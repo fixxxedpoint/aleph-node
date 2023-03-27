@@ -240,7 +240,7 @@ impl<H> From<(H, BlockNumber)> for HashNum<H, BlockNumber> {
 
 pub type BlockHashNum<B> = HashNum<<B as Block>::Hash, NumberFor<B>>;
 
-const VALIDATOR_NETWORK_BIT_RATE_PER_NODE: &str = "BIT_RATE_PER_NODE";
+const VALIDATOR_NETWORK_BIT_RATE_PER_NODE: &str = "VALIDATOR_NETWORK_BIT_RATE_PER_NODE";
 
 const DEFAULT_VALIDATOR_NETWORK_PER_NODE_BIT_RATE: f64 = 1024.0 * 1024.0;
 
