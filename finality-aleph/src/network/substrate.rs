@@ -276,7 +276,12 @@ impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
         loop {
             select! {
                 _ = &mut rate_sleep => break,
-                default => { self.stream.next_event().await; },
+                default => {
+                    select! {
+                        _ = &mut rate_sleep => break,
+                        _ = self.stream.next_event().fuse() => {},
+                    }
+                },
             }
         }
         self.last_read_size = 0;
