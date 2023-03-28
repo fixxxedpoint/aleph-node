@@ -246,7 +246,7 @@ const DEFAULT_VALIDATOR_NETWORK_PER_NODE_BIT_RATE: f64 = 1024.0 * 1024.0;
 
 const GOSSIP_NETWORK_BIT_RATE: &str = "GOSSIP_NETWORK_BIT_RATE";
 
-const DEFAULT_GOSSIP_NETWORK_BIT_RATE: f64 = 512.0 * 1024.0;
+const DEFAULT_GOSSIP_NETWORK_BIT_RATE: f64 = 128.0 * 1024.0;
 
 /// This options are intentionally hidden behind environment variables. It should not be needed to modify those.
 pub struct RateLimiterConfig {
