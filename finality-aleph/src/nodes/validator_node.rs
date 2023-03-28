@@ -78,6 +78,7 @@ where
     )
     .await;
 
+    debug!(target: "aleph-party", "Initializing rate-limiter for the validator-network with {} byte(s) per second.", rate_limiter_config.alephbft_bit_rate_per_connection);
     let alephbft_rate_limiter =
         TokenBucket::new(rate_limiter_config.alephbft_bit_rate_per_connection);
 
@@ -101,6 +102,7 @@ where
         validator_network_service.run(exit).await
     });
 
+    debug!(target: "aleph-party", "Initializing rate-limiter for the gossip-network with {} byte(s) per second.", rate_limiter_config.gossip_network_bit_rate);
     let gossip_network_rate_limiter = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
 
     let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
