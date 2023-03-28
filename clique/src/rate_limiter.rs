@@ -94,14 +94,12 @@ impl SleepingRateLimiter {
     fn set_sleep(&mut self, read_size: usize) -> RateLimiterTask {
         let mut now = None;
         let mut now_closure = || now.get_or_insert_with(|| Instant::now()).clone();
-        let next_wait = self
-            .rate_limiter
-            .rate_limit(read_size, &mut now_closure)
-            .unwrap_or(Duration::ZERO);
-        let next_wait = now_closure() + next_wait;
-
-        self.finished = false;
-        self.sleep.set(tokio::time::sleep_until(next_wait.into()));
+        let next_wait = self.rate_limiter.rate_limit(read_size, &mut now_closure);
+        if let Some(next_wait) = next_wait {
+            let wait_until = now_closure() + next_wait;
+            self.finished = false;
+            self.sleep.set(tokio::time::sleep_until(wait_until.into()));
+        }
         self.current_sleep()
     }
 
