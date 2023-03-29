@@ -273,19 +273,32 @@ impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
         let mut rate_sleep = self.rate_limiter.rate_limit(self.last_read_size).fuse();
-        loop {
+        let mut none_returned = false;
+        let mut keep_dropping_messages = false;
+        select! {
+        _ = &mut rate_sleep => {},
+            default => keep_dropping_messages = true,
+        }
+        while keep_dropping_messages {
             select! {
                 _ = &mut rate_sleep => break,
-                default => {
-                    select! {
-                        _ = &mut rate_sleep => break,
-                        _ = self.stream.next_event().fuse() => {},
+                _ = async {
+                    // don't spend too much time here
+                    for _ in 1..2048 {
+                        match self.stream.next_event().now_or_never() {
+                            Some(None) => { none_returned = true; keep_dropping_messages = false; break; },
+                            None => break,
+                            _ => {},
+                        }
                     }
-                },
+                }.fuse() => {},
             }
         }
-        self.last_read_size = 0;
+        if none_returned {
+            return None;
+        }
 
+        self.last_read_size = 0;
         let event = self.stream.next_event().await?;
         if let Event::Messages(_, messages) = &event {
             let size_received = size(messages);
