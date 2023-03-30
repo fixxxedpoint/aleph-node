@@ -274,24 +274,21 @@ impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
     async fn next_event(&mut self) -> Option<Event<P>> {
         let mut rate_sleep = self.rate_limiter.rate_limit(self.last_read_size).fuse();
         let mut none_returned = false;
-        let mut keep_dropping_messages = false;
-        select! {
-        _ = &mut rate_sleep => {},
-            default => keep_dropping_messages = true,
-        }
-        while keep_dropping_messages {
+        // let mut iterations: u64 = 1024 * 1024 * 1024;
+        while !none_returned {
+            // iterations = iterations.saturating_mul(2);
             select! {
                 _ = &mut rate_sleep => break,
-                _ = async {
-                    // don't spend too much time here
-                    for _ in 1..2048 {
+                default => {
+                    // for _ in 1..iterations {
+                    loop {
                         match self.stream.next_event().now_or_never() {
-                            Some(None) => { none_returned = true; keep_dropping_messages = false; break; },
+                            Some(None) => { none_returned = true; break; },
                             None => break,
                             _ => {},
                         }
                     }
-                }.fuse() => {},
+                }
             }
         }
         if none_returned {
