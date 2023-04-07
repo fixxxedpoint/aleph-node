@@ -16,7 +16,7 @@ use crate::{
     network::{
         session::{ConnectionManager, ConnectionManagerConfig},
         tcp::{new_rate_limited_network, KEY_TYPE},
-        GossipService, SubstrateNetwork,
+        GossipService, RateLimitedRawNetwork, SubstrateNetwork,
     },
     nodes::{setup_justification_handler, JustificationParams},
     party::{
@@ -103,8 +103,15 @@ where
     });
 
     let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
+
+    debug!(target: "aleph-party", "Initializing rate-limiter for the gossip-network with {} byte(s) per second.", rate_limiter_config.gossip_network_bit_rate);
+    let gossip_network_rate_limiter = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
+
+    let rate_limited_substrate_network =
+        RateLimitedRawNetwork::new(substrate_network, gossip_network_rate_limiter);
     let (gossip_network_service, authentication_network, _block_sync_network) =
-        GossipService::new(substrate_network, spawn_handle.clone());
+        GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
+
     let gossip_network_task = async move { gossip_network_service.run().await };
 
     let block_requester = network.clone();
