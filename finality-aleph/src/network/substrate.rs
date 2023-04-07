@@ -294,3 +294,105 @@ impl<B: Block, H: ExHashT> RawNetwork for SubstrateNetwork<B, H> {
         })
     }
 }
+
+pub struct RateLimitedNetworkEventStream<P, ES: EventStream<P>> {
+    stream: ES,
+    rate_limiter: SleepingRateLimiter,
+    last_read_size: usize,
+    _phantom_data: PhantomData<P>,
+}
+
+impl<P, ES: EventStream<P>> RateLimitedNetworkEventStream<P, ES> {
+    pub fn new(stream: ES, rate_limiter: TokenBucket) -> Self {
+        Self {
+            stream,
+            rate_limiter: SleepingRateLimiter::new(rate_limiter),
+            last_read_size: 0,
+            _phantom_data: PhantomData,
+        }
+    }
+}
+
+#[async_trait]
+impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
+    for RateLimitedNetworkEventStream<P, ES>
+{
+    async fn next_event(&mut self) -> Option<Event<P>> {
+        let mut rate_sleep = self.rate_limiter.rate_limit(self.last_read_size).fuse();
+        let mut none_returned = false;
+        // let mut iterations: u64 = 1024 * 1024 * 1024;
+        while !none_returned {
+            // iterations = iterations.saturating_mul(2);
+            select! {
+                _ = &mut rate_sleep => break,
+                default => {
+                    // for _ in 1..iterations {
+                    loop {
+                        match self.stream.next_event().now_or_never() {
+                            Some(None) => { none_returned = true; break; },
+                            None => break,
+                            _ => {},
+                        }
+                    }
+                }
+            }
+        }
+        if none_returned {
+            return None;
+        }
+
+        self.last_read_size = 0;
+        let event = self.stream.next_event().await?;
+        if let Event::Messages(_, messages) = &event {
+            let size_received = size(messages);
+
+            self.last_read_size = size_received;
+        }
+        Some(event)
+    }
+}
+
+fn size(messages: &Vec<(Protocol, bytes::Bytes)>) -> usize {
+    messages.iter().map(|(_, bytes)| bytes.len()).sum()
+}
+
+#[derive(Clone)]
+pub struct RateLimitedRawNetwork<RN> {
+    raw_network: RN,
+    rate_limiter: TokenBucket,
+}
+
+impl<RN> RateLimitedRawNetwork<RN> {
+    pub fn new(network: RN, rate_limiter: TokenBucket) -> Self {
+        Self {
+            raw_network: network,
+            rate_limiter,
+        }
+    }
+}
+
+impl<RN: RawNetwork> RawNetwork for RateLimitedRawNetwork<RN>
+where
+    RN::EventStream: Send,
+    RN::PeerId: Sync,
+{
+    type SenderError = RN::SenderError;
+    type NetworkSender = RN::NetworkSender;
+    type PeerId = RN::PeerId;
+    type EventStream = RateLimitedNetworkEventStream<RN::PeerId, RN::EventStream>;
+
+    fn event_stream(&self) -> Self::EventStream {
+        RateLimitedNetworkEventStream::new(
+            self.raw_network.event_stream(),
+            self.rate_limiter.clone(),
+        )
+    }
+
+    fn sender(
+        &self,
+        peer_id: Self::PeerId,
+        protocol: Protocol,
+    ) -> Result<Self::NetworkSender, Self::SenderError> {
+        self.raw_network.sender(peer_id, protocol)
+    }
+}
