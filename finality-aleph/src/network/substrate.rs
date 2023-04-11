@@ -1,9 +1,10 @@
-use std::{collections::HashMap, fmt, iter, pin::Pin, sync::Arc};
+use std::{collections::HashMap, fmt, iter, marker::PhantomData, pin::Pin, sync::Arc};
 
 use aleph_primitives::BlockNumber;
 use async_trait::async_trait;
 use futures::stream::{Stream, StreamExt};
 use log::{error, trace};
+use network_clique::rate_limiter::{SleepingRateLimiter, TokenBucket};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
     multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
@@ -318,28 +319,10 @@ impl<P: Send + Sync, ES: EventStream<P> + Send> EventStream<P>
     for RateLimitedNetworkEventStream<P, ES>
 {
     async fn next_event(&mut self) -> Option<Event<P>> {
-        let mut rate_sleep = self.rate_limiter.rate_limit(self.last_read_size).fuse();
-        let mut none_returned = false;
-        // let mut iterations: u64 = 1024 * 1024 * 1024;
-        while !none_returned {
-            // iterations = iterations.saturating_mul(2);
-            select! {
-                _ = &mut rate_sleep => break,
-                default => {
-                    // for _ in 1..iterations {
-                    loop {
-                        match self.stream.next_event().now_or_never() {
-                            Some(None) => { none_returned = true; break; },
-                            None => break,
-                            _ => {},
-                        }
-                    }
-                }
-            }
-        }
-        if none_returned {
-            return None;
-        }
+        trace!(target: "rate-limiter", "rate-limiter with {} bytes", self.last_read_size);
+        let start = tokio::time::Instant::now();
+        self.rate_limiter.rate_limit(self.last_read_size).await;
+        trace!(target: "rate-limiter", "rate-limiter slept for {}", tokio::time::Instant::now().duration_since(start).as_millis());
 
         self.last_read_size = 0;
         let event = self.stream.next_event().await?;
