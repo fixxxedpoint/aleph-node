@@ -186,12 +186,12 @@ impl Listener for TcpListener {
     }
 }
 
-pub struct RateLimitedAsyncRead<A> {
+pub struct RateLimitedAsyncReadWrite<A> {
     rate_limiter: SleepingRateLimiter,
     read: Pin<Box<A>>,
 }
 
-impl<A: AsyncRead> RateLimitedAsyncRead<A> {
+impl<A: AsyncRead> RateLimitedAsyncReadWrite<A> {
     pub fn new(read: A, rate_limiter: TokenBucket) -> Self {
         Self {
             rate_limiter: SleepingRateLimiter::new(rate_limiter),
@@ -200,7 +200,7 @@ impl<A: AsyncRead> RateLimitedAsyncRead<A> {
     }
 }
 
-impl<A: AsyncRead> AsyncRead for RateLimitedAsyncRead<A> {
+impl<A: AsyncRead> AsyncRead for RateLimitedAsyncReadWrite<A> {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -223,7 +223,7 @@ impl<A: AsyncRead> AsyncRead for RateLimitedAsyncRead<A> {
     }
 }
 
-impl<A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncRead<A> {
+impl<A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncReadWrite<A> {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -247,19 +247,19 @@ impl<A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncRead<A> {
     }
 }
 
-impl<R: Splittable> Splittable for RateLimitedAsyncRead<R> {
+impl<R: Splittable> Splittable for RateLimitedAsyncReadWrite<R> {
     type Sender = R::Sender;
-    type Receiver = RateLimitedAsyncRead<R::Receiver>;
+    type Receiver = RateLimitedAsyncReadWrite<R::Receiver>;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         let (sender, receiver) = Pin::<Box<R>>::into_inner(self.read).split();
         let rate_limiter = self.rate_limiter;
-        let receiver = RateLimitedAsyncRead::new(receiver, rate_limiter.into_inner());
+        let receiver = RateLimitedAsyncReadWrite::new(receiver, rate_limiter.into_inner());
         (sender, receiver)
     }
 }
 
-impl<A: ConnectionInfo> ConnectionInfo for RateLimitedAsyncRead<A> {
+impl<A: ConnectionInfo> ConnectionInfo for RateLimitedAsyncReadWrite<A> {
     fn peer_address_info(&self) -> PeerAddressInfo {
         self.read.peer_address_info()
     }
@@ -282,12 +282,12 @@ impl<D> RateLimitingDialer<D> {
 
 #[async_trait::async_trait]
 impl<A: Data, D: Dialer<A>> Dialer<A> for RateLimitingDialer<D> {
-    type Connection = RateLimitedAsyncRead<D::Connection>;
+    type Connection = RateLimitedAsyncReadWrite<D::Connection>;
     type Error = D::Error;
 
     async fn connect(&mut self, address: A) -> Result<Self::Connection, Self::Error> {
         let connection = self.dialer.connect(address).await?;
-        Ok(RateLimitedAsyncRead::new(
+        Ok(RateLimitedAsyncReadWrite::new(
             connection,
             self.rate_limiter.clone(),
         ))
@@ -310,12 +310,12 @@ impl<L> RateLimitingListener<L> {
 
 #[async_trait::async_trait]
 impl<L: Listener + Send> Listener for RateLimitingListener<L> {
-    type Connection = RateLimitedAsyncRead<L::Connection>;
+    type Connection = RateLimitedAsyncReadWrite<L::Connection>;
     type Error = L::Error;
 
     async fn accept(&mut self) -> Result<Self::Connection, Self::Error> {
         let connection = self.listener.accept().await?;
-        Ok(RateLimitedAsyncRead::new(
+        Ok(RateLimitedAsyncReadWrite::new(
             connection,
             self.rate_limiter.clone(),
         ))
