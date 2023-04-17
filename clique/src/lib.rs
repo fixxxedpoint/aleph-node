@@ -188,36 +188,36 @@ impl Listener for TcpListener {
 
 pub struct RateLimitedAsyncReadWrite<A> {
     rate_limiter: SleepingRateLimiter,
-    read: Pin<Box<A>>,
+    read: A,
 }
 
 impl<A: AsyncRead> RateLimitedAsyncReadWrite<A> {
     pub fn new(read: A, rate_limiter: TokenBucket) -> Self {
         Self {
             rate_limiter: SleepingRateLimiter::new(rate_limiter),
-            read: Box::pin(read),
+            read,
         }
     }
 }
 
-impl<A: AsyncRead> AsyncRead for RateLimitedAsyncReadWrite<A> {
+impl<A: AsyncRead + Unpin> AsyncRead for RateLimitedAsyncReadWrite<A> {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        let deref_self = self.get_mut();
-        match Pin::new(&mut deref_self.rate_limiter.current_sleep()).poll(cx) {
+        let this = self.get_mut();
+        match Pin::new(&mut this.rate_limiter.current_sleep()).poll(cx) {
             std::task::Poll::Pending => return std::task::Poll::Pending,
             _ => {}
         }
 
         let filled_before = buf.filled().len();
-        let result = deref_self.read.as_mut().poll_read(cx, buf);
+        let result = Pin::new(&mut this.read).poll_read(cx, buf);
         let filled_after = buf.filled().len();
         let last_read_size = filled_after - filled_before;
 
-        deref_self.rate_limiter.rate_limit(last_read_size);
+        this.rate_limiter.rate_limit(last_read_size);
 
         result
     }
@@ -229,21 +229,21 @@ impl<A: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncReadWrite<A> {
         cx: &mut std::task::Context<'_>,
         buf: &[u8],
     ) -> std::task::Poll<Result<usize, std::io::Error>> {
-        self.read.as_mut().poll_write(cx, buf)
+        Pin::new(&mut self.read).poll_write(cx, buf)
     }
 
     fn poll_flush(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
-        self.read.as_mut().poll_flush(cx)
+        Pin::new(&mut self.read).poll_flush(cx)
     }
 
     fn poll_shutdown(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), std::io::Error>> {
-        self.read.as_mut().poll_shutdown(cx)
+        Pin::new(&mut self.read).poll_shutdown(cx)
     }
 }
 
@@ -252,7 +252,7 @@ impl<R: Splittable> Splittable for RateLimitedAsyncReadWrite<R> {
     type Receiver = RateLimitedAsyncReadWrite<R::Receiver>;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
-        let (sender, receiver) = Pin::<Box<R>>::into_inner(self.read).split();
+        let (sender, receiver) = self.read.split();
         let rate_limiter = self.rate_limiter;
         let receiver = RateLimitedAsyncReadWrite::new(receiver, rate_limiter.into_inner());
         (sender, receiver)

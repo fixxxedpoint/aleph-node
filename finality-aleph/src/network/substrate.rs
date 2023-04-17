@@ -2,13 +2,19 @@ use std::{collections::HashMap, fmt, iter, marker::PhantomData, pin::Pin, sync::
 
 use aleph_primitives::BlockNumber;
 use async_trait::async_trait;
-use futures::stream::{Stream, StreamExt};
+use futures::{
+    stream::{Stream, StreamExt},
+    Future, TryFuture,
+};
 use log::{error, trace};
-use network_clique::rate_limiter::{SleepingRateLimiter, TokenBucket};
+use network_clique::{
+    rate_limiter::{SleepingRateLimiter, TokenBucket},
+    RateLimitedAsyncReadWrite,
+};
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
-    multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
-    NetworkService, NetworkSyncForkRequest, PeerId,
+    multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, ListenerId, Multiaddr,
+    NetworkService, NetworkSyncForkRequest, PeerId, Transport, TransportError, TransportEvent,
 };
 use sc_network_common::{
     protocol::ProtocolName,
@@ -377,5 +383,111 @@ where
         protocol: Protocol,
     ) -> Result<Self::NetworkSender, Self::SenderError> {
         self.raw_network.sender(peer_id, protocol)
+    }
+}
+
+pub struct WrapWithRateLimiter<InnerFut> {
+    rate_limiter: Option<SleepingRateLimiter>,
+    inner: InnerFut,
+}
+
+impl<T> WrapWithRateLimiter<T> {
+    pub fn new(rate_limiter: SleepingRateLimiter, inner: T) -> Self {
+        Self {
+            rate_limiter: Some(rate_limiter),
+            inner,
+        }
+    }
+}
+
+impl<InnerFut> Future for WrapWithRateLimiter<InnerFut>
+where
+    InnerFut: TryFuture + Unpin,
+{
+    type Output = Result<RateLimitedAsyncReadWrite<InnerFut::Ok>, InnerFut::Error>;
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
+        let this = self.get_mut();
+
+        use std::task::Poll;
+        match TryFuture::try_poll(Pin::new(&mut this.inner), cx) {
+            Poll::Pending => {}
+            Poll::Ready(Ok(v)) => {
+                let rate_limiter = if let Some(rate_limiter) = this.rate_limiter.take() {
+                    rate_limiter
+                } else {
+                    return Poll::Pending;
+                };
+                return Poll::Ready(Ok(RateLimitedAsyncReadWrite::new(v, rate_limiter)));
+            }
+            Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
+        }
+    }
+}
+
+pub struct RateLimitedTransport<T> {
+    token_bucket: TokenBucket,
+    inner: T,
+}
+
+impl<T> Transport for RateLimitedTransport<T>
+where
+    T: Transport,
+{
+    type Output = RateLimitedAsyncReadWrite<T::Output>;
+
+    type Error = T::Error;
+
+    type ListenerUpgrade = WrapWithRateLimiter<T::ListenerUpgrade>;
+
+    type Dial = WrapWithRateLimiter<T::Dial>;
+
+    fn listen_on(&mut self, addr: Multiaddr) -> Result<ListenerId, TransportError<Self::Error>> {
+        self.inner.listen_on(addr)
+    }
+
+    fn remove_listener(&mut self, id: ListenerId) -> bool {
+        self.inner.remove_listener(id)
+    }
+
+    fn dial(&mut self, addr: Multiaddr) -> Result<Self::Dial, TransportError<Self::Error>> {
+        let dial_result = self.inner.dial(addr)?;
+        Ok(WrapWithRateLimiter::new(
+            SleepingRateLimiter::new(self.token_bucket.clone()),
+            dial_result,
+        ))
+    }
+
+    fn dial_as_listener(
+        &mut self,
+        addr: Multiaddr,
+    ) -> Result<Self::Dial, TransportError<Self::Error>> {
+        let dial_result = self.inner.dial_as_listener(addr)?;
+        Ok(WrapWithRateLimiter::new(
+            SleepingRateLimiter::new(self.token_bucket.clone()),
+            dial_result,
+        ))
+    }
+
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<TransportEvent<Self::ListenerUpgrade, Self::Error>> {
+        let this = self.get_mut();
+        Pin::new(&mut this.inner).poll(cx).map(|event| {
+            event.map_upgrade(|inner_fut| {
+                WrapWithRateLimiter::new(
+                    SleepingRateLimiter::new(this.token_bucket.clone()),
+                    inner_fut,
+                )
+            })
+        })
+    }
+
+    fn address_translation(&self, listen: &Multiaddr, observed: &Multiaddr) -> Option<Multiaddr> {
+        self.inner.address_translation(listen, observed)
     }
 }
