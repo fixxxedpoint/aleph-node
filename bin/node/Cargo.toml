@@ -26,54 +26,55 @@ hex-literal = "0.3"
 libp2p = "0.49.0"
 thiserror = "1.0"
 
-sp-application-crypto = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-block-builder = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-chain-spec = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38"}
-sc-cli = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-core = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-executor = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-service = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-telemetry = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-keystore = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-keystore = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-inherents = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-basic-authorship = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-network = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-transaction-pool = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-transaction-pool = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-transaction-pool-api = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-consensus-aura = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-consensus-aura = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-consensus = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-consensus = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-client-api = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-runtime = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-timestamp = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-staking = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-try-runtime-cli = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38", optional = true }
-sc-consensus-slots = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-arithmetic = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-io = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+sp-application-crypto = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-block-builder = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-chain-spec = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX"}
+sc-cli = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-core = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-executor = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-service = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-telemetry = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-keystore = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-keystore = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-inherents = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-basic-authorship = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-network = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-transaction-pool = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-transaction-pool = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-transaction-pool-api = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-consensus-aura = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-consensus-aura = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-consensus = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-consensus = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-client-api = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-runtime = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-timestamp = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-staking = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+try-runtime-cli = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX", optional = true }
+sc-consensus-slots = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-arithmetic = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-io = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
-frame-benchmarking-cli = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38", optional = true }
-frame-benchmarking = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38", optional = true }
+frame-benchmarking-cli = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX", optional = true }
+frame-benchmarking = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX", optional = true }
 
 aleph-runtime = { path = "../runtime" }
 finality-aleph = { path = "../../finality-aleph" }
 aleph-primitives = { package = "primitives", path = "../../primitives" }
+network-clique = { package = "network-clique", path = "../../clique" }
 
 # These dependencies are used for the node's RPCs
 jsonrpsee = { version = "0.16.2", features = ["server"] }
-sc-rpc = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-api = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sc-rpc-api = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-blockchain = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-block-builder = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-substrate-frame-rpc-system = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-transaction-payment-rpc = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+sc-rpc = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-api = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sc-rpc-api = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-blockchain = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-block-builder = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+substrate-frame-rpc-system = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-transaction-payment-rpc = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
 [build-dependencies]
-substrate-build-script-utils = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+substrate-build-script-utils = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
 [features]
 default = []

@@ -15,49 +15,49 @@ codec = { package = "parity-scale-codec", version = "3.0", default-features = fa
 scale-info = { version = "2.0", default-features = false, features = ["derive"] }
 serde = { version = "1.0", optional = true, features = ["derive"] }
 
-frame-executive = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-frame-support = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-frame-system = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-frame-system-rpc-runtime-api = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-frame-try-runtime = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38", optional = true }
+frame-executive = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+frame-support = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+frame-system = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+frame-system-rpc-runtime-api = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+frame-try-runtime = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX", optional = true }
 
-pallet-aura = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-authorship = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-balances = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-contracts = { git = "https://github.com/Cardinal-Cryptography/substrate", default-features = false, branch = "aleph-v0.9.38" }
-pallet-contracts-primitives = { git = "https://github.com/Cardinal-Cryptography/substrate", default-features = false, branch = "aleph-v0.9.38" }
-pallet-identity = { git = "https://github.com/Cardinal-Cryptography/substrate", default-features = false, branch = "aleph-v0.9.38" }
-pallet-randomness-collective-flip = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-session = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-scheduler = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-staking = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-sudo = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-timestamp = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-transaction-payment = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-transaction-payment-rpc-runtime-api = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-treasury = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-vesting = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-multisig = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-utility = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-nomination-pools = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-pallet-nomination-pools-runtime-api = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+pallet-aura = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-authorship = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-balances = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-contracts = { git = "https://github.com/fixxxedpoint/substrate.git", default-features = false, branch = "unbounded_channel_FIX" }
+pallet-contracts-primitives = { git = "https://github.com/fixxxedpoint/substrate.git", default-features = false, branch = "unbounded_channel_FIX" }
+pallet-identity = { git = "https://github.com/fixxxedpoint/substrate.git", default-features = false, branch = "unbounded_channel_FIX" }
+pallet-randomness-collective-flip = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-session = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-scheduler = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-staking = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-sudo = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-timestamp = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-transaction-payment = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-transaction-payment-rpc-runtime-api = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-treasury = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-vesting = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-multisig = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-utility = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-nomination-pools = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+pallet-nomination-pools-runtime-api = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
-sp-api = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-block-builder = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-consensus-aura = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-core = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-inherents = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-offchain = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-runtime = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-session = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-staking = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-std = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-transaction-pool = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-version = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-io = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+sp-api = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-block-builder = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-consensus-aura = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-core = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-inherents = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-offchain = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-runtime = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-session = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-staking = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-std = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-transaction-pool = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-version = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-io = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
 # Benchmarking stuff
-frame-benchmarking = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38", optional = true }
+frame-benchmarking = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX", optional = true }
 
 primitives = { path = "../../primitives", default-features = false }
 pallet-aleph = { path = "../../pallets/aleph", default-features = false }
@@ -69,7 +69,7 @@ baby-liminal-extension = { path = "../../baby-liminal-extension", default-featur
 pallet-baby-liminal = { path = "../../pallets/baby-liminal", default-features = false, optional = true }
 
 [build-dependencies]
-substrate-wasm-builder = { git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+substrate-wasm-builder = { git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
 [dev-dependencies]
 smallvec = { version = "1", default-features = false}

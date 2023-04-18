@@ -29,18 +29,18 @@ ark-marlin = { version = "^0.3.0", default-features = false }
 
 liminal-ark-poseidon = { version = "0.1.0", default-features = false, optional = true }
 
-frame-benchmarking = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38", optional = true }
-frame-support = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-frame-system = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-core = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-io = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
-sp-std = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+frame-benchmarking = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX", optional = true }
+frame-support = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+frame-system = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-core = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-io = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-std = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
 primitives = { path = "../../primitives", default-features = false }
 
 [dev-dependencies]
-pallet-balances = { default-features = false, git = 'https://github.com/Cardinal-Cryptography/substrate.git', branch = "aleph-v0.9.38" }
-sp-runtime = { default-features = false, git = "https://github.com/Cardinal-Cryptography/substrate.git", branch = "aleph-v0.9.38" }
+pallet-balances = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
+sp-runtime = { default-features = false, git = "https://github.com/fixxxedpoint/substrate.git", branch = "unbounded_channel_FIX" }
 
 [features]
 default = ["std"]
