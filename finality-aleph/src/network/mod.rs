@@ -12,7 +12,9 @@ pub mod tcp;
 pub use gossip::mock::{MockEvent, MockRawNetwork};
 pub use gossip::{Network as GossipNetwork, Protocol, Service as GossipService};
 use network_clique::{AddressingInformation, NetworkIdentity, PeerId};
-pub use substrate::{ProtocolNaming, RateLimitedRawNetwork, SubstrateNetwork};
+pub use substrate::{
+    ProtocolNaming, RateLimitedRawNetwork, RateLimitedTransport, SubstrateNetwork,
+};
 
 use crate::BlockIdentifier;
 

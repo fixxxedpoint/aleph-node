@@ -9,15 +9,16 @@ use aleph_primitives::{AlephSessionApi, MAX_BLOCK_SIZE};
 use aleph_runtime::{self, opaque::Block, RuntimeApi};
 use finality_aleph::{
     run_validator_node, AlephBlockImport, AlephConfig, JustificationNotificationFor, Metrics,
-    MillisecsPerBlock, Protocol, ProtocolNaming, RateLimiterConfig, SessionPeriod,
-    TracingBlockImport,
+    MillisecsPerBlock, Protocol, ProtocolNaming, RateLimitedTransport, RateLimiterConfig,
+    SessionPeriod, TracingBlockImport,
 };
 use futures::channel::mpsc;
 use log::warn;
+use network_clique::rate_limiter::TokenBucket;
 use sc_client_api::{Backend, BlockBackend, HeaderBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_slots::BackoffAuthoringBlocksStrategy;
-use sc_network::NetworkService;
+use sc_network::{build_tcp_transport, NetworkService};
 use sc_service::{
     error::Error as ServiceError, Configuration, KeystoreContainer, NetworkStarter, RpcHandlers,
     TFullClient, TaskManager,
@@ -208,6 +209,7 @@ fn setup(
     client: Arc<FullClient>,
     telemetry: &mut Option<Telemetry>,
     import_justification_tx: mpsc::UnboundedSender<JustificationNotificationFor<Block>>,
+    rate_limiter_config: RateLimiterConfig,
 ) -> Result<
     (
         RpcHandlers,
@@ -242,8 +244,11 @@ fn setup(
             Protocol::BlockSync,
         ));
 
+    let token_bucket = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
+    let tcp_transport = build_tcp_transport();
+    let rate_limited_transport = RateLimitedTransport::new(token_bucket, tcp_transport);
     let (network, system_rpc_tx, tx_handler_controller, network_starter) =
-        sc_service::build_network(sc_service::BuildNetworkParams::<_, _, _, _> {
+        sc_service::build_network(sc_service::BuildNetworkParams {
             config: &config,
             client: client.clone(),
             transaction_pool: transaction_pool.clone(),
@@ -251,7 +256,7 @@ fn setup(
             import_queue,
             block_announce_validator_builder: None,
             warp_sync: None,
-            transport: None,
+            transport: Some(rate_limited_transport),
         })?;
 
     let rpc_builder = {
@@ -332,6 +337,7 @@ pub fn new_authority(
     let backoff_authoring_blocks = Some(LimitNonfinalized(aleph_config.max_nonfinalized_blocks()));
     let prometheus_registry = config.prometheus_registry().cloned();
 
+    let rate_limiter_config = RateLimiterConfig::new();
     let (_rpc_handlers, network, protocol_naming, network_starter) = setup(
         config,
         backend.clone(),
@@ -342,6 +348,7 @@ pub fn new_authority(
         client.clone(),
         &mut telemetry,
         justification_tx,
+        rate_limiter_config.clone(),
     )?;
 
     let mut proposer_factory = sc_basic_authorship::ProposerFactory::new(
@@ -393,7 +400,6 @@ pub fn new_authority(
         panic!("Cannot run a validator node without external addresses, stopping.");
     }
     let blockchain_backend = BlockchainBackendImpl { backend };
-    let rate_limiter_config = RateLimiterConfig::new();
     let aleph_config = AlephConfig {
         network,
         client,

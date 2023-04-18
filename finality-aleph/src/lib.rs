@@ -54,7 +54,7 @@ pub use import::{AlephBlockImport, TracingBlockImport};
 pub use justification::{
     AlephJustification, JustificationNotification, JustificationNotificationFor,
 };
-pub use network::{Protocol, ProtocolNaming};
+pub use network::{Protocol, ProtocolNaming, RateLimitedTransport};
 pub use nodes::run_validator_node;
 pub use session::SessionPeriod;
 
@@ -274,6 +274,7 @@ const GOSSIP_NETWORK_BIT_RATE: &str = "GOSSIP_NETWORK_BIT_RATE";
 const DEFAULT_GOSSIP_NETWORK_BIT_RATE: f64 = 256.0;
 
 /// This options are intentionally hidden behind environment variables. It should not be needed to modify those.
+#[derive(Clone)]
 pub struct RateLimiterConfig {
     /// Maximum bitrate per node (bytes per second) of the alephbft validator network.
     pub alephbft_bit_rate_per_connection: f64,

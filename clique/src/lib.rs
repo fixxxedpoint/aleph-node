@@ -8,6 +8,7 @@ use std::{
 use codec::Codec;
 use futures::Future;
 use rate_limiter::{SleepingRateLimiter, TokenBucket};
+use sc_network::{AsyncRead as ScAsyncRead, AsyncWrite as ScAsyncWrite};
 use tokio::io::{AsyncRead, AsyncWrite};
 
 mod crypto;
@@ -191,7 +192,7 @@ pub struct RateLimitedAsyncReadWrite<A> {
     read: A,
 }
 
-impl<A: AsyncRead> RateLimitedAsyncReadWrite<A> {
+impl<A> RateLimitedAsyncReadWrite<A> {
     pub fn new(read: A, rate_limiter: TokenBucket) -> Self {
         Self {
             rate_limiter: SleepingRateLimiter::new(rate_limiter),
@@ -220,6 +221,54 @@ impl<A: AsyncRead + Unpin> AsyncRead for RateLimitedAsyncReadWrite<A> {
         this.rate_limiter.rate_limit(last_read_size);
 
         result
+    }
+}
+
+impl<A: ScAsyncRead + Unpin> ScAsyncRead for RateLimitedAsyncReadWrite<A> {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let this = self.get_mut();
+        match Pin::new(&mut this.rate_limiter.current_sleep()).poll(cx) {
+            std::task::Poll::Pending => return std::task::Poll::Pending,
+            _ => {}
+        }
+
+        let result = Pin::new(&mut this.read).poll_read(cx, buf);
+        let last_read_size = match result {
+            std::task::Poll::Ready(Ok(v)) => v,
+            r @ _ => return r,
+        };
+
+        this.rate_limiter.rate_limit(last_read_size);
+
+        std::task::Poll::Ready(Ok(last_read_size))
+    }
+}
+
+impl<A: ScAsyncWrite + Unpin> ScAsyncWrite for RateLimitedAsyncReadWrite<A> {
+    fn poll_write(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        Pin::new(&mut self.read).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        Pin::new(&mut self.read).poll_flush(cx)
+    }
+
+    fn poll_close(
+        mut self: Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::io::Result<()>> {
+        Pin::new(&mut self.read).poll_close(cx)
     }
 }
 

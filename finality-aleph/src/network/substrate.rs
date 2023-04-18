@@ -387,14 +387,14 @@ where
 }
 
 pub struct WrapWithRateLimiter<InnerFut> {
-    rate_limiter: Option<SleepingRateLimiter>,
+    rate_limiter: TokenBucket,
     inner: InnerFut,
 }
 
 impl<T> WrapWithRateLimiter<T> {
-    pub fn new(rate_limiter: SleepingRateLimiter, inner: T) -> Self {
+    pub fn new(rate_limiter: TokenBucket, inner: T) -> Self {
         Self {
-            rate_limiter: Some(rate_limiter),
+            rate_limiter,
             inner,
         }
     }
@@ -414,15 +414,11 @@ where
 
         use std::task::Poll;
         match TryFuture::try_poll(Pin::new(&mut this.inner), cx) {
-            Poll::Pending => {}
-            Poll::Ready(Ok(v)) => {
-                let rate_limiter = if let Some(rate_limiter) = this.rate_limiter.take() {
-                    rate_limiter
-                } else {
-                    return Poll::Pending;
-                };
-                return Poll::Ready(Ok(RateLimitedAsyncReadWrite::new(v, rate_limiter)));
-            }
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Ok(v)) => Poll::Ready(Ok(RateLimitedAsyncReadWrite::new(
+                v,
+                this.rate_limiter.clone(),
+            ))),
             Poll::Ready(Err(err)) => return Poll::Ready(Err(err)),
         }
     }
@@ -433,9 +429,20 @@ pub struct RateLimitedTransport<T> {
     inner: T,
 }
 
+impl<T> RateLimitedTransport<T> {
+    pub fn new(token_bucket: TokenBucket, transport: T) -> Self {
+        Self {
+            token_bucket,
+            inner: transport,
+        }
+    }
+}
+
 impl<T> Transport for RateLimitedTransport<T>
 where
-    T: Transport,
+    T: Transport + Unpin,
+    T::ListenerUpgrade: Unpin,
+    T::Dial: Unpin,
 {
     type Output = RateLimitedAsyncReadWrite<T::Output>;
 
@@ -444,7 +451,6 @@ where
     type ListenerUpgrade = WrapWithRateLimiter<T::ListenerUpgrade>;
 
     type Dial = WrapWithRateLimiter<T::Dial>;
-
     fn listen_on(&mut self, addr: Multiaddr) -> Result<ListenerId, TransportError<Self::Error>> {
         self.inner.listen_on(addr)
     }
@@ -456,7 +462,7 @@ where
     fn dial(&mut self, addr: Multiaddr) -> Result<Self::Dial, TransportError<Self::Error>> {
         let dial_result = self.inner.dial(addr)?;
         Ok(WrapWithRateLimiter::new(
-            SleepingRateLimiter::new(self.token_bucket.clone()),
+            self.token_bucket.clone(),
             dial_result,
         ))
     }
@@ -467,7 +473,7 @@ where
     ) -> Result<Self::Dial, TransportError<Self::Error>> {
         let dial_result = self.inner.dial_as_listener(addr)?;
         Ok(WrapWithRateLimiter::new(
-            SleepingRateLimiter::new(self.token_bucket.clone()),
+            self.token_bucket.clone(),
             dial_result,
         ))
     }
@@ -479,10 +485,7 @@ where
         let this = self.get_mut();
         Pin::new(&mut this.inner).poll(cx).map(|event| {
             event.map_upgrade(|inner_fut| {
-                WrapWithRateLimiter::new(
-                    SleepingRateLimiter::new(this.token_bucket.clone()),
-                    inner_fut,
-                )
+                WrapWithRateLimiter::new(this.token_bucket.clone(), inner_fut)
             })
         })
     }
