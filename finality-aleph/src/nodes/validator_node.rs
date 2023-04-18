@@ -104,13 +104,15 @@ where
 
     let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
 
-    debug!(target: "aleph-party", "Initializing rate-limiter for the gossip-network with {} byte(s) per second.", rate_limiter_config.gossip_network_bit_rate);
-    let gossip_network_rate_limiter = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
+    // debug!(target: "aleph-party", "Initializing rate-limiter for the gossip-network with {} byte(s) per second.", rate_limiter_config.gossip_network_bit_rate);
+    // let gossip_network_rate_limiter = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
 
-    let rate_limited_substrate_network =
-        RateLimitedRawNetwork::new(substrate_network, gossip_network_rate_limiter);
+    // let rate_limited_substrate_network =
+    //     RateLimitedRawNetwork::new(substrate_network, gossip_network_rate_limiter);
+    // let (gossip_network_service, authentication_network, _block_sync_network) =
+    //     GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
     let (gossip_network_service, authentication_network, _block_sync_network) =
-        GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
+        GossipService::new(substrate_network, spawn_handle.clone());
 
     let gossip_network_task = async move { gossip_network_service.run().await };
 

@@ -18,7 +18,7 @@ use network_clique::rate_limiter::TokenBucket;
 use sc_client_api::{Backend, BlockBackend, HeaderBackend};
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_slots::BackoffAuthoringBlocksStrategy;
-use sc_network::{build_tcp_transport, NetworkService};
+use sc_network::{build_basic_transport, build_tcp_transport, NetworkService};
 use sc_service::{
     error::Error as ServiceError, Configuration, KeystoreContainer, NetworkStarter, RpcHandlers,
     TFullClient, TaskManager,
@@ -244,9 +244,11 @@ fn setup(
             Protocol::BlockSync,
         ));
 
-    let token_bucket = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
-    let tcp_transport = build_tcp_transport();
-    let rate_limited_transport = RateLimitedTransport::new(token_bucket, tcp_transport);
+    let rate_limited_transport = build_basic_transport(Some(|| {
+        let token_bucket = TokenBucket::new(rate_limiter_config.gossip_network_bit_rate);
+        let tcp_transport = build_tcp_transport();
+        RateLimitedTransport::new(token_bucket, tcp_transport)
+    }));
     let (network, system_rpc_tx, tx_handler_controller, network_starter) =
         sc_service::build_network(sc_service::BuildNetworkParams {
             config: &config,
