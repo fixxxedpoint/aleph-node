@@ -14,7 +14,10 @@ pub use gossip::{
     Error as GossipError, Network as GossipNetwork, Protocol, Service as GossipService,
 };
 use network_clique::{AddressingInformation, NetworkIdentity, PeerId};
-pub use substrate::{ProtocolNaming, SubstrateNetwork};
+pub use substrate::{
+    MapNetwork, ProtocolNaming, ReputationRateLimitedEventStream, ReputationRateLimiter,
+    SubstrateNetwork,
+};
 
 use crate::BlockIdentifier;
 

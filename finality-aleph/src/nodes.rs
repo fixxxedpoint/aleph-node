@@ -112,10 +112,10 @@ where
         validator_network_service.run(exit).await
     });
 
-    let (gossip_network_service, authentication_network, block_sync_network) = GossipService::new(
-        SubstrateNetwork::new(network.clone(), protocol_naming),
-        spawn_handle.clone(),
-    );
+    let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
+    let rate_limited_substrate_network = MapNetwork::new(substrate_network);
+    let (gossip_network_service, authentication_network, block_sync_network) =
+        GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
     let gossip_network_task = async move { gossip_network_service.run().await };
 
     let block_requester = network.clone();

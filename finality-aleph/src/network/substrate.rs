@@ -1,19 +1,28 @@
-use std::{collections::HashMap, fmt, iter, pin::Pin, sync::Arc};
+use std::{
+    cmp::max,
+    collections::HashMap,
+    fmt, iter,
+    pin::Pin,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 use aleph_primitives::BlockNumber;
 use async_trait::async_trait;
 use futures::stream::{Stream, StreamExt};
 use log::{error, trace};
+use rate_limiter::TokenBucket;
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
     multiaddr::Protocol as MultiaddressProtocol, Event as SubstrateEvent, Multiaddr,
-    NetworkService, NetworkSyncForkRequest, PeerId,
+    NetworkService, NetworkSyncForkRequest, PeerId, ReputationChange,
 };
 use sc_network_common::{
     protocol::ProtocolName,
     service::{NetworkEventStream as _, NetworkNotification, NetworkPeers, NotificationSender},
     ExHashT,
 };
+use sc_peerset::BANNED_THRESHOLD;
 use sp_runtime::traits::{Block, Header};
 
 use crate::{
@@ -293,4 +302,128 @@ impl<B: Block, H: ExHashT> RawNetwork for SubstrateNetwork<B, H> {
             peer_id,
         })
     }
+}
+
+pub struct ReputationRateLimiter {
+    rate_limiter: TokenBucket,
+    duration_to_reputation_ratio: i32,
+}
+
+impl ReputationRateLimiter {
+    pub fn new(rate_limiter: TokenBucket, time_to_ban: Duration) -> Self {
+        let duration_to_reputation_ratio =
+            BANNED_THRESHOLD / i32::try_from(max(time_to_ban.as_secs(), 1)).unwrap_or(i32::MAX);
+        Self {
+            rate_limiter,
+            duration_to_reputation_ratio,
+        }
+    }
+
+    fn map_to_reputation(&self, duration: Duration) -> ReputationChange {
+        let reputation_delta = self.duration_to_reputation_ratio
+            * i32::try_from(duration.as_secs()).unwrap_or(i32::MAX);
+        ReputationChange::new(reputation_delta, "Peer exceeded bandwidth limit.")
+    }
+}
+
+impl ReputationRateLimiter {
+    pub fn rate_limit(&mut self, read_size: usize) -> Option<ReputationChange> {
+        let wait_time = self.rate_limiter.rate_limit(read_size, || Instant::now());
+        wait_time.map(|time| self.map_to_reputation(time))
+    }
+}
+
+pub struct ReputationRateLimitedEventStream<NP, ES> {
+    rate_limiter: ReputationRateLimiter,
+    rate_limiters: HashMap<PeerId, ReputationRateLimiter>,
+    stream: ES,
+    network: NP,
+}
+
+impl<NP, ES> ReputationRateLimitedEventStream<NP, ES> {
+    pub fn new(rate_limiter: ReputationRateLimiter, stream: ES, network: NP) -> Self {
+        Self {
+            rate_limiter,
+            stream,
+            network,
+        }
+    }
+
+    fn compute_size<P>(&self, event: &Event<P>) -> usize {
+        if let Event::Messages(_, messages) = event {
+            let mut size = 0;
+            for message in messages {
+                size = message.1.len().saturating_add(size);
+            }
+            size
+        } else {
+            0
+        }
+    }
+}
+
+#[async_trait]
+impl<NP, ES> EventStream<PeerId> for ReputationRateLimitedEventStream<NP, ES>
+where
+    NP: NetworkPeers + Send,
+    ES: EventStream<PeerId> + Send,
+{
+    async fn next_event(&mut self) -> Option<Event<PeerId>> {
+        let event = self.stream.next_event().await?;
+        let size = self.compute_size(&event);
+        // TODO implement this on per peer basis
+        if let Some(reputation_change) = self.rate_limiter.rate_limit(size) {
+            let who = event.peer();
+            self.network.report_peer(who.clone(), reputation_change);
+        }
+        Some(event)
+    }
+}
+
+#[derive(Clone)]
+pub struct MapNetwork<RN, F> {
+    network: RN,
+    event_stream_map: F,
+}
+
+impl<RN, F> MapNetwork<RN, F> {
+    pub fn new(network: RN, event_stream_map: F) -> Self {
+        Self {
+            network,
+            event_stream_map,
+        }
+    }
+}
+
+impl<RN, F, ES> RawNetwork for MapNetwork<RN, F>
+where
+    RN: RawNetwork,
+    ES: EventStream<RN::PeerId>,
+    F: Fn(RN::EventStream) -> ES + Send + Sync + Clone + 'static,
+{
+    type SenderError = RN::SenderError;
+    type NetworkSender = RN::NetworkSender;
+    type PeerId = RN::PeerId;
+    type EventStream = ES;
+
+    fn event_stream(&self) -> Self::EventStream {
+        (self.event_stream_map)(self.network.event_stream())
+    }
+
+    fn sender(
+        &self,
+        peer_id: Self::PeerId,
+        protocol: Protocol,
+    ) -> Result<Self::NetworkSender, Self::SenderError> {
+        self.network.sender(peer_id, protocol)
+    }
+}
+
+pub fn new_reputation_rate_limited_network<B: Block, H: ExHashT, NP: NetworkPeers>(
+    network: SubstrateNetwork<B, H>,
+) -> MapNetwork<
+    SubstrateNetwork<B, H>,
+    impl Fn(NetworkEventStream<B, H>) -> ReputationRateLimitedEventStream<NP, NetworkEventStream<B, H>>,
+> {
+    MapNetwork::new(network)
 }

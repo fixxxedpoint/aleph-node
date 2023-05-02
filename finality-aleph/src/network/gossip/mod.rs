@@ -74,6 +74,16 @@ pub enum Event<P> {
     Messages(P, Vec<(Protocol, Bytes)>),
 }
 
+impl<P> Event<P> {
+    pub fn peer(&self) -> &P {
+        match self {
+            Event::StreamOpened(peer, _) => peer,
+            Event::StreamClosed(peer, _) => peer,
+            Event::Messages(peer, _) => peer,
+        }
+    }
+}
+
 #[async_trait::async_trait]
 pub trait EventStream<P> {
     async fn next_event(&mut self) -> Option<Event<P>>;

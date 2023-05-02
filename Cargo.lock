@@ -2442,6 +2442,7 @@ dependencies = [
  "sc-consensus",
  "sc-network",
  "sc-network-common",
+ "sc-peerset",
  "sc-service",
  "sc-telemetry",
  "sc-utils",
