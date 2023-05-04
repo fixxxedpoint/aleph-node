@@ -271,6 +271,10 @@ impl<B: Block, H: ExHashT> SubstrateNetwork<B, H> {
     pub fn new(network: Arc<NetworkService<B, H>>, naming: ProtocolNaming) -> Self {
         SubstrateNetwork { network, naming }
     }
+
+    pub fn network_service(&self) -> Arc<NetworkService<B, H>> {
+        Arc::clone(&self.network)
+    }
 }
 
 impl<B: Block, H: ExHashT> RawNetwork for SubstrateNetwork<B, H> {
@@ -304,6 +308,7 @@ impl<B: Block, H: ExHashT> RawNetwork for SubstrateNetwork<B, H> {
     }
 }
 
+#[derive(Clone)]
 pub struct ReputationRateLimiter {
     rate_limiter: TokenBucket,
     duration_to_reputation_ratio: i32,
@@ -324,6 +329,13 @@ impl ReputationRateLimiter {
             * i32::try_from(duration.as_secs()).unwrap_or(i32::MAX);
         ReputationChange::new(reputation_delta, "Peer exceeded bandwidth limit.")
     }
+
+    fn build_from(&self) -> Self {
+        Self {
+            rate_limiter: self.rate_limiter.build_from(),
+            duration_to_reputation_ratio: self.duration_to_reputation_ratio,
+        }
+    }
 }
 
 impl ReputationRateLimiter {
@@ -333,8 +345,9 @@ impl ReputationRateLimiter {
     }
 }
 
+#[derive(Clone)]
 pub struct ReputationRateLimitedEventStream<NP, ES> {
-    rate_limiter: ReputationRateLimiter,
+    prototype_rate_limiter: ReputationRateLimiter,
     rate_limiters: HashMap<PeerId, ReputationRateLimiter>,
     stream: ES,
     network: NP,
@@ -343,7 +356,8 @@ pub struct ReputationRateLimitedEventStream<NP, ES> {
 impl<NP, ES> ReputationRateLimitedEventStream<NP, ES> {
     pub fn new(rate_limiter: ReputationRateLimiter, stream: ES, network: NP) -> Self {
         Self {
-            rate_limiter,
+            prototype_rate_limiter: rate_limiter,
+            rate_limiters: HashMap::new(),
             stream,
             network,
         }
@@ -360,6 +374,12 @@ impl<NP, ES> ReputationRateLimitedEventStream<NP, ES> {
             0
         }
     }
+
+    fn get_rate_limiter(&mut self, who: PeerId) -> &mut ReputationRateLimiter {
+        self.rate_limiters
+            .entry(who)
+            .or_insert_with(|| self.prototype_rate_limiter.build_from())
+    }
 }
 
 #[async_trait]
@@ -372,8 +392,8 @@ where
         let event = self.stream.next_event().await?;
         let size = self.compute_size(&event);
         // TODO implement this on per peer basis
-        if let Some(reputation_change) = self.rate_limiter.rate_limit(size) {
-            let who = event.peer();
+        let who = event.peer().clone();
+        if let Some(reputation_change) = self.get_rate_limiter(who).rate_limit(size) {
             self.network.report_peer(who.clone(), reputation_change);
         }
         Some(event)
@@ -419,11 +439,22 @@ where
     }
 }
 
-pub fn new_reputation_rate_limited_network<B: Block, H: ExHashT, NP: NetworkPeers>(
+pub fn new_reputation_rate_limited_network<B: Block, H: ExHashT>(
     network: SubstrateNetwork<B, H>,
+    rate_limiter: ReputationRateLimiter,
 ) -> MapNetwork<
     SubstrateNetwork<B, H>,
-    impl Fn(NetworkEventStream<B, H>) -> ReputationRateLimitedEventStream<NP, NetworkEventStream<B, H>>,
+    impl (Fn(
+            NetworkEventStream<B, H>,
+        )
+            -> ReputationRateLimitedEventStream<Arc<NetworkService<B, H>>, NetworkEventStream<B, H>>)
+        + Clone,
 > {
-    MapNetwork::new(network)
+    MapNetwork::new(network.clone(), move |event_stream| {
+        ReputationRateLimitedEventStream::new(
+            rate_limiter.build_from(),
+            event_stream,
+            network.network_service(),
+        )
+    })
 }

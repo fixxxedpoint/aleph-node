@@ -270,12 +270,15 @@ impl<H: Header<Number = BlockNumber>> BlockIdentifier for BlockId<H> {
 pub struct RateLimiterConfig {
     /// Maximum bitrate per node (bytes per second) of the alephbft validator network.
     pub alephbft_bit_rate_per_connection: f64,
+    /// Maximum bitrate per node (bytes per second) of the substrate event-stream network.
+    pub substrate_network_bit_rate_per_connection: f64,
 }
 
 impl Default for RateLimiterConfig {
     fn default() -> Self {
         Self {
             alephbft_bit_rate_per_connection: 1024.0 * 1024.0,
+            substrate_network_bit_rate_per_connection: 1024.0 * 1024.0,
         }
     }
 }

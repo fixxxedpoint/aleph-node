@@ -18,7 +18,17 @@ impl TokenBucket {
         Self {
             rate,
             token_limit,
-            available: token_limit,
+            available: 0,
+            requested: 0,
+            last_update: Instant::now(),
+        }
+    }
+
+    pub fn build_from(&self) -> Self {
+        Self {
+            rate: self.rate,
+            token_limit: self.token_limit,
+            available: 0,
             requested: 0,
             last_update: Instant::now(),
         }

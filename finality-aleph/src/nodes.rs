@@ -17,9 +17,10 @@ use crate::{
     finalization::AlephFinalizer,
     justification::Requester,
     network::{
+        new_reputation_rate_limited_network,
         session::{ConnectionManager, ConnectionManagerConfig},
         tcp::{new_rate_limited_network, KEY_TYPE},
-        GossipService, SubstrateNetwork,
+        GossipService, ReputationRateLimiter, SubstrateNetwork,
     },
     party::{
         impls::ChainStateImpl, manager::NodeSessionManagerImpl, ConsensusParty,
@@ -113,7 +114,13 @@ where
     });
 
     let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
-    let rate_limited_substrate_network = MapNetwork::new(substrate_network);
+    let substrate_rate_limiter =
+        TokenBucket::new(rate_limiter_config.substrate_network_bit_rate_per_connection);
+    let substrate_reputation_rate_limiter =
+        // TODO
+        ReputationRateLimiter::new(substrate_rate_limiter, std::time::Duration::from_secs(10));
+    let rate_limited_substrate_network =
+        new_reputation_rate_limited_network(substrate_network, substrate_reputation_rate_limiter);
     let (gossip_network_service, authentication_network, block_sync_network) =
         GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
     let gossip_network_task = async move { gossip_network_service.run().await };

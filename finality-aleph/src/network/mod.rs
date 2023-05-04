@@ -15,8 +15,8 @@ pub use gossip::{
 };
 use network_clique::{AddressingInformation, NetworkIdentity, PeerId};
 pub use substrate::{
-    MapNetwork, ProtocolNaming, ReputationRateLimitedEventStream, ReputationRateLimiter,
-    SubstrateNetwork,
+    new_reputation_rate_limited_network, MapNetwork, ProtocolNaming,
+    ReputationRateLimitedEventStream, ReputationRateLimiter, SubstrateNetwork,
 };
 
 use crate::BlockIdentifier;
