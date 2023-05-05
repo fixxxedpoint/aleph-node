@@ -10,7 +10,7 @@ use std::{
 use aleph_primitives::BlockNumber;
 use async_trait::async_trait;
 use futures::stream::{Stream, StreamExt};
-use log::{error, trace};
+use log::{debug, error, trace};
 use rate_limiter::TokenBucket;
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
@@ -312,36 +312,61 @@ impl<B: Block, H: ExHashT> RawNetwork for SubstrateNetwork<B, H> {
 pub struct ReputationRateLimiter {
     rate_limiter: TokenBucket,
     duration_to_reputation_ratio: i32,
+    last_update: Instant,
+    last_deadline: Instant,
 }
 
 impl ReputationRateLimiter {
     pub fn new(rate_limiter: TokenBucket, time_to_ban: Duration) -> Self {
         let duration_to_reputation_ratio =
-            BANNED_THRESHOLD / i32::try_from(max(time_to_ban.as_secs(), 1)).unwrap_or(i32::MAX);
+            BANNED_THRESHOLD / i32::try_from(max(time_to_ban.as_micros(), 1)).unwrap_or(i32::MAX);
+        debug!(target: "aleph-network-rate_limiter", "duration_to_reputation_ratio = {}`", duration_to_reputation_ratio);
+        let now = Instant::now();
         Self {
             rate_limiter,
             duration_to_reputation_ratio,
+            last_update: now,
+            last_deadline: now,
         }
     }
 
-    fn map_to_reputation(&self, duration: Duration) -> ReputationChange {
+    fn map_to_reputation(&mut self, duration: Duration, current_time: Instant) -> ReputationChange {
+        let current_deadline = current_time + duration;
+        let delta_time = current_deadline - self.last_deadline;
+
+        self.last_update = current_time;
+        self.last_deadline = current_deadline;
+
+        debug!(target: "aleph-network-rate_limiter", "delta_time = {:?}", delta_time);
+
         let reputation_delta = self.duration_to_reputation_ratio
-            * i32::try_from(duration.as_secs()).unwrap_or(i32::MAX);
+            * i32::try_from(delta_time.as_micros()).unwrap_or(i32::MAX);
         ReputationChange::new(reputation_delta, "Peer exceeded bandwidth limit.")
     }
 
     fn build_from(&self) -> Self {
+        let now = Instant::now();
         Self {
             rate_limiter: self.rate_limiter.build_from(),
             duration_to_reputation_ratio: self.duration_to_reputation_ratio,
+            last_update: now,
+            last_deadline: now,
         }
     }
 }
 
 impl ReputationRateLimiter {
     pub fn rate_limit(&mut self, read_size: usize) -> Option<ReputationChange> {
-        let wait_time = self.rate_limiter.rate_limit(read_size, || Instant::now());
-        wait_time.map(|time| self.map_to_reputation(time))
+        let mut now = None;
+
+        let wait_time = self
+            .rate_limiter
+            .rate_limit(read_size, || *now.get_or_insert_with(Instant::now));
+
+        // map new deadline into reputation points
+        wait_time
+            .zip(now)
+            .map(|(wait_time, now)| self.map_to_reputation(wait_time, now))
     }
 }
 
@@ -391,9 +416,9 @@ where
     async fn next_event(&mut self) -> Option<Event<PeerId>> {
         let event = self.stream.next_event().await?;
         let size = self.compute_size(&event);
-        // TODO implement this on per peer basis
         let who = event.peer().clone();
         if let Some(reputation_change) = self.get_rate_limiter(who).rate_limit(size) {
+            debug!(target: "aleph-network-rate_limiter", "Reputation of {} changed by {:?}", who, reputation_change);
             self.network.report_peer(who.clone(), reputation_change);
         }
         Some(event)
