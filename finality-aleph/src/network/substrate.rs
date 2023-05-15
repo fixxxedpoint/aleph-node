@@ -1,6 +1,6 @@
 use std::{
     cmp::max,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt, iter,
     pin::Pin,
     sync::Arc,
@@ -9,8 +9,12 @@ use std::{
 
 use aleph_primitives::BlockNumber;
 use async_trait::async_trait;
-use futures::stream::{Stream, StreamExt};
-use log::{debug, error, trace};
+use futures::{
+    channel::mpsc::SendError,
+    stream::{Stream, StreamExt},
+    Sink, SinkExt,
+};
+use log::{debug, error, info, trace};
 use rate_limiter::TokenBucket;
 use sc_consensus::JustificationSyncLink;
 use sc_network::{
@@ -24,6 +28,7 @@ use sc_network_common::{
 };
 use sc_peerset::BANNED_THRESHOLD;
 use sp_runtime::traits::{Block, Header};
+use tokio::{select, time::Sleep};
 
 use crate::{
     network::{
@@ -200,12 +205,14 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
                             iter::once(MultiaddressProtocol::P2p(remote.into())).collect();
                         trace!(target: "aleph-network", "Connected event from address {:?}", multiaddress);
                         if let Err(e) = self.network.add_peers_to_reserved_set(
+                            // if let Err(e) = self.network.add_to_peers_set(
                             self.naming.protocol_name(&Protocol::Authentication),
                             iter::once(multiaddress.clone()).collect(),
                         ) {
                             error!(target: "aleph-network", "add_reserved failed for authentications: {}", e);
                         }
                         if let Err(e) = self.network.add_peers_to_reserved_set(
+                            // if let Err(e) = self.network.add_to_peers_set(
                             self.naming.protocol_name(&Protocol::BlockSync),
                             iter::once(multiaddress).collect(),
                         ) {
@@ -217,10 +224,12 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
                         trace!(target: "aleph-network", "Disconnected event for peer {:?}", remote);
                         let addresses: Vec<_> = iter::once(remote).collect();
                         self.network.remove_peers_from_reserved_set(
+                            // self.network.remove_from_peers_set(
                             self.naming.protocol_name(&Protocol::Authentication),
                             addresses.clone(),
                         );
                         self.network.remove_peers_from_reserved_set(
+                            // self.network.remove_from_peers_set(
                             self.naming.protocol_name(&Protocol::BlockSync),
                             addresses,
                         );
@@ -312,8 +321,11 @@ impl<B: Block, H: ExHashT> RawNetwork for SubstrateNetwork<B, H> {
 pub struct ReputationRateLimiter {
     rate_limiter: TokenBucket,
     duration_to_reputation_ratio: i32,
+    time_to_ban: u128,
     last_update: Instant,
     last_deadline: Instant,
+    // TODO remove
+    finished: bool,
 }
 
 impl ReputationRateLimiter {
@@ -325,8 +337,10 @@ impl ReputationRateLimiter {
         Self {
             rate_limiter,
             duration_to_reputation_ratio,
+            time_to_ban: time_to_ban.as_micros(),
             last_update: now,
             last_deadline: now,
+            finished: false,
         }
     }
 
@@ -339,8 +353,13 @@ impl ReputationRateLimiter {
 
         debug!(target: "aleph-network-rate_limiter", "delta_time = {:?}", delta_time);
 
-        let reputation_delta = self.duration_to_reputation_ratio
-            * i32::try_from(delta_time.as_micros()).unwrap_or(i32::MAX);
+        // TODO overflow
+        // let delta_time = max(delta_time.as_micros(), self.time_to_ban);
+        // let reputation_delta = self.duration_to_reputation_ratio
+        //     * i32::try_from(delta_time.as_micros()).unwrap(self.time_to_ban)
+        // let reputation_delta = BANNED_THRESHOLD - 1;
+        let reputation_delta = i32::MIN;
+        self.finished = true;
         ReputationChange::new(reputation_delta, "Peer exceeded bandwidth limit.")
     }
 
@@ -349,14 +368,19 @@ impl ReputationRateLimiter {
         Self {
             rate_limiter: self.rate_limiter.build_from(),
             duration_to_reputation_ratio: self.duration_to_reputation_ratio,
+            time_to_ban: self.time_to_ban,
             last_update: now,
             last_deadline: now,
+            finished: false,
         }
     }
 }
 
 impl ReputationRateLimiter {
     pub fn rate_limit(&mut self, read_size: usize) -> Option<ReputationChange> {
+        if self.finished {
+            return None;
+        }
         let mut now = None;
 
         let wait_time = self
@@ -420,6 +444,12 @@ where
         if let Some(reputation_change) = self.get_rate_limiter(who).rate_limit(size) {
             debug!(target: "aleph-network-rate_limiter", "Reputation of {} changed by {:?}", who, reputation_change);
             self.network.report_peer(who.clone(), reputation_change);
+            // self.network.remove_reserved_peer(who);
+            // for protocol in event.protocols() {
+            //     self.network.remove_reserved_peer(peer_id)
+            //     self.network
+            //         .disconnect_peer(who, self.protocol_naming.protocol_name(protocol));
+            // }
         }
         Some(event)
     }
@@ -482,4 +512,129 @@ pub fn new_reputation_rate_limited_network<B: Block, H: ExHashT>(
             network.network_service(),
         )
     })
+}
+
+pub struct BanManager<S> {
+    commands: S,
+}
+
+// TODO I don't want this to be public!
+pub enum BanCommand {
+    Ban(PeerId),
+    Unban(PeerId),
+}
+
+impl<S: Sink<BanCommand> + Unpin> BanManager<S> {
+    pub fn new(commands_sink: S) -> Self {
+        Self {
+            commands: commands_sink,
+        }
+    }
+
+    pub async fn ban(&mut self, peer: PeerId) -> Result<(), S::Error> {
+        self.commands.send(BanCommand::Ban(peer)).await
+    }
+
+    pub async fn remove_ban(&mut self, peer: PeerId) -> Result<(), S::Error> {
+        self.commands.send(BanCommand::Unban(peer)).await
+    }
+
+    pub fn close(self) {}
+}
+
+struct BanService<NP> {
+    banned_peers: HashSet<PeerId>,
+    ban_reminder_duration: Duration,
+    network_peers: NP,
+}
+
+impl<NP> BanService<NP> {
+    pub fn new(network_peers: NP, ban_reminder_duration: Duration) -> Self {
+        Self {
+            banned_peers: HashSet::new(),
+            ban_reminder_duration,
+            network_peers,
+        }
+    }
+}
+
+impl<NP> BanService<NP>
+where
+    NP: NetworkPeers + Send,
+
+    pub async fn run(mut self, mut ban_requests: impl Stream<Item = BanCommand> + Unpin) {
+        info!(target: "aleph-network-ban-service", "Starting the Ban service.");
+        let mut next_wake = tokio::time::interval(self.ban_reminder_duration);
+        loop {
+            select! {
+                _ = next_wake.tick() => {},
+                else => {},
+            }
+            select! {
+                _ = next_wake.tick() => {
+                    self.process_bans();
+                },
+                command = ban_requests.next() => {
+                    let command = match command {
+                        Some(command) => command,
+                        None => break,
+                    };
+                    self.process_command(command);
+                },
+            }
+        }
+        info!(target: "aleph-network-ban-service", "Exiting the Ban service.");
+    }
+
+    fn process_command(&mut self, command: BanCommand) {
+        match command {
+            BanCommand::Ban(peer_id) => self.ban(peer_id),
+            BanCommand::Unban(peer_id) => self.unban(peer_id),
+        }
+    }
+
+    fn ban(&mut self, peer_id: PeerId) {
+        self.banned_peers.insert(peer_id);
+    }
+
+    fn process_ban(&self, peer_id: PeerId) {
+        let reputation_for_ban = ReputationChange::new(
+            i32::MIN,
+            "Peer exceeded its bandwidth limits - 1 of 2 calls.",
+        );
+        self.network_peers
+            .report_peer(peer_id.clone(), reputation_for_ban);
+
+        let reputation_for_ban = ReputationChange::new(
+            i32::MIN,
+            "Peer exceeded its bandwidth limits - 2 of 2 calls.",
+        );
+        self.network_peers.report_peer(peer_id, reputation_for_ban);
+    }
+
+    fn unban(&mut self, peer_id: PeerId) {
+        self.banned_peers.remove(&peer_id);
+
+        // try to fix reputation
+        let reputation =
+            ReputationChange::new(i32::MIN, "Trying to fix reputation - 1 of 4 calls.");
+        self.network_peers.report_peer(peer_id.clone(), reputation);
+
+        let reputation =
+            ReputationChange::new(i32::MIN, "Trying to fix reputation - 2 of 4 calls.");
+        self.network_peers.report_peer(peer_id.clone(), reputation);
+
+        let reputation = ReputationChange::new(1, "Trying to fix reputation - 3 of 4 calls.");
+        self.network_peers.report_peer(peer_id.clone(), reputation);
+
+        let reputation =
+            ReputationChange::new(i32::MAX, "Trying to fix reputation - 4 of 4 calls.");
+        self.network_peers.report_peer(peer_id.clone(), reputation);
+    }
+
+    fn process_bans(&mut self) {
+        for peer_id in self.banned_peers.iter() {
+            self.process_ban(peer_id.clone());
+        }
+    }
 }
