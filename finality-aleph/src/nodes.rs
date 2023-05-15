@@ -20,7 +20,7 @@ use crate::{
         new_reputation_rate_limited_network,
         session::{ConnectionManager, ConnectionManagerConfig},
         tcp::{new_rate_limited_network, KEY_TYPE},
-        GossipService, ReputationRateLimiter, SubstrateNetwork,
+        BanManager, BanService, GossipService, ReputationRateLimiter, SubstrateNetwork,
     },
     party::{
         impls::ChainStateImpl, manager::NodeSessionManagerImpl, ConsensusParty,
@@ -113,14 +113,28 @@ where
         validator_network_service.run(exit).await
     });
 
+    // TODO move
+    let (ban_sink, ban_stream) = futures::channel::mpsc::channel(0);
+    let network_clone = network.clone();
+    spawn_handle.spawn("aleph/ban_manager", async move {
+        debug!(target: "aleph-party", "Ban manager started.");
+        BanService::new(network_clone.clone(), std::time::Duration::from_secs(2))
+            .run(ban_stream)
+            .await
+    });
+    let ban_manager = BanManager::new(ban_sink);
+
     let substrate_network = SubstrateNetwork::new(network.clone(), protocol_naming);
     let substrate_rate_limiter =
         TokenBucket::new(rate_limiter_config.substrate_network_bit_rate_per_connection);
     let substrate_reputation_rate_limiter =
         // TODO
         ReputationRateLimiter::new(substrate_rate_limiter, std::time::Duration::from_secs(10));
-    let rate_limited_substrate_network =
-        new_reputation_rate_limited_network(substrate_network, substrate_reputation_rate_limiter);
+    let rate_limited_substrate_network = new_reputation_rate_limited_network(
+        substrate_network,
+        substrate_reputation_rate_limiter,
+        ban_manager,
+    );
     let (gossip_network_service, authentication_network, block_sync_network) =
         GossipService::new(rate_limited_substrate_network, spawn_handle.clone());
     let gossip_network_task = async move { gossip_network_service.run().await };

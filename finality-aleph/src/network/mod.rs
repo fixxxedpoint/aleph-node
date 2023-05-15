@@ -15,7 +15,7 @@ pub use gossip::{
 };
 use network_clique::{AddressingInformation, NetworkIdentity, PeerId};
 pub use substrate::{
-    new_reputation_rate_limited_network, MapNetwork, ProtocolNaming,
+    new_reputation_rate_limited_network, BanManager, BanService, MapNetwork, ProtocolNaming,
     ReputationRateLimitedEventStream, ReputationRateLimiter, SubstrateNetwork,
 };
 

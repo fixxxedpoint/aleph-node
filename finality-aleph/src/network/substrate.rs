@@ -344,6 +344,11 @@ impl ReputationRateLimiter {
         }
     }
 
+    fn map_to_ban(&mut self, duration: Duration) -> bool {
+        debug!(target: "aleph-network-rate_limiter", "duration = {:?}", duration.as_secs());
+        duration.as_micros() > self.time_to_ban
+    }
+
     fn map_to_reputation(&mut self, duration: Duration, current_time: Instant) -> ReputationChange {
         let current_deadline = current_time + duration;
         let delta_time = current_deadline - self.last_deadline;
@@ -377,38 +382,53 @@ impl ReputationRateLimiter {
 }
 
 impl ReputationRateLimiter {
-    pub fn rate_limit(&mut self, read_size: usize) -> Option<ReputationChange> {
-        if self.finished {
-            return None;
-        }
-        let mut now = None;
+    // pub fn rate_limit(&mut self, read_size: usize) -> Option<ReputationChange> {
+    pub fn rate_limit(&mut self, read_size: usize) -> bool {
+        // if self.finished {
+        //     return false;
+        // }
+        // let mut now = None;
 
-        let wait_time = self
-            .rate_limiter
-            .rate_limit(read_size, || *now.get_or_insert_with(Instant::now));
+        // let wait_time = self
+        //     .rate_limiter
+        //     .rate_limit(read_size, || *now.get_or_insert_with(Instant::now));
 
         // map new deadline into reputation points
+        // wait_time
+        //     .zip(now)
+        //     .map(|(wait_time, now)| self.map_to_reputation(wait_time, now))
+
+        if self.finished {
+            return false;
+        }
+
+        let wait_time = self.rate_limiter.rate_limit(read_size, Instant::now);
+
         wait_time
-            .zip(now)
-            .map(|(wait_time, now)| self.map_to_reputation(wait_time, now))
+            .map(|wait_time| self.map_to_ban(wait_time))
+            .unwrap_or(false)
     }
 }
 
 #[derive(Clone)]
-pub struct ReputationRateLimitedEventStream<NP, ES> {
+pub struct ReputationRateLimitedEventStream<S, ES> {
     prototype_rate_limiter: ReputationRateLimiter,
     rate_limiters: HashMap<PeerId, ReputationRateLimiter>,
     stream: ES,
-    network: NP,
+    ban_manager: BanManager<S>,
 }
 
-impl<NP, ES> ReputationRateLimitedEventStream<NP, ES> {
-    pub fn new(rate_limiter: ReputationRateLimiter, stream: ES, network: NP) -> Self {
+impl<S, ES> ReputationRateLimitedEventStream<S, ES> {
+    pub fn new(
+        rate_limiter: ReputationRateLimiter,
+        stream: ES,
+        ban_manager: BanManager<S>,
+    ) -> Self {
         Self {
             prototype_rate_limiter: rate_limiter,
             rate_limiters: HashMap::new(),
             stream,
-            network,
+            ban_manager,
         }
     }
 
@@ -432,24 +452,18 @@ impl<NP, ES> ReputationRateLimitedEventStream<NP, ES> {
 }
 
 #[async_trait]
-impl<NP, ES> EventStream<PeerId> for ReputationRateLimitedEventStream<NP, ES>
+impl<S, ES> EventStream<PeerId> for ReputationRateLimitedEventStream<S, ES>
 where
-    NP: NetworkPeers + Send,
     ES: EventStream<PeerId> + Send,
+    S: Sink<BanCommand> + Unpin + Send + Clone,
 {
     async fn next_event(&mut self) -> Option<Event<PeerId>> {
         let event = self.stream.next_event().await?;
         let size = self.compute_size(&event);
         let who = event.peer().clone();
-        if let Some(reputation_change) = self.get_rate_limiter(who).rate_limit(size) {
-            debug!(target: "aleph-network-rate_limiter", "Reputation of {} changed by {:?}", who, reputation_change);
-            self.network.report_peer(who.clone(), reputation_change);
-            // self.network.remove_reserved_peer(who);
-            // for protocol in event.protocols() {
-            //     self.network.remove_reserved_peer(peer_id)
-            //     self.network
-            //         .disconnect_peer(who, self.protocol_naming.protocol_name(protocol));
-            // }
+        if self.get_rate_limiter(who).rate_limit(size) {
+            debug!(target: "aleph-network-rate_limiter", "Banning {}!!!", who);
+            self.ban_manager.ban(who).await;
         }
         Some(event)
     }
@@ -494,26 +508,27 @@ where
     }
 }
 
-pub fn new_reputation_rate_limited_network<B: Block, H: ExHashT>(
+pub fn new_reputation_rate_limited_network<B: Block, H: ExHashT, S: Clone>(
     network: SubstrateNetwork<B, H>,
     rate_limiter: ReputationRateLimiter,
+    ban_manager: BanManager<S>,
 ) -> MapNetwork<
     SubstrateNetwork<B, H>,
     impl (Fn(
             NetworkEventStream<B, H>,
-        )
-            -> ReputationRateLimitedEventStream<Arc<NetworkService<B, H>>, NetworkEventStream<B, H>>)
+        ) -> ReputationRateLimitedEventStream<S, NetworkEventStream<B, H>>)
         + Clone,
 > {
     MapNetwork::new(network.clone(), move |event_stream| {
         ReputationRateLimitedEventStream::new(
             rate_limiter.build_from(),
             event_stream,
-            network.network_service(),
+            ban_manager.clone(),
         )
     })
 }
 
+#[derive(Clone)]
 pub struct BanManager<S> {
     commands: S,
 }
@@ -542,7 +557,7 @@ impl<S: Sink<BanCommand> + Unpin> BanManager<S> {
     pub fn close(self) {}
 }
 
-struct BanService<NP> {
+pub struct BanService<NP> {
     banned_peers: HashSet<PeerId>,
     ban_reminder_duration: Duration,
     network_peers: NP,
@@ -561,13 +576,13 @@ impl<NP> BanService<NP> {
 impl<NP> BanService<NP>
 where
     NP: NetworkPeers + Send,
-
+{
     pub async fn run(mut self, mut ban_requests: impl Stream<Item = BanCommand> + Unpin) {
         info!(target: "aleph-network-ban-service", "Starting the Ban service.");
         let mut next_wake = tokio::time::interval(self.ban_reminder_duration);
         loop {
             select! {
-                _ = next_wake.tick() => {},
+                _ = next_wake.tick() => self.process_bans() ,
                 else => {},
             }
             select! {
@@ -595,6 +610,7 @@ where
 
     fn ban(&mut self, peer_id: PeerId) {
         self.banned_peers.insert(peer_id);
+        self.process_ban(peer_id);
     }
 
     fn process_ban(&self, peer_id: PeerId) {
