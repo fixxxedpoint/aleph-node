@@ -302,7 +302,7 @@ pub struct PurgeChainCmd {
 impl PurgeChainCmd {
     pub fn run(&self, database_config: DatabaseSource) -> Result<(), Error> {
         self.purge_backup.run(
-            self.purge_chain.yes,
+            self.purge_backup.force_purge_backup,
             self.purge_chain
                 .shared_params
                 .base_path()?
@@ -327,6 +327,13 @@ pub struct PurgeBackupCmd {
     /// Directory under which AlephBFT backup is stored
     #[arg(long, default_value = DEFAULT_BACKUP_FOLDER)]
     pub backup_dir: String,
+
+    /// Skip interactive prompt for purging backup by answering `yes` automatically.
+    ///
+    /// WARNING: removing AlephBFT backup will most likely make the node unable to continue the session in which it last participated.
+    /// It will join AlephBFT consensus in the next session.
+    #[arg(long)]
+    pub force_purge_backup: bool,
 }
 
 impl PurgeBackupCmd {
