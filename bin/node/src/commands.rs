@@ -342,7 +342,10 @@ impl PurgeBackupCmd {
 
         if !skip_prompt {
             print!(
-                "Are you sure you want to remove {:?}? [y/N]: ",
+                r#"WARNING: removing AlephBFT backup will most likely make the node unable to continue the AlephBFT session in which it last participated.
+It will join AlephBFT consensus in the next session.
+
+Are you sure you want to remove {:?}? [y/N]: "#,
                 &backup_path
             );
             io::stdout().flush().expect("failed to flush stdout");
