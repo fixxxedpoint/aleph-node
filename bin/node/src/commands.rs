@@ -301,13 +301,18 @@ pub struct PurgeChainCmd {
 
 impl PurgeChainCmd {
     pub fn run(&self, database_config: DatabaseSource) -> Result<(), Error> {
-        self.purge_backup.run(
-            self.purge_backup.force_purge_backup,
-            self.purge_chain
-                .shared_params
-                .base_path()?
-                .ok_or_else(|| Error::Input("need base-path to be provided".to_string()))?,
-        )?;
+        let should_call_purge_backup =
+            self.purge_chain.yes && self.purge_backup.force_purge_backup || !self.purge_chain.yes;
+
+        if should_call_purge_backup {
+            self.purge_backup.run(
+                self.purge_backup.force_purge_backup,
+                self.purge_chain
+                    .shared_params
+                    .base_path()?
+                    .ok_or_else(|| Error::Input("need base-path to be provided".to_string()))?,
+            )?;
+        }
         self.purge_chain.run(database_config)
     }
 }
