@@ -346,7 +346,7 @@ version = "0.9.0"
 dependencies = [
  "aleph-runtime",
  "finality-aleph",
- "frame-benchmarking",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "frame-benchmarking-cli",
  "futures",
  "hex",
@@ -378,18 +378,18 @@ dependencies = [
  "sc-transaction-pool-api",
  "serde",
  "serde_json",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-aura",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-timestamp",
  "sp-transaction-pool",
  "substrate-build-script-utils",
@@ -403,10 +403,10 @@ name = "aleph-runtime"
 version = "0.9.1"
 dependencies = [
  "baby-liminal-extension",
- "frame-benchmarking",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "frame-executive",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
  "pallet-aleph",
@@ -415,8 +415,8 @@ dependencies = [
  "pallet-baby-liminal",
  "pallet-balances",
  "pallet-committee-management",
- "pallet-contracts 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "pallet-contracts-primitives 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "pallet-contracts 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "pallet-contracts-primitives 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "pallet-elections",
  "pallet-identity",
  "pallet-insecure-randomness-collective-flip",
@@ -438,19 +438,19 @@ dependencies = [
  "scale-info",
  "serde",
  "smallvec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-block-builder",
  "sp-consensus-aura",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-offchain",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-session",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-transaction-pool",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-wasm-builder",
 ]
 
@@ -1046,7 +1046,7 @@ dependencies = [
 [[package]]
 name = "binary-merkle-tree"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "hash-db 0.16.0",
  "log",
@@ -2671,16 +2671,16 @@ dependencies = [
  "sc-telemetry",
  "sc-utils",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
- "sp-trie",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "static_assertions",
  "substrate-prometheus-endpoint",
  "substrate-test-client",
@@ -2753,7 +2753,7 @@ checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 [[package]]
 name = "fork-tree"
 version = "3.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
 ]
@@ -2799,18 +2799,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-benchmarking"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support-procedural 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "linregress",
+ "log",
+ "parity-scale-codec",
+ "paste",
+ "scale-info",
+ "serde",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-storage 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "static_assertions",
+]
+
+[[package]]
 name = "frame-benchmarking-cli"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "Inflector",
  "array-bytes",
  "chrono",
  "clap",
  "comfy-table",
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "gethostname",
  "handlebars",
  "itertools",
@@ -2829,18 +2854,18 @@ dependencies = [
  "sc-sysinfo",
  "serde",
  "serde_json",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-database",
- "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-storage 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-trie",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-storage 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "thousands",
 ]
@@ -2848,7 +2873,7 @@ dependencies = [
 [[package]]
 name = "frame-election-provider-solution-type"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2859,35 +2884,35 @@ dependencies = [
 [[package]]
 name = "frame-election-provider-support"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "frame-election-provider-solution-type",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "scale-info",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-npos-elections",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "frame-executive"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "frame-try-runtime",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-tracing 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-tracing 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -2905,7 +2930,7 @@ dependencies = [
 [[package]]
 name = "frame-remote-externalities"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-recursion",
  "futures",
@@ -2913,9 +2938,9 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "serde",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-rpc-client",
  "tokio",
 ]
@@ -2975,10 +3000,43 @@ dependencies = [
  "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-state-machine 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-tracing 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-weights 4.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "tt-call",
+]
+
+[[package]]
+name = "frame-support"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "bitflags 1.3.2",
+ "environmental",
+ "frame-metadata",
+ "frame-support-procedural 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "impl-trait-for-tuples",
+ "k256 0.13.1",
+ "log",
+ "once_cell",
+ "parity-scale-codec",
+ "paste",
+ "scale-info",
+ "serde",
+ "smallvec",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core-hashing-proc-macro 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-tracing 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "tt-call",
 ]
 
@@ -3014,6 +3072,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-support-procedural"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "Inflector",
+ "cfg-expr",
+ "derive-syn-parse",
+ "frame-support-procedural-tools 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "itertools",
+ "proc-macro-warning",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
 name = "frame-support-procedural-tools"
 version = "4.0.0-dev"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -3038,6 +3112,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-support-procedural-tools"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "frame-support-procedural-tools-derive 3.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
 name = "frame-support-procedural-tools-derive"
 version = "3.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -3051,6 +3137,16 @@ dependencies = [
 name = "frame-support-procedural-tools-derive"
 version = "3.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
+name = "frame-support-procedural-tools-derive"
+version = "3.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3093,24 +3189,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "frame-system"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+]
+
+[[package]]
 name = "frame-system-rpc-runtime-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "frame-try-runtime"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -5575,72 +5689,72 @@ dependencies = [
 name = "pallet-aleph"
 version = "0.5.5"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "pallet-balances",
  "pallet-session",
  "pallet-timestamp",
  "parity-scale-codec",
  "primitives",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-aura"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-consensus-aura",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-authorship"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "impl-trait-for-tuples",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-babe"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "pallet-authorship",
  "pallet-session",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-consensus-babe",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-session",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -5649,7 +5763,7 @@ version = "0.1.0"
 dependencies = [
  "ark-bls12-381",
  "ark-serialize",
- "frame-benchmarking",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "jf-plonk",
@@ -5661,46 +5775,46 @@ dependencies = [
 [[package]]
 name = "pallet-balances"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-beefy"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "pallet-authorship",
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
  "serde",
  "sp-consensus-beefy",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-session",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-beefy-mmr"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "binary-merkle-tree",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "pallet-beefy",
  "pallet-mmr",
@@ -5708,20 +5822,20 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-consensus-beefy",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-committee-management"
 version = "0.1.0"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "pallet-authorship",
  "pallet-session",
  "pallet-staking",
@@ -5731,10 +5845,10 @@ dependencies = [
  "rand 0.8.5",
  "rand_pcg",
  "scale-info",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -5765,27 +5879,27 @@ dependencies = [
 [[package]]
 name = "pallet-contracts"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "bitflags 1.3.2",
  "environmental",
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "impl-trait-for-tuples",
  "log",
- "pallet-contracts-primitives 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "pallet-contracts-proc-macro 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "pallet-contracts-primitives 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "pallet-contracts-proc-macro 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "rand 0.8.5",
  "scale-info",
  "serde",
  "smallvec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "wasm-instrument 0.4.0",
  "wasmi 0.28.0",
  "wasmparser-nostd 0.100.1",
@@ -5806,14 +5920,14 @@ dependencies = [
 [[package]]
 name = "pallet-contracts-primitives"
 version = "7.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "bitflags 1.3.2",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-weights 4.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -5829,7 +5943,7 @@ dependencies = [
 [[package]]
 name = "pallet-contracts-proc-macro"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5841,8 +5955,8 @@ name = "pallet-elections"
 version = "0.5.4"
 dependencies = [
  "frame-election-provider-support",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "pallet-authorship",
  "pallet-balances",
  "pallet-staking",
@@ -5852,293 +5966,293 @@ dependencies = [
  "rand 0.8.5",
  "rand_pcg",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-identity"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "enumflags2",
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "scale-info",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-insecure-randomness-collective-flip"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "safe-mix",
  "scale-info",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-mmr"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-mmr-primitives",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-multisig"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-nomination-pools"
 version = "1.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-nomination-pools-runtime-api"
 version = "1.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "pallet-nomination-pools",
  "parity-scale-codec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-scheduler"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-weights 4.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-session"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "impl-trait-for-tuples",
  "log",
  "pallet-timestamp",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-session",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-trie",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-staking"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "frame-election-provider-support",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "pallet-authorship",
  "pallet-session",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-sudo"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "scale-info",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-timestamp"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-timestamp",
 ]
 
 [[package]]
 name = "pallet-transaction-payment"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-transaction-payment-rpc"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "jsonrpsee",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-scale-codec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-rpc",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-weights 4.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-transaction-payment-rpc-runtime-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "pallet-transaction-payment",
  "parity-scale-codec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-weights 4.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-treasury"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "impl-trait-for-tuples",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-utility"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallet-vesting"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "frame-benchmarking",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-benchmarking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "pallets-support"
 version = "0.1.4"
 dependencies = [
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -6566,12 +6680,12 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -7370,18 +7484,18 @@ dependencies = [
 [[package]]
 name = "sc-allocator"
 version = "4.1.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "log",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-wasm-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-wasm-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sc-basic-authorship"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "futures",
  "futures-timer",
@@ -7392,34 +7506,34 @@ dependencies = [
  "sc-proposer-metrics",
  "sc-telemetry",
  "sc-transaction-pool-api",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
 ]
 
 [[package]]
 name = "sc-block-builder"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
  "sc-client-api",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-block-builder",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sc-chain-spec"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "memmap2",
  "sc-chain-spec-derive",
@@ -7430,15 +7544,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sc-chain-spec-derive"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -7449,7 +7563,7 @@ dependencies = [
 [[package]]
 name = "sc-cli"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "chrono",
@@ -7475,12 +7589,12 @@ dependencies = [
  "serde",
  "serde_json",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-keyring",
- "sp-keystore",
- "sp-panic-handler",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-panic-handler 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "tiny-bip39",
  "tokio",
@@ -7489,7 +7603,7 @@ dependencies = [
 [[package]]
 name = "sc-client-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "fnv",
  "futures",
@@ -7499,23 +7613,23 @@ dependencies = [
  "sc-executor",
  "sc-transaction-pool-api",
  "sc-utils",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-database",
- "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
- "sp-storage 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-storage 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
 ]
 
 [[package]]
 name = "sc-client-db"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "hash-db 0.16.0",
  "kvdb",
@@ -7529,19 +7643,19 @@ dependencies = [
  "sc-client-api",
  "sc-state-db",
  "schnellru",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-database",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
- "sp-trie",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sc-consensus"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "futures",
@@ -7553,12 +7667,12 @@ dependencies = [
  "sc-client-api",
  "sc-utils",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -7566,7 +7680,7 @@ dependencies = [
 [[package]]
 name = "sc-consensus-aura"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "futures",
@@ -7577,17 +7691,17 @@ dependencies = [
  "sc-consensus",
  "sc-consensus-slots",
  "sc-telemetry",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-aura",
  "sp-consensus-slots",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -7595,7 +7709,7 @@ dependencies = [
 [[package]]
 name = "sc-consensus-slots"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "futures",
@@ -7605,20 +7719,20 @@ dependencies = [
  "sc-client-api",
  "sc-consensus",
  "sc-telemetry",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sc-executor"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "lru",
  "parity-scale-codec",
@@ -7626,15 +7740,15 @@ dependencies = [
  "sc-executor-common",
  "sc-executor-wasmi",
  "sc-executor-wasmtime",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-panic-handler",
- "sp-runtime-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-trie",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-wasm-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-panic-handler 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-wasm-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "tracing",
  "wasmi 0.13.2",
 ]
@@ -7642,11 +7756,11 @@ dependencies = [
 [[package]]
 name = "sc-executor-common"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "sc-allocator",
  "sp-maybe-compressed-blob",
- "sp-wasm-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-wasm-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "wasm-instrument 0.3.0",
  "wasmi 0.13.2",
@@ -7655,20 +7769,20 @@ dependencies = [
 [[package]]
 name = "sc-executor-wasmi"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "log",
  "sc-allocator",
  "sc-executor-common",
- "sp-runtime-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-wasm-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-wasm-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "wasmi 0.13.2",
 ]
 
 [[package]]
 name = "sc-executor-wasmtime"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "anyhow",
  "cfg-if",
@@ -7678,15 +7792,15 @@ dependencies = [
  "rustix 0.36.15",
  "sc-allocator",
  "sc-executor-common",
- "sp-runtime-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-wasm-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-wasm-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "wasmtime",
 ]
 
 [[package]]
 name = "sc-informant"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "ansi_term",
  "futures",
@@ -7696,28 +7810,28 @@ dependencies = [
  "sc-network",
  "sc-network-common",
  "sp-blockchain",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sc-keystore"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "async-trait",
  "parking_lot 0.12.1",
  "serde_json",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sc-network"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "async-channel",
@@ -7748,11 +7862,11 @@ dependencies = [
  "serde_json",
  "smallvec",
  "snow",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
  "thiserror",
  "unsigned-varint",
@@ -7762,7 +7876,7 @@ dependencies = [
 [[package]]
 name = "sc-network-bitswap"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "cid",
  "futures",
@@ -7774,7 +7888,7 @@ dependencies = [
  "sc-network",
  "sc-network-common",
  "sp-blockchain",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "unsigned-varint",
 ]
@@ -7782,7 +7896,7 @@ dependencies = [
 [[package]]
 name = "sc-network-common"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "async-trait",
@@ -7801,7 +7915,7 @@ dependencies = [
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-grandpa",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
  "thiserror",
  "zeroize",
@@ -7810,7 +7924,7 @@ dependencies = [
 [[package]]
 name = "sc-network-light"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "futures",
@@ -7824,15 +7938,15 @@ dependencies = [
  "sc-network-common",
  "sc-peerset",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sc-network-sync"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "async-trait",
@@ -7853,12 +7967,12 @@ dependencies = [
  "sc-peerset",
  "sc-utils",
  "smallvec",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-grandpa",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
  "thiserror",
 ]
@@ -7866,7 +7980,7 @@ dependencies = [
 [[package]]
 name = "sc-network-transactions"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "futures",
@@ -7879,14 +7993,14 @@ dependencies = [
  "sc-peerset",
  "sc-utils",
  "sp-consensus",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-prometheus-endpoint",
 ]
 
 [[package]]
 name = "sc-offchain"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "bytes",
@@ -7906,10 +8020,10 @@ dependencies = [
  "sc-network-common",
  "sc-peerset",
  "sc-utils",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-offchain",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "threadpool",
  "tracing",
 ]
@@ -7917,7 +8031,7 @@ dependencies = [
 [[package]]
 name = "sc-peerset"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "futures",
  "libp2p",
@@ -7930,7 +8044,7 @@ dependencies = [
 [[package]]
 name = "sc-proposer-metrics"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "log",
  "substrate-prometheus-endpoint",
@@ -7939,7 +8053,7 @@ dependencies = [
 [[package]]
 name = "sc-rpc"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "futures",
  "jsonrpsee",
@@ -7954,22 +8068,22 @@ dependencies = [
  "sc-transaction-pool-api",
  "sc-utils",
  "serde_json",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-offchain",
  "sp-rpc",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-session",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "tokio",
 ]
 
 [[package]]
 name = "sc-rpc-api"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "jsonrpsee",
  "parity-scale-codec",
@@ -7978,17 +8092,17 @@ dependencies = [
  "scale-info",
  "serde",
  "serde_json",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-rpc",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sc-rpc-server"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "http",
  "jsonrpsee",
@@ -8003,7 +8117,7 @@ dependencies = [
 [[package]]
 name = "sc-rpc-spec-v2"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "futures",
@@ -8017,11 +8131,11 @@ dependencies = [
  "sc-client-api",
  "sc-transaction-pool-api",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "tokio-stream",
 ]
@@ -8029,7 +8143,7 @@ dependencies = [
 [[package]]
 name = "sc-service"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "directories",
@@ -8069,20 +8183,20 @@ dependencies = [
  "sc-utils",
  "serde",
  "serde_json",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-session",
- "sp-state-machine",
- "sp-storage 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-storage 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-transaction-pool",
  "sp-transaction-storage-proof",
- "sp-trie",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "static_init",
  "substrate-prometheus-endpoint",
  "tempfile",
@@ -8095,18 +8209,18 @@ dependencies = [
 [[package]]
 name = "sc-state-db"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "log",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sc-storage-monitor"
 version = "0.1.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "clap",
  "fs4",
@@ -8114,7 +8228,7 @@ dependencies = [
  "log",
  "sc-client-db",
  "sc-utils",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "tokio",
 ]
@@ -8122,7 +8236,7 @@ dependencies = [
 [[package]]
 name = "sc-sysinfo"
 version = "6.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "futures",
  "libc",
@@ -8133,15 +8247,15 @@ dependencies = [
  "sc-telemetry",
  "serde",
  "serde_json",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sc-telemetry"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "chrono",
  "futures",
@@ -8160,7 +8274,7 @@ dependencies = [
 [[package]]
 name = "sc-tracing"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "ansi_term",
  "atty",
@@ -8176,12 +8290,12 @@ dependencies = [
  "sc-rpc-server",
  "sc-tracing-proc-macro",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-rpc",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-tracing 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-tracing 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "tracing",
  "tracing-log",
@@ -8191,7 +8305,7 @@ dependencies = [
 [[package]]
 name = "sc-tracing-proc-macro"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -8202,7 +8316,7 @@ dependencies = [
 [[package]]
 name = "sc-transaction-pool"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "futures",
@@ -8216,11 +8330,11 @@ dependencies = [
  "sc-transaction-pool-api",
  "sc-utils",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-tracing 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-tracing 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-transaction-pool",
  "substrate-prometheus-endpoint",
  "thiserror",
@@ -8229,21 +8343,21 @@ dependencies = [
 [[package]]
 name = "sc-transaction-pool-api"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "futures",
  "log",
  "serde",
  "sp-blockchain",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sc-utils"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-channel",
  "futures",
@@ -8252,7 +8366,7 @@ dependencies = [
  "log",
  "parking_lot 0.12.1",
  "prometheus",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -8776,12 +8890,32 @@ dependencies = [
  "scale-info",
  "sp-api-proc-macro 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-metadata-ir",
+ "sp-metadata-ir 0.1.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-state-machine 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-trie",
+ "sp-trie 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "thiserror",
+]
+
+[[package]]
+name = "sp-api"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "hash-db 0.16.0",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api-proc-macro 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-metadata-ir 0.1.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
@@ -8801,6 +8935,20 @@ dependencies = [
 name = "sp-api-proc-macro"
 version = "4.0.0-dev"
 source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+dependencies = [
+ "Inflector",
+ "blake2",
+ "expander",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
+name = "sp-api-proc-macro"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "Inflector",
  "blake2",
@@ -8837,6 +8985,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-application-crypto"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+]
+
+[[package]]
 name = "sp-arithmetic"
 version = "6.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -8864,135 +9025,149 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-arithmetic"
+version = "6.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "integer-sqrt",
+ "num-traits",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "static_assertions",
+]
+
+[[package]]
 name = "sp-block-builder"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sp-blockchain"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "futures",
  "log",
  "lru",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-consensus",
  "sp-database",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sp-consensus"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "futures",
  "log",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sp-consensus-aura"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "parity-scale-codec",
  "scale-info",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-timestamp",
 ]
 
 [[package]]
 name = "sp-consensus-babe"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-consensus",
  "sp-consensus-slots",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-timestamp",
 ]
 
 [[package]]
 name = "sp-consensus-beefy"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "lazy_static",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-mmr-primitives",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "strum",
 ]
 
 [[package]]
 name = "sp-consensus-grandpa"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "finality-grandpa",
  "log",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sp-consensus-slots"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-timestamp",
 ]
 
@@ -9062,6 +9237,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-core"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "array-bytes",
+ "bitflags 1.3.2",
+ "blake2",
+ "bounded-collections",
+ "bs58",
+ "dyn-clonable",
+ "ed25519-zebra",
+ "futures",
+ "hash-db 0.16.0",
+ "hash256-std-hasher",
+ "impl-serde",
+ "lazy_static",
+ "libsecp256k1",
+ "log",
+ "merlin 2.0.1",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "paste",
+ "primitive-types",
+ "rand 0.8.5",
+ "regex",
+ "scale-info",
+ "schnorrkel",
+ "secp256k1",
+ "secrecy",
+ "serde",
+ "sp-core-hashing 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-debug-derive 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-storage 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "ss58-registry",
+ "substrate-bip39",
+ "thiserror",
+ "tiny-bip39",
+ "zeroize",
+]
+
+[[package]]
 name = "sp-core-hashing"
 version = "5.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -9090,6 +9309,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-core-hashing"
+version = "5.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "blake2b_simd",
+ "byteorder",
+ "digest 0.10.7",
+ "sha2 0.10.7",
+ "sha3",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "twox-hash",
+]
+
+[[package]]
 name = "sp-core-hashing-proc-macro"
 version = "5.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -9112,9 +9345,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-core-hashing-proc-macro"
+version = "5.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "sp-core-hashing 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "syn 2.0.28",
+]
+
+[[package]]
 name = "sp-database"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "kvdb",
  "parking_lot 0.12.1",
@@ -9134,6 +9378,16 @@ dependencies = [
 name = "sp-debug-derive"
 version = "5.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
+name = "sp-debug-derive"
+version = "5.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -9163,6 +9417,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-externalities"
+version = "0.13.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "environmental",
+ "parity-scale-codec",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-storage 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+]
+
+[[package]]
 name = "sp-inherents"
 version = "4.0.0-dev"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -9185,6 +9450,21 @@ dependencies = [
  "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "thiserror",
+]
+
+[[package]]
+name = "sp-inherents"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "async-trait",
+ "impl-trait-for-tuples",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
@@ -9220,12 +9500,38 @@ dependencies = [
  "secp256k1",
  "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
+ "sp-keystore 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-runtime-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-state-machine 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-tracing 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-trie",
+ "sp-trie 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "tracing",
+ "tracing-core",
+]
+
+[[package]]
+name = "sp-io"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "bytes",
+ "ed25519",
+ "ed25519-dalek",
+ "futures",
+ "libsecp256k1",
+ "log",
+ "parity-scale-codec",
+ "rustversion",
+ "secp256k1",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-tracing 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "tracing",
  "tracing-core",
 ]
@@ -9233,11 +9539,11 @@ dependencies = [
 [[package]]
 name = "sp-keyring"
 version = "7.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "lazy_static",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "strum",
 ]
 
@@ -9249,16 +9555,29 @@ dependencies = [
  "futures",
  "parity-scale-codec",
  "parking_lot 0.12.1",
- "serde",
  "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "thiserror",
 ]
 
 [[package]]
+name = "sp-keystore"
+version = "0.13.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "futures",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "serde",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "thiserror",
+]
+
+[[package]]
 name = "sp-maybe-compressed-blob"
 version = "4.1.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "thiserror",
  "zstd 0.12.4",
@@ -9276,45 +9595,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-metadata-ir"
+version = "0.1.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "frame-metadata",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+]
+
+[[package]]
 name = "sp-mmr-primitives"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "ckb-merkle-mountain-range",
  "log",
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-debug-derive 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-debug-derive 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
 [[package]]
 name = "sp-npos-elections"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-arithmetic 6.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sp-offchain"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -9328,13 +9658,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-panic-handler"
+version = "5.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "backtrace",
+ "lazy_static",
+ "regex",
+]
+
+[[package]]
 name = "sp-rpc"
 version = "6.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "rustc-hash",
  "serde",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -9380,6 +9720,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-runtime"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "either",
+ "hash256-std-hasher",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "paste",
+ "rand 0.8.5",
+ "scale-info",
+ "serde",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+]
+
+[[package]]
 name = "sp-runtime-interface"
 version = "7.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -9416,6 +9778,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-runtime-interface"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "bytes",
+ "impl-trait-for-tuples",
+ "parity-scale-codec",
+ "primitive-types",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime-interface-proc-macro 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-storage 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-tracing 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-wasm-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "static_assertions",
+]
+
+[[package]]
 name = "sp-runtime-interface-proc-macro"
 version = "6.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -9440,17 +9820,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-runtime-interface-proc-macro"
+version = "6.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "Inflector",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
 name = "sp-session"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
  "scale-info",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-staking 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-staking 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -9479,6 +9871,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-staking"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+]
+
+[[package]]
 name = "sp-state-machine"
 version = "0.13.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
@@ -9491,9 +9896,29 @@ dependencies = [
  "smallvec",
  "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-panic-handler",
+ "sp-panic-handler 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-trie",
+ "sp-trie 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "sp-state-machine"
+version = "0.13.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "hash-db 0.16.0",
+ "log",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
+ "smallvec",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-panic-handler 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "tracing",
 ]
@@ -9507,6 +9932,11 @@ source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0
 name = "sp-std"
 version = "5.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+
+[[package]]
+name = "sp-std"
+version = "5.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 
 [[package]]
 name = "sp-storage"
@@ -9533,17 +9963,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-storage"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "impl-serde",
+ "parity-scale-codec",
+ "ref-cast",
+ "serde",
+ "sp-debug-derive 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+]
+
+[[package]]
 name = "sp-timestamp"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "futures-timer",
  "log",
  "parity-scale-codec",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
 ]
 
@@ -9571,28 +10014,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-tracing"
+version = "6.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "parity-scale-codec",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "sp-transaction-pool"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "sp-transaction-storage-proof"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "log",
  "parity-scale-codec",
  "scale-info",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-trie",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -9612,6 +10067,29 @@ dependencies = [
  "schnellru",
  "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "thiserror",
+ "tracing",
+ "trie-db",
+ "trie-root",
+]
+
+[[package]]
+name = "sp-trie"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "ahash 0.8.3",
+ "hash-db 0.16.0",
+ "hashbrown 0.13.2",
+ "lazy_static",
+ "memory-db",
+ "nohash-hasher",
+ "parity-scale-codec",
+ "parking_lot 0.12.1",
+ "scale-info",
+ "schnellru",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "thiserror",
  "tracing",
  "trie-db",
@@ -9649,6 +10127,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-version"
+version = "5.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "impl-serde",
+ "parity-scale-codec",
+ "parity-wasm",
+ "scale-info",
+ "serde",
+ "sp-core-hashing-proc-macro 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version-proc-macro 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "thiserror",
+]
+
+[[package]]
 name = "sp-version-proc-macro"
 version = "4.0.0-dev"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -9663,6 +10158,17 @@ dependencies = [
 name = "sp-version-proc-macro"
 version = "4.0.0-dev"
 source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+dependencies = [
+ "parity-scale-codec",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.28",
+]
+
+[[package]]
+name = "sp-version-proc-macro"
+version = "4.0.0-dev"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "parity-scale-codec",
  "proc-macro2",
@@ -9695,6 +10201,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sp-wasm-interface"
+version = "7.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "anyhow",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "wasmi 0.13.2",
+ "wasmtime",
+]
+
+[[package]]
 name = "sp-weights"
 version = "4.0.0"
 source = "git+https://github.com/Cardinal-Cryptography/substrate?branch=aleph-v0.9.38#edd03de713561ecd604a8b2c957d0b620a2420de"
@@ -9721,6 +10241,21 @@ dependencies = [
  "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-debug-derive 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
  "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+]
+
+[[package]]
+name = "sp-weights"
+version = "4.0.0"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "smallvec",
+ "sp-arithmetic 6.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-debug-derive 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
@@ -9873,7 +10408,7 @@ dependencies = [
 [[package]]
 name = "substrate-build-script-utils"
 version = "3.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "platforms 2.0.0",
 ]
@@ -9881,7 +10416,7 @@ dependencies = [
 [[package]]
 name = "substrate-frame-rpc-system"
 version = "4.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "frame-system-rpc-runtime-api",
  "futures",
@@ -9890,17 +10425,17 @@ dependencies = [
  "parity-scale-codec",
  "sc-rpc-api",
  "sc-transaction-pool-api",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-block-builder",
  "sp-blockchain",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "substrate-prometheus-endpoint"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "hyper",
  "log",
@@ -9912,20 +10447,20 @@ dependencies = [
 [[package]]
 name = "substrate-rpc-client"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "jsonrpsee",
  "log",
  "sc-rpc-api",
  "serde",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "substrate-test-client"
 version = "2.0.1"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "array-bytes",
  "async-trait",
@@ -9941,21 +10476,21 @@ dependencies = [
  "serde_json",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-keyring",
- "sp-keystore",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
 ]
 
 [[package]]
 name = "substrate-test-runtime"
 version = "2.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "cfg-if",
- "frame-support 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "frame-system 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "frame-support 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "frame-system 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "frame-system-rpc-runtime-api",
  "log",
  "memory-db",
@@ -9966,27 +10501,27 @@ dependencies = [
  "sc-service",
  "scale-info",
  "serde",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-application-crypto 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-application-crypto 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-block-builder",
  "sp-consensus-aura",
  "sp-consensus-babe",
  "sp-consensus-beefy",
  "sp-consensus-grandpa",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-keyring",
  "sp-offchain",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime-interface 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime-interface 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-session",
- "sp-state-machine",
- "sp-std 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-std 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-transaction-pool",
- "sp-trie",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-trie 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-wasm-builder",
  "trie-db",
 ]
@@ -9994,7 +10529,7 @@ dependencies = [
 [[package]]
 name = "substrate-test-runtime-client"
 version = "2.0.0"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "futures",
  "parity-scale-codec",
@@ -10002,11 +10537,11 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-consensus",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-blockchain",
  "sp-consensus",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-test-client",
  "substrate-test-runtime",
 ]
@@ -10014,7 +10549,7 @@ dependencies = [
 [[package]]
 name = "substrate-wasm-builder"
 version = "5.0.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "ansi_term",
  "build-helper",
@@ -10617,7 +11152,7 @@ checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 [[package]]
 name = "try-runtime-cli"
 version = "0.10.0-dev"
-source = "git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42#1e002bc989d3a83f5bcb003d0bacd025b161c5b1"
+source = "git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale#b730d1ffd139e2dfdaace6a86ef2ec4587a3ad85"
 dependencies = [
  "async-trait",
  "clap",
@@ -10631,22 +11166,22 @@ dependencies = [
  "sc-service",
  "serde",
  "serde_json",
- "sp-api 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-api 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-consensus-aura",
  "sp-consensus-babe",
- "sp-core 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-debug-derive 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-externalities 0.13.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-inherents 4.0.0-dev (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-io 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-keystore",
+ "sp-core 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-debug-derive 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-externalities 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-inherents 4.0.0-dev (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-io 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-keystore 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-rpc",
- "sp-runtime 7.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-state-machine",
+ "sp-runtime 7.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-state-machine 0.13.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "sp-timestamp",
  "sp-transaction-storage-proof",
- "sp-version 5.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
- "sp-weights 4.0.0 (git+https://github.com/Cardinal-Cryptography/substrate.git?branch=aleph-v0.9.42)",
+ "sp-version 5.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
+ "sp-weights 4.0.0 (git+https://github.com/fixxxedpoint/substrate.git?branch=aleph-v0.9.42.FIX_ChainSync_stale)",
  "substrate-rpc-client",
  "zstd 0.12.4",
 ]
