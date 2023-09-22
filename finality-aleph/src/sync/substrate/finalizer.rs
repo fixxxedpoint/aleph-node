@@ -19,6 +19,7 @@ where
     type Error = ClientError;
 
     fn finalize(&self, justification: Justification) -> Result<(), Self::Error> {
+        // return Ok(());
         match justification.inner_justification {
             InnerJustification::AlephJustification(aleph_justification) => self.finalize_block(
                 (justification.header.hash(), *justification.header.number()).into(),

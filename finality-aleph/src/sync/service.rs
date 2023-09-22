@@ -163,6 +163,7 @@ where
         trace!(target: LOG_TARGET, "Broadcasting state: {:?}", state);
 
         let data = NetworkData::StateBroadcast(state);
+        return;
         if let Err(e) = self.network.broadcast(data) {
             self.metrics.report_event_error(Event::Broadcast);
             warn!(target: LOG_TARGET, "Error sending broadcast: {}.", e)
@@ -186,6 +187,7 @@ where
         trace!(target: LOG_TARGET, "Sending a request: {:?}", request);
         let data = NetworkData::Request(request);
 
+        return;
         if let Err(e) = self.network.send_to_random(data, peers) {
             self.metrics.report_event_error(Event::SendRequest);
             warn!(target: LOG_TARGET, "Error sending request: {}.", e);
@@ -200,6 +202,7 @@ where
             data,
             peer
         );
+        return;
         if let Err(e) = self.network.send_to(data, peer) {
             self.metrics.report_event_error(Event::SendTo);
             warn!(target: LOG_TARGET, "Error sending response: {}.", e);

@@ -26,6 +26,7 @@ pub struct BlockImporter(pub Box<dyn ImportQueueService<Block>>);
 
 impl BlockImport<Block> for BlockImporter {
     fn import_block(&mut self, block: Block) {
+        return;
         let origin = BlockOrigin::NetworkBroadcast;
         let incoming_block = IncomingBlock::<Block> {
             hash: block.header.hash(),
