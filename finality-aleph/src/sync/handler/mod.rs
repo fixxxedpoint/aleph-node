@@ -272,6 +272,7 @@ where
     MissingJustification,
     BlockNotImportable,
     HeaderNotRequired,
+    Multiple(Vec<Error<B, J, CS, V, F>>),
 }
 
 impl<B, J, CS, V, F> Display for Error<B, J, CS, V, F>
@@ -299,6 +300,8 @@ where
                 write!(f, "cannot import a block that we do not consider required")
             }
             HeaderNotRequired => write!(f, "header was not required, but it should have been"),
+            Multiple(_) =>
+                write!(f, "TODO this is value was added for debugging"),
         }
     }
 }
@@ -487,7 +490,10 @@ where
             true => Some(id),
             false => None,
         };
-        self.try_finalize()?;
+        match self.try_finalize() {
+            Err(_) => println!("error while calling try_finalize in handle_justification"),
+            _ => {},
+        }
         Ok(maybe_id)
     }
 
@@ -540,12 +546,14 @@ where
         peer: I,
     ) -> (Option<BlockIdFor<J>>, Option<<Self as HandlerTypes>::Error>) {
         let mut highest_justified = None;
+        let mut errors = Vec::new();
         for item in response_items {
             match item {
                 ResponseItem::Justification(j) => {
                     match self.handle_justification(j, Some(peer.clone())) {
                         Ok(Some(id)) => highest_justified = Some(id),
-                        Err(e) => return (highest_justified, Some(e)),
+                        // Err(e) => return (highest_justified, Some(e)),
+                        Err(e) => errors.push(e),
                         _ => {}
                     }
                 }
@@ -554,10 +562,12 @@ where
                         continue;
                     }
                     if !self.forest.importable(&h.id()) {
-                        return (highest_justified, Some(Error::HeaderNotRequired));
+                        // return (highest_justified, Some(Error::HeaderNotRequired));
+                        errors.push(Error::HeaderNotRequired);
                     }
                     if let Err(e) = self.forest.update_header(&h, Some(peer.clone()), true) {
-                        return (highest_justified, Some(Error::Forest(e)));
+                        // return (highest_justified, Some(Error::Forest(e)));
+                        errors.push(Error::Forest(e));
                     }
                 }
                 ResponseItem::Block(b) => {
@@ -566,13 +576,26 @@ where
                     }
                     match self.forest.importable(&b.header().id()) {
                         true => self.block_importer.import_block(b),
-                        false => return (highest_justified, Some(Error::BlockNotImportable)),
+                        // false => return (highest_justified, Some(Error::BlockNotImportable)),
+                        false => errors.push(Error::BlockNotImportable),
                     };
                 }
             }
         }
 
-        (highest_justified, None)
+        if errors.is_empty() {
+            (highest_justified, None)
+        } else {
+            if errors.len() == 1 {
+                for err in errors {
+                    return (highest_justified, Some(err));
+                }
+                panic!("it should never happen");
+                (highest_justified, None)
+            } else {
+                (highest_justified, Some(Error::Multiple(errors)))
+            }
+        }
     }
 
     fn last_justification_unverified(
