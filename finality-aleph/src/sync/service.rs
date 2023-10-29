@@ -1,5 +1,5 @@
 use core::marker::PhantomData;
-use std::time::Duration;
+use std::{time::Duration, cmp::Ordering};
 
 use futures::{channel::mpsc, StreamExt};
 use log::{debug, error, trace, warn};
@@ -298,13 +298,32 @@ where
         }
     }
 
-    fn handle_request_response(&mut self, response_items: ResponseItems<B, J>, peer: N::PeerId) {
+    fn handle_request_response(&mut self, mut response_items: ResponseItems<B, J>, peer: N::PeerId) {
+        // TODO first we should handle blocks, then header, then justifications
+        // let processed_response_items = ResponseItems::with_capacity(response_items.len());
+        response_items.sort_by(|left, right| {
+            match (left, right) {
+                (crate::sync::data::ResponseItem::Header(_), crate::sync::data::ResponseItem::Header(_)) => Ordering::Equal,
+                (crate::sync::data::ResponseItem::Header(_), _) => Ordering::Less,
+                // (crate::sync::data::ResponseItem::Header(_), crate::sync::data::ResponseItem::Justification(_)) => Ordering::Less,
+                // (crate::sync::data::ResponseItem::Header(_), crate::sync::data::ResponseItem::Block(_)) => Ordering::Greater,
+
+                (crate::sync::data::ResponseItem::Block(_), crate::sync::data::ResponseItem::Block(_)) => Ordering::Equal,
+                (crate::sync::data::ResponseItem::Block(_), crate::sync::data::ResponseItem::Header(_)) => Ordering::Greater,
+                (crate::sync::data::ResponseItem::Block(_), _) => Ordering::Less,
+
+                (crate::sync::data::ResponseItem::Justification(_), crate::sync::data::ResponseItem::Justification(_)) => Ordering::Equal,
+                (crate::sync::data::ResponseItem::Justification(_), _) => Ordering::Greater,
+            }
+        });
+
         trace!(
             target: LOG_TARGET,
             "Handling request response from peer {:?}. Items: {:?}.",
             peer,
             response_items,
         );
+
         self.metrics.report_event(Event::HandleRequestResponse);
         let (maybe_id, maybe_error) = self
             .handler

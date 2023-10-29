@@ -22,7 +22,7 @@ use crate::{
 };
 
 mod request_handler;
-use log::debug;
+use log::{debug, error};
 pub use request_handler::Action;
 
 use crate::sync::data::{ResponseItem, ResponseItems};
@@ -401,6 +401,37 @@ where
         &mut self,
         highest_finalized: Option<u32>,
     ) -> Result<(), <Self as HandlerTypes>::Error> {
+        let mut justified: Vec<_> = self.forest.justified_blocks().keys().cloned().collect();
+        justified.sort_unstable();
+        let mut last_missed = None;
+        let nothing_to_do = justified.is_empty();
+        for id in justified {
+            debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &id);
+            match self.forest.try_finalize(&id) {
+                Some(justification) => {
+                    self.finalizer
+                        .finalize(justification)
+                        .map_err(Error::Finalizer)?;
+                    debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &id);
+                }
+                None => {
+                    last_missed = Some(id);
+                    // self.missed_import_data
+                    //     .try_sync(&self.chain_status, &mut self.forest)?;
+                    // return Ok(());
+                }
+            };
+        }
+        if let Some(last_missed) = last_missed {
+            self.missed_import_data
+                .try_sync(&self.chain_status, &mut self.forest)?;
+        }
+        if nothing_to_do {
+            self.missed_import_data
+                        .try_sync(&self.chain_status, &mut self.forest)?;
+        }
+        return Ok(());
+
         let mut number = self
             .chain_status
             .top_finalized()
@@ -438,9 +469,10 @@ where
                     debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &number);
                 }
                 None => {
-                    self.missed_import_data
-                        .try_sync(&self.chain_status, &mut self.forest)?;
+                    // self.missed_import_data
+                    //     .try_sync(&self.chain_status, &mut self.forest)?;
                     // return Ok(());
+                    debug!(target: "aleph-request-response", "missed finalization slot: {}", &number);
                 }
             };
         }
@@ -513,7 +545,7 @@ where
             }
         };
         match self.try_finalize(maybe_id.as_ref().map(|id| id.number()).clone()) {
-            Err(_) => println!("error while calling try_finalize in handle_justification"),
+            Err(_) => error!("error while calling try_finalize in handle_justification"),
             _ => {
                 debug!(target: "aleph-handle-request-responnse", "try_finalize withing handle_justification sucessfull")
             }

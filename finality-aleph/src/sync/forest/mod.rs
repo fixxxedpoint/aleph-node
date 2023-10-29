@@ -6,7 +6,7 @@ use std::{
     fmt::{Display, Error as FmtError, Formatter},
 };
 
-use log::debug;
+use log::{debug, error};
 use static_assertions::const_assert;
 
 use crate::{
@@ -416,7 +416,10 @@ where
                 let vertex = &mut entry.get_mut().vertex;
                 vertex.insert_justification(parent_id, justification, holder);
                 if vertex.justified_block() {
+                    error!(target: "aleph-finalization-fix", "vertex justified {:?}", &id);
                     self.justified_blocks.insert(id.number(), id.clone());
+                } else {
+                    error!(target: "aleph-finalization-fix", "vertex not justified {:?}", &id);
                 }
                 debug!(target: "aleph-finalization-fix", "update_justification: vertex was found, trying to update highest {:?}", &id);
                 self.try_update_highest_justified(id)
@@ -462,6 +465,7 @@ where
                     Ok(justification) => {
                         self.root_id = id.clone();
                         self.root_children = children;
+                        // TODO this should happen only after we succ finalize on chain (?)
                         self.prune_level(self.root_id.number());
                         return Some(justification);
                     }
