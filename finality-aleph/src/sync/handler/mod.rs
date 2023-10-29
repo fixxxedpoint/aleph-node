@@ -409,13 +409,17 @@ where
             .id()
             .number()
             + 1;
-        loop {
+        let highest_justified = self.forest.highest_justified().number();
+        while number <= highest_justified {
+            debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &number);
             while let Some(justification) = self.forest.try_finalize(&number) {
                 self.finalizer
                     .finalize(justification)
                     .map_err(Error::Finalizer)?;
                 number += 1;
             }
+            debug!(target: "aleph-request-response", "forest::try_finalize with number {} successful", &number);
+            number += 1;
             // number = max(
             //     number,
             //     highest_finalized.unwrap_or_else(|| {
@@ -423,21 +427,24 @@ where
             //             .last_block_of_session(self.session_info.session_id_from_block_num(number))
             //     }),
             // );
-            number = max(number, self.forest.highest_justified().number());
+            // number = max(number, self.forest.highest_justified().number());
+            debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {}", &number);
             match self.forest.try_finalize(&number) {
                 Some(justification) => {
                     self.finalizer
                         .finalize(justification)
                         .map_err(Error::Finalizer)?;
                     number += 1;
+                    debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &number);
                 }
                 None => {
                     self.missed_import_data
                         .try_sync(&self.chain_status, &mut self.forest)?;
-                    return Ok(());
+                    // return Ok(());
                 }
             };
         }
+        return Ok(());
     }
 
     /// Inform the handler that a block has been imported.
