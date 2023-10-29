@@ -6,6 +6,7 @@ use std::{
     fmt::{Display, Error as FmtError, Formatter},
 };
 
+use log::debug;
 use static_assertions::const_assert;
 
 use crate::{
@@ -242,6 +243,7 @@ where
             if let Some(parent_id) = vertex.vertex.parent().cloned() {
                 match self.get_mut(&parent_id) {
                     Unknown(entry) => {
+                        debug!(target: "aleph-finalization-fix", "adding new vertex {:?}", &parent_id);
                         entry
                             .insert(VertexWithChildren::new())
                             .add_child(id.clone());
@@ -295,13 +297,17 @@ where
     }
 
     fn insert_id(&mut self, id: BlockIdFor<J>, holder: Option<I>) -> Result<(), Error> {
+        let debug_id = id.clone();
         match self.special_state(&id) {
             Some(SpecialState::TooNew) => Err(Error::TooNew),
             Some(_) => Ok(()),
             _ => {
                 self.vertices
                     .entry(id)
-                    .or_insert_with(VertexWithChildren::new)
+                    .or_insert_with(|| {
+                        debug!(target: "aleph-finalization-fix", "new vertex in insert_id {:?}", &debug_id);
+                        VertexWithChildren::new()
+                    })
                     .vertex
                     .add_block_holder(holder);
                 Ok(())
@@ -412,14 +418,19 @@ where
                 if vertex.justified_block() {
                     self.justified_blocks.insert(id.number(), id.clone());
                 }
-                self.try_update_highest_justified(id.clone())
+                debug!(target: "aleph-finalization-fix", "update_justification: vertex was found, trying to update highest {:?}", &id);
+                self.try_update_highest_justified(id)
             }
-            _ => false,
+            _ => {
+                debug!(target: "aleph-finalization-fix", "update_justification: vertex not found {:?}", &id);
+                false
+            },
         })
     }
 
     fn prune(&mut self, id: &BlockIdFor<J>) {
         if let Some(VertexWithChildren { children, .. }) = self.vertices.remove(id) {
+            debug!(target: "aleph-finalization-fix", "removing vertex in prune {:?}", &id);
             self.compost_bin.insert(id.clone());
             for child in children {
                 self.prune(&child);
@@ -445,6 +456,7 @@ where
     pub fn try_finalize(&mut self, number: &u32) -> Option<J> {
         if let Some(id) = self.justified_blocks.get(number) {
             if let Some(VertexWithChildren { vertex, children }) = self.vertices.remove(id) {
+                debug!(target: "aleph-finalization-fix", "removing vertex in try finalize {:?}", &id);
                 match vertex.ready() {
                     // should always match, as the id is taken from self.justified_blocks
                     Ok(justification) => {

@@ -22,6 +22,7 @@ use crate::{
 };
 
 mod request_handler;
+use log::debug;
 pub use request_handler::Action;
 
 use crate::sync::data::{ResponseItem, ResponseItems};
@@ -300,8 +301,7 @@ where
                 write!(f, "cannot import a block that we do not consider required")
             }
             HeaderNotRequired => write!(f, "header was not required, but it should have been"),
-            Multiple(_) =>
-                write!(f, "TODO this is value was added for debugging"),
+            Multiple(_) => write!(f, "TODO this is value was added for debugging"),
         }
     }
 }
@@ -397,7 +397,10 @@ where
         })
     }
 
-    fn try_finalize(&mut self) -> Result<(), <Self as HandlerTypes>::Error> {
+    fn try_finalize(
+        &mut self,
+        highest_finalized: Option<u32>,
+    ) -> Result<(), <Self as HandlerTypes>::Error> {
         let mut number = self
             .chain_status
             .top_finalized()
@@ -413,9 +416,13 @@ where
                     .map_err(Error::Finalizer)?;
                 number += 1;
             }
-            number = self
-                .session_info
-                .last_block_of_session(self.session_info.session_id_from_block_num(number));
+            number = max(
+                number,
+                highest_finalized.unwrap_or_else(|| {
+                    self.session_info
+                        .last_block_of_session(self.session_info.session_id_from_block_num(number))
+                }),
+            );
             match self.forest.try_finalize(&number) {
                 Some(justification) => {
                     self.finalizer
@@ -445,7 +452,7 @@ where
             }
             return Err(e.into());
         }
-        self.try_finalize()
+        self.try_finalize(None)
     }
 
     /// Handle a request for potentially substantial amounts of data.
@@ -483,16 +490,25 @@ where
             .verify(justification)
             .map_err(Error::Verifier)?;
         let id = justification.header().id();
+        let debug_id = id.clone();
         let maybe_id = match self
             .forest
             .update_justification(justification, maybe_peer)?
         {
-            true => Some(id),
-            false => None,
+            true => {
+                debug!(target: "aleph-request-response", "justification {:?} become highest {:?}", debug_id, id);
+                Some(id)
+            }
+            false => {
+                debug!(target: "aleph-request-response", "justification {:?} is skipped {:?}", debug_id, id);
+                None
+            }
         };
-        match self.try_finalize() {
+        match self.try_finalize(maybe_id.as_ref().map(|id| id.number()).clone()) {
             Err(_) => println!("error while calling try_finalize in handle_justification"),
-            _ => {},
+            _ => {
+                debug!(target: "aleph-handle-request-responnse", "try_finalize withing handle_justification sucessfull")
+            }
         }
         Ok(maybe_id)
     }
@@ -550,10 +566,15 @@ where
         for item in response_items {
             match item {
                 ResponseItem::Justification(j) => {
+                    debug!(target: "aleph-handle-request-responnse", "handling justification {:?}", &j);
+
                     match self.handle_justification(j, Some(peer.clone())) {
                         Ok(Some(id)) => highest_justified = Some(id),
                         // Err(e) => return (highest_justified, Some(e)),
-                        Err(e) => errors.push(e),
+                        Err(e) => {
+                            debug!(target: "aleph-handle-request-responnse", "error while handling a justification {}", &e);
+                            errors.push(e);
+                        }
                         _ => {}
                     }
                 }
