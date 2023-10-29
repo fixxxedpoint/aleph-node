@@ -8,8 +8,10 @@ use crate::{
     aleph_primitives::MAX_BLOCK_SIZE,
     network::GossipNetwork,
     sync::{Block, BlockIdFor, Justification, LOG_TARGET},
-    Version,
+    Version, BlockIdentifier,
 };
+
+use super::Header;
 
 /// The representation of the database state to be sent to other nodes.
 /// In the first version this only contains the top justification.
@@ -67,6 +69,14 @@ where
                 _ => None,
             })
             .collect()
+    }
+
+    pub fn number(&self) -> u32 {
+        match self {
+            ResponseItem::Justification(jst) => jst.id().number(),
+            ResponseItem::Header(hdr) => hdr.id().number(),
+            ResponseItem::Block(blk) => blk.header().id().number(),
+        }
     }
 }
 

@@ -232,7 +232,8 @@ impl<I: PeerId, J: Justification> Vertex<I, J> {
                 };
                 true
             }
-            _ => false,
+            // _ => false,
+            _ => true,
         }
     }
 

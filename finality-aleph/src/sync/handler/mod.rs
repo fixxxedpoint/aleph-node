@@ -397,41 +397,7 @@ where
         })
     }
 
-    fn try_finalize(
-        &mut self,
-        highest_finalized: Option<u32>,
-    ) -> Result<(), <Self as HandlerTypes>::Error> {
-        // let mut justified: Vec<_> = self.forest.justified_blocks().keys().cloned().collect();
-        // justified.sort_unstable();
-        // let mut last_missed = None;
-        // let nothing_to_do = justified.is_empty();
-        // for id in justified {
-        //     debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &id);
-        //     match self.forest.try_finalize(&id) {
-        //         Some(justification) => {
-        //             self.finalizer
-        //                 .finalize(justification)
-        //                 .map_err(Error::Finalizer)?;
-        //             debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &id);
-        //         }
-        //         None => {
-        //             last_missed = Some(id);
-        //             // self.missed_import_data
-        //             //     .try_sync(&self.chain_status, &mut self.forest)?;
-        //             // return Ok(());
-        //         }
-        //     };
-        // }
-        // if let Some(last_missed) = last_missed {
-        //     self.missed_import_data
-        //         .try_sync(&self.chain_status, &mut self.forest)?;
-        // }
-        // if nothing_to_do {
-        //     self.missed_import_data
-        //                 .try_sync(&self.chain_status, &mut self.forest)?;
-        // }
-        // return Ok(());
-
+    fn try_finalize(&mut self, highest_finalized: Option<u32>) -> Result<(), <Self as HandlerTypes>::Error> {
         let mut number = self
             .chain_status
             .top_finalized()
@@ -440,52 +406,113 @@ where
             .id()
             .number()
             + 1;
-        let highest_justified = self.forest.highest_justified().number();
-        let mut request_something = false;
-        while number <= highest_justified {
-            debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &number);
+        debug!(target: "aleph-request-response", "try_finalize number.1 is {}", &number);
+        loop {
             while let Some(justification) = self.forest.try_finalize(&number) {
                 self.finalizer
                     .finalize(justification)
                     .map_err(Error::Finalizer)?;
                 number += 1;
             }
-            debug!(target: "aleph-request-response", "forest::try_finalize with number {} successful", &number);
-
-            // number += 1;
-
-            // number = max(
-            //     number,
-            //     highest_finalized.unwrap_or_else(|| {
-            //         self.session_info
-            //             .last_block_of_session(self.session_info.session_id_from_block_num(number))
-            //     }),
-            // );
-            // number = max(number, self.forest.highest_justified().number());
-            debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {}", &number);
+            debug!(target: "aleph-request-response", "try_finalize number.2 is {}", &number);
+            number = self
+                .session_info
+                .last_block_of_session(self.session_info.session_id_from_block_num(number));
+            debug!(target: "aleph-request-response", "try_finalize number.3 is {}", &number);
             match self.forest.try_finalize(&number) {
                 Some(justification) => {
+                    debug!(target: "aleph-request-response", "forest.try_finalize was Some(..) for number {}", &number);
                     self.finalizer
                         .finalize(justification)
                         .map_err(Error::Finalizer)?;
                     number += 1;
-                    debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &number);
                 }
                 None => {
-                    // self.missed_import_data
-                    //     .try_sync(&self.chain_status, &mut self.forest)?;
-                    // return Ok(());
-                    request_something = true;
-                    debug!(target: "aleph-request-response", "missed finalization slot: {}", &number);
+                    debug!(target: "aleph-request-response", "forest.try_finalize was None for number {}", &number);
+                    self.missed_import_data
+                        .try_sync(&self.chain_status, &mut self.forest)?;
+                    return Ok(());
                 }
             };
         }
-        if request_something {
-            self.missed_import_data
-                .try_sync(&self.chain_status, &mut self.forest)?;
-        }
-        return Ok(());
     }
+
+    // fn try_finalize(
+    //     &mut self,
+    //     highest_finalized: Option<u32>,
+    // ) -> Result<(), <Self as HandlerTypes>::Error> {
+    //     // let mut justified: Vec<_> = self.forest.justified_blocks().keys().cloned().collect();
+    //     // justified.sort_unstable();
+    //     // let mut last_missed = None;
+    //     // let nothing_to_do = justified.is_empty();
+    //     // for id in justified {
+    //     //     debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &id);
+    //     //     match self.forest.try_finalize(&id) {
+    //     //         Some(justification) => {
+    //     //             self.finalizer
+    //     //                 .finalize(justification)
+    //     //                 .map_err(Error::Finalizer)?;
+    //     //             debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &id);
+    //     //         }
+    //     //         None => {
+    //     //             last_missed = Some(id);
+    //     //             // self.missed_import_data
+    //     //             //     .try_sync(&self.chain_status, &mut self.forest)?;
+    //     //             // return Ok(());
+    //     //         }
+    //     //     };
+    //     // }
+    //     // if let Some(last_missed) = last_missed {
+    //     //     self.missed_import_data
+    //     //         .try_sync(&self.chain_status, &mut self.forest)?;
+    //     // }
+    //     // if nothing_to_do {
+    //     //     self.missed_import_data
+    //     //                 .try_sync(&self.chain_status, &mut self.forest)?;
+    //     // }
+    //     // return Ok(());
+
+    //     let mut number = self
+    //         .chain_status
+    //         .top_finalized()
+    //         .map_err(Error::ChainStatus)?
+    //         .header()
+    //         .id()
+    //         .number()
+    //         + 1;
+    //     let highest_justified = self.forest.highest_justified().number();
+    //     let highest_justified = max(
+    //         highest_justified,
+    //         self.session_info
+    //             .last_block_of_session(self.session_info.session_id_from_block_num(number)),
+    //     );
+    //     let mut request_something = false;
+    //     while number <= highest_justified {
+    //         debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {}", &number);
+    //         match self.forest.try_finalize(&number) {
+    //             Some(justification) => {
+    //                 self.finalizer
+    //                     .finalize(justification)
+    //                     .map_err(Error::Finalizer)?;
+    //                 debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &number);
+    //             }
+    //             None => {
+    //                 // self.missed_import_data
+    //                 //     .try_sync(&self.chain_status, &mut self.forest)?;
+    //                 // return Ok(());
+    //                 request_something = true;
+    //                 debug!(target: "aleph-request-response", "missed finalization slot: {}", &number);
+    //                 // break;
+    //             }
+    //         };
+    //         number += 1;
+    //     }
+    //     if request_something {
+    //         self.missed_import_data
+    //             .try_sync(&self.chain_status, &mut self.forest)?;
+    //     }
+    //     return Ok(());
+    // }
 
     /// Inform the handler that a block has been imported.
     pub fn block_imported(
@@ -553,7 +580,9 @@ where
             }
         };
         match self.try_finalize(maybe_id.as_ref().map(|id| id.number()).clone()) {
-            Err(_) => error!("error while calling try_finalize in handle_justification"),
+            Err(_) => {
+                debug!(target: "aleph-handle-request-responnse", "error while calling try_finalize in handle_justification")
+            }
             _ => {
                 debug!(target: "aleph-handle-request-responnse", "try_finalize withing handle_justification sucessfull")
             }

@@ -388,7 +388,9 @@ where
 
     /// Updates the `highest_justified` if the given id is higher.
     fn try_update_highest_justified(&mut self, id: BlockIdFor<J>) -> bool {
-        match id.number() > self.highest_justified.number() {
+        // return true;
+
+        match id.number() >= self.highest_justified.number() {
             true => {
                 self.highest_justified = id;
                 true
