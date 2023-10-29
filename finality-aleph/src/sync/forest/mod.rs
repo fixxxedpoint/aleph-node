@@ -476,6 +476,10 @@ where
         &self.highest_justified
     }
 
+    pub fn justified_blocks(&self) -> &HashMap<u32, BlockIdFor<J>> {
+        &self.justified_blocks
+    }
+
     /// Returns the BranchKnowledge regarding the given block id,
     /// or None if there is no branch at all.
     fn branch_knowledge(&self, mut id: BlockIdFor<J>) -> Option<BranchKnowledge<J>> {
