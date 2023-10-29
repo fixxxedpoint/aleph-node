@@ -401,36 +401,36 @@ where
         &mut self,
         highest_finalized: Option<u32>,
     ) -> Result<(), <Self as HandlerTypes>::Error> {
-        let mut justified: Vec<_> = self.forest.justified_blocks().keys().cloned().collect();
-        justified.sort_unstable();
-        let mut last_missed = None;
-        let nothing_to_do = justified.is_empty();
-        for id in justified {
-            debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &id);
-            match self.forest.try_finalize(&id) {
-                Some(justification) => {
-                    self.finalizer
-                        .finalize(justification)
-                        .map_err(Error::Finalizer)?;
-                    debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &id);
-                }
-                None => {
-                    last_missed = Some(id);
-                    // self.missed_import_data
-                    //     .try_sync(&self.chain_status, &mut self.forest)?;
-                    // return Ok(());
-                }
-            };
-        }
-        if let Some(last_missed) = last_missed {
-            self.missed_import_data
-                .try_sync(&self.chain_status, &mut self.forest)?;
-        }
-        if nothing_to_do {
-            self.missed_import_data
-                        .try_sync(&self.chain_status, &mut self.forest)?;
-        }
-        return Ok(());
+        // let mut justified: Vec<_> = self.forest.justified_blocks().keys().cloned().collect();
+        // justified.sort_unstable();
+        // let mut last_missed = None;
+        // let nothing_to_do = justified.is_empty();
+        // for id in justified {
+        //     debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &id);
+        //     match self.forest.try_finalize(&id) {
+        //         Some(justification) => {
+        //             self.finalizer
+        //                 .finalize(justification)
+        //                 .map_err(Error::Finalizer)?;
+        //             debug!(target: "aleph-request-response", "second calling forest::try_finalize with number {} sucsessful", &id);
+        //         }
+        //         None => {
+        //             last_missed = Some(id);
+        //             // self.missed_import_data
+        //             //     .try_sync(&self.chain_status, &mut self.forest)?;
+        //             // return Ok(());
+        //         }
+        //     };
+        // }
+        // if let Some(last_missed) = last_missed {
+        //     self.missed_import_data
+        //         .try_sync(&self.chain_status, &mut self.forest)?;
+        // }
+        // if nothing_to_do {
+        //     self.missed_import_data
+        //                 .try_sync(&self.chain_status, &mut self.forest)?;
+        // }
+        // return Ok(());
 
         let mut number = self
             .chain_status
@@ -441,6 +441,7 @@ where
             .number()
             + 1;
         let highest_justified = self.forest.highest_justified().number();
+        let mut request_something = false;
         while number <= highest_justified {
             debug!(target: "aleph-request-response", "calling forest::try_finalize with number {}", &number);
             while let Some(justification) = self.forest.try_finalize(&number) {
@@ -450,7 +451,9 @@ where
                 number += 1;
             }
             debug!(target: "aleph-request-response", "forest::try_finalize with number {} successful", &number);
-            number += 1;
+
+            // number += 1;
+
             // number = max(
             //     number,
             //     highest_finalized.unwrap_or_else(|| {
@@ -472,9 +475,14 @@ where
                     // self.missed_import_data
                     //     .try_sync(&self.chain_status, &mut self.forest)?;
                     // return Ok(());
+                    request_something = true;
                     debug!(target: "aleph-request-response", "missed finalization slot: {}", &number);
                 }
             };
+        }
+        if request_something {
+            self.missed_import_data
+                .try_sync(&self.chain_status, &mut self.forest)?;
         }
         return Ok(());
     }
