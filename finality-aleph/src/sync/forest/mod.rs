@@ -472,6 +472,10 @@ where
         None
     }
 
+    pub fn highest_justified(&self) -> &BlockIdFor<J> {
+        &self.highest_justified
+    }
+
     /// Returns the BranchKnowledge regarding the given block id,
     /// or None if there is no branch at all.
     fn branch_knowledge(&self, mut id: BlockIdFor<J>) -> Option<BranchKnowledge<J>> {

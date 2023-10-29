@@ -416,13 +416,14 @@ where
                     .map_err(Error::Finalizer)?;
                 number += 1;
             }
-            number = max(
-                number,
-                highest_finalized.unwrap_or_else(|| {
-                    self.session_info
-                        .last_block_of_session(self.session_info.session_id_from_block_num(number))
-                }),
-            );
+            // number = max(
+            //     number,
+            //     highest_finalized.unwrap_or_else(|| {
+            //         self.session_info
+            //             .last_block_of_session(self.session_info.session_id_from_block_num(number))
+            //     }),
+            // );
+            number = max(number, self.forest.highest_justified().number());
             match self.forest.try_finalize(&number) {
                 Some(justification) => {
                     self.finalizer
