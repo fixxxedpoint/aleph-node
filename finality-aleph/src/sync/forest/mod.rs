@@ -388,14 +388,15 @@ where
 
     /// Updates the `highest_justified` if the given id is higher.
     fn try_update_highest_justified(&mut self, id: BlockIdFor<J>) -> bool {
-        // return true;
+        return true;
 
-        match id.number() >= self.highest_justified.number() {
+        match id.number() > self.highest_justified.number() {
             true => {
                 self.highest_justified = id;
                 true
             }
             false => false,
+            // false => true,
         }
     }
 
@@ -420,8 +421,11 @@ where
                 if vertex.justified_block() {
                     error!(target: "aleph-finalization-fix", "vertex justified {:?}", &id);
                     self.justified_blocks.insert(id.number(), id.clone());
+                    debug!(target: "aleph-finalization-fix", "update_justification: vertex was found, trying to update highest {:?}", &id);
+                    // self.try_update_highest_justified(id);
                 } else {
                     error!(target: "aleph-finalization-fix", "vertex not justified {:?}", &id);
+                    // false
                 }
                 debug!(target: "aleph-finalization-fix", "update_justification: vertex was found, trying to update highest {:?}", &id);
                 self.try_update_highest_justified(id)
