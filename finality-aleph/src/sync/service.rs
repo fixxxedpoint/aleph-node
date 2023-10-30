@@ -10,7 +10,7 @@ use crate::{
     network::GossipNetwork,
     session::SessionBoundaryInfo,
     sync::{
-        data::{NetworkData, Request, ResponseItems, State, VersionWrapper, VersionedNetworkData},
+        data::{NetworkData, Request, ResponseItems, State, VersionWrapper, VersionedNetworkData, ResponseItem},
         handler::{Action, Error as HandlerError, HandleStateAction, Handler},
         message_limiter::MsgLimiter,
         metrics::{Event, Metrics},
@@ -305,19 +305,15 @@ where
             if left.number() != right.number() {
                 return cmp::Ord::cmp(&left.number(), &right.number());
             }
-            match (left, right) {
-                (crate::sync::data::ResponseItem::Header(_), crate::sync::data::ResponseItem::Header(_)) => Ordering::Equal,
-                (crate::sync::data::ResponseItem::Header(_), _) => Ordering::Less,
-                // (crate::sync::data::ResponseItem::Header(_), crate::sync::data::ResponseItem::Justification(_)) => Ordering::Less,
-                // (crate::sync::data::ResponseItem::Header(_), crate::sync::data::ResponseItem::Block(_)) => Ordering::Greater,
 
-                (crate::sync::data::ResponseItem::Block(_), crate::sync::data::ResponseItem::Block(_)) => Ordering::Equal,
-                (crate::sync::data::ResponseItem::Block(_), crate::sync::data::ResponseItem::Header(_)) => Ordering::Greater,
-                (crate::sync::data::ResponseItem::Block(_), _) => Ordering::Less,
-
-                (crate::sync::data::ResponseItem::Justification(_), crate::sync::data::ResponseItem::Justification(_)) => Ordering::Equal,
-                (crate::sync::data::ResponseItem::Justification(_), _) => Ordering::Greater,
-            }
+            let response_item_to_int = |response_item: &ResponseItem<B, J>| {
+                match response_item {
+                    ResponseItem::Header(_) => 0,
+                    ResponseItem::Block(_) => 1,
+                    ResponseItem::Justification(_) => 2,
+                }
+            };
+            cmp::Ord::cmp(&response_item_to_int(left), &response_item_to_int(right))
         });
 
         trace!(
