@@ -135,7 +135,7 @@ where
         );
         self.tasks.schedule_in(
             RequestTask::new_highest_justified(block_id),
-            Duration::from_millis(200),
+            Duration::ZERO,
         );
     }
 

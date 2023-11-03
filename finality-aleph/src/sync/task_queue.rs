@@ -5,7 +5,7 @@ use std::{
 };
 
 use log::warn;
-use tokio::time::{sleep, Duration, Instant};
+use tokio::{time::{sleep, Duration, Instant}, task::yield_now};
 
 use crate::sync::LOG_TARGET;
 
@@ -100,6 +100,8 @@ impl<T> TaskQueue<T> {
                 .saturating_duration_since(Instant::now());
             if !duration.is_zero() {
                 sleep(duration).await;
+            } else {
+                yield_now().await;
             }
         }
     }
