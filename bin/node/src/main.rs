@@ -5,7 +5,7 @@ use aleph_node::{new_authority, new_partial, Cli, Subcommand};
 use aleph_runtime::Block;
 use log::{info, warn};
 use primitives::HEAP_PAGES;
-use sc_cli::{clap::Parser, CliConfiguration, DatabasePruningMode, PruningParams, SubstrateCli};
+use sc_cli::{clap::Parser, DatabasePruningMode, PruningParams, SubstrateCli};
 use sc_network::config::Role;
 use sc_service::{Configuration, PartialComponents};
 
@@ -17,7 +17,7 @@ fn default_blocks_pruning() -> DatabasePruningMode {
     DatabasePruningMode::ArchiveCanonical
 }
 
-fn minimum_state_pruning() -> usize {
+fn minimum_state_pruning() -> u32 {
     2048
 }
 
@@ -32,27 +32,77 @@ fn pruning_changed(params: &PruningParams) -> bool {
     state_pruning_changed || blocks_pruning_changed
 }
 
-fn handle_pruning_settings(cli: &mut _) -> bool {
+struct PruningConfigValidationResult {
+    overwritten_pruning: bool,
+    invalid_state_pruning_setting: Result<(), u32>,
+    invalid_database_backend: Result<(), sc_cli::Database>,
+}
+
+fn handle_pruning_settings(cli: &mut Cli) -> PruningConfigValidationResult {
     let overwritten_pruning = pruning_changed(&cli.run.import_params.pruning_params);
+    let mut invalid_state_pruning_setting = Ok(());
+    let mut invalid_database_backend = Ok(());
     if !cli.aleph.pruning() {
+        // We need to override state pruning to our default (archive), as substrate has 256 by default.
+        // 256 does not work with our code.
         cli.run.import_params.pruning_params.state_pruning = Some(default_state_pruning());
         cli.run.import_params.pruning_params.blocks_pruning = default_blocks_pruning();
-    // We need to override state pruning to our default (archive), as substrate has 256 by default.
-    // 256 does not work with our code.
     } else {
         match cli.run.import_params.pruning_params.state_pruning {
-            Some(Constrained(constraints)) => {
-                if constraints.max_blocks < minimum_state_pruning() {
-                    warn!("State pruning was enabled but the value of the state_pruning parameter is below minimal supported
-                    treshold ({}). Further execution can lead to misbehaviour, which can be punished. State pruning:
-                    {constraints.max_blocks};",minimum_state_pruning());
+            Some(DatabasePruningMode::Custom(max_blocks)) => {
+                if max_blocks < minimum_state_pruning() {
+                    invalid_state_pruning_setting = Err(max_blocks);
                 }
             }
-            None => cli.run.import_params.pruning_params.state_pruning = default_state_pruning(),
+            None => {
+                cli.run.import_params.pruning_params.state_pruning = Some(default_state_pruning())
+            }
             _ => {}
         }
+
+        match cli.run.import_params.database_params.database {
+            Some(sc_cli::Database::ParityDb) => {}
+            Some(database) => {
+                invalid_database_backend = Err(database);
+            }
+            None => {
+                cli.run.import_params.database_params.database = Some(sc_cli::Database::ParityDb)
+            }
+        }
     }
-    overwritten_pruning
+    PruningConfigValidationResult {
+        overwritten_pruning,
+        invalid_state_pruning_setting,
+        invalid_database_backend,
+    }
+}
+
+fn report_pruning_validation_result(
+    cli: &Cli,
+    pruning_config_validation_result: PruningConfigValidationResult,
+) {
+    if !cli.aleph.pruning() && pruning_config_validation_result.overwritten_pruning {
+        warn!("Pruning not supported. Switching to keeping all block bodies and states.");
+    } else if cli.aleph.pruning() {
+        if let Err(max_blocks) = pruning_config_validation_result.invalid_state_pruning_setting {
+            warn!(
+                "State pruning was enabled but the `state_pruning` parameter
+                is smaller than minimal supported value (min: {}). Further
+                execution can lead to misbehaviour, which can be punished. State
+                pruning: {};",
+                minimum_state_pruning(),
+                max_blocks
+            );
+        }
+        if let Err(database) = pruning_config_validation_result.invalid_database_backend {
+            warn!(
+                "State pruning was enabled but the selected database backend
+                is not ParityDB which is the only supported when using pruning.
+                Further execution can lead to misbehaviour, which can be
+                punished. Database backend: {database:?};"
+            );
+        }
+    }
 }
 
 fn enforce_heap_pages(config: &mut Configuration) {
@@ -61,7 +111,7 @@ fn enforce_heap_pages(config: &mut Configuration) {
 
 fn main() -> sc_cli::Result<()> {
     let mut cli = Cli::parse();
-    let overwritten_pruning = handle_pruning_settings(&mut cli);
+    let pruning_config_validation_result = handle_pruning_settings(&mut cli);
 
     match &cli.subcommand {
         Some(Subcommand::BootstrapChain(cmd)) => cmd.run(),
@@ -176,9 +226,8 @@ fn main() -> sc_cli::Result<()> {
         ),
         None => {
             let runner = cli.create_runner(&cli.run)?;
-            if !cli.aleph.pruning() && overwritten_pruning {
-                warn!("Pruning not supported. Switching to keeping all block bodies and states.");
-            }
+
+            report_pruning_validation_result(&cli, pruning_config_validation_result);
 
             let mut aleph_cli_config = cli.aleph;
             runner.run_node_until_exit(|mut config| async move {
