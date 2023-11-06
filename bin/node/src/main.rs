@@ -9,21 +9,50 @@ use sc_cli::{clap::Parser, CliConfiguration, DatabasePruningMode, PruningParams,
 use sc_network::config::Role;
 use sc_service::{Configuration, PartialComponents};
 
-fn default_state_pruning() -> Option<DatabasePruningMode> {
-    Some(DatabasePruningMode::Archive)
+fn default_state_pruning() -> DatabasePruningMode {
+    DatabasePruningMode::Archive
 }
 
 fn default_blocks_pruning() -> DatabasePruningMode {
     DatabasePruningMode::ArchiveCanonical
 }
 
+fn minimum_state_pruning() -> usize {
+    2048
+}
+
 fn pruning_changed(params: &PruningParams) -> bool {
-    let state_pruning_changed =
-        params.state_pruning.is_some() && (params.state_pruning != default_state_pruning());
+    let state_pruning_changed = match params.state_pruning {
+        Some(state_pruning) => state_pruning != default_state_pruning(),
+        None => false,
+    };
 
     let blocks_pruning_changed = params.blocks_pruning != default_blocks_pruning();
 
     state_pruning_changed || blocks_pruning_changed
+}
+
+fn handle_pruning_settings(cli: &mut _) -> bool {
+    let overwritten_pruning = pruning_changed(&cli.run.import_params.pruning_params);
+    if !cli.aleph.pruning() {
+        cli.run.import_params.pruning_params.state_pruning = Some(default_state_pruning());
+        cli.run.import_params.pruning_params.blocks_pruning = default_blocks_pruning();
+    // We need to override state pruning to our default (archive), as substrate has 256 by default.
+    // 256 does not work with our code.
+    } else {
+        match cli.run.import_params.pruning_params.state_pruning {
+            Some(Constrained(constraints)) => {
+                if constraints.max_blocks < minimum_state_pruning() {
+                    warn!("State pruning was enabled but the value of the state_pruning parameter is below minimal supported
+                    treshold ({}). Further execution can lead to misbehaviour, which can be punished. State pruning:
+                    {constraints.max_blocks};",minimum_state_pruning());
+                }
+            }
+            None => cli.run.import_params.pruning_params.state_pruning = default_state_pruning(),
+            _ => {}
+        }
+    }
+    overwritten_pruning
 }
 
 fn enforce_heap_pages(config: &mut Configuration) {
@@ -32,15 +61,7 @@ fn enforce_heap_pages(config: &mut Configuration) {
 
 fn main() -> sc_cli::Result<()> {
     let mut cli = Cli::parse();
-    let overwritten_pruning = pruning_changed(&cli.run.import_params.pruning_params);
-    if !cli.aleph.experimental_pruning() {
-        cli.run.import_params.pruning_params.state_pruning = default_state_pruning();
-        cli.run.import_params.pruning_params.blocks_pruning = default_blocks_pruning();
-    // We need to override state pruning to our default (archive), as substrate has 256 by default.
-    // 256 does not work with our code.
-    } else if cli.run.import_params.pruning_params.state_pruning.is_none() {
-        cli.run.import_params.pruning_params.state_pruning = default_state_pruning();
-    }
+    let overwritten_pruning = handle_pruning_settings(&mut cli);
 
     match &cli.subcommand {
         Some(Subcommand::BootstrapChain(cmd)) => cmd.run(),
@@ -155,12 +176,7 @@ fn main() -> sc_cli::Result<()> {
         ),
         None => {
             let runner = cli.create_runner(&cli.run)?;
-            if cli.aleph.experimental_pruning() {
-                warn!("Experimental_pruning was turned on. Usage of this flag can lead to misbehaviour, which can be punished. State pruning: {:?}; Blocks pruning: {:?};",
-                    cli.run.state_pruning()?.unwrap_or_default(),
-                    cli.run.blocks_pruning()?,
-                );
-            } else if overwritten_pruning {
+            if !cli.aleph.pruning() && overwritten_pruning {
                 warn!("Pruning not supported. Switching to keeping all block bodies and states.");
             }
 
@@ -197,7 +213,7 @@ mod tests {
     #[test]
     fn pruning_sanity_check() {
         let pruning_params = PruningParams {
-            state_pruning: default_state_pruning(),
+            state_pruning: Some(default_state_pruning()),
             blocks_pruning: default_blocks_pruning(),
         };
 
