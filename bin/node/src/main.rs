@@ -5,7 +5,7 @@ use aleph_node::{new_authority, new_partial, Cli, Subcommand};
 use aleph_runtime::Block;
 use log::{info, warn};
 use primitives::HEAP_PAGES;
-use sc_cli::{clap::Parser, DatabasePruningMode, PruningParams, SubstrateCli};
+use sc_cli::{clap::Parser, Database, DatabasePruningMode, PruningParams, SubstrateCli};
 use sc_network::config::Role;
 use sc_service::{Configuration, PartialComponents};
 
@@ -17,8 +17,12 @@ fn default_blocks_pruning() -> DatabasePruningMode {
     DatabasePruningMode::ArchiveCanonical
 }
 
-fn minimum_state_pruning() -> u32 {
+fn default_state_pruning_when_pruning_enabled() -> u32 {
     2048
+}
+
+fn default_database_for_pruning() -> sc_cli::Database {
+    Database::ParityDb
 }
 
 fn pruning_changed(params: &PruningParams) -> bool {
@@ -35,73 +39,104 @@ fn pruning_changed(params: &PruningParams) -> bool {
 struct PruningConfigValidationResult {
     overwritten_pruning: bool,
     invalid_state_pruning_setting: Result<(), u32>,
-    invalid_database_backend: Result<(), sc_cli::Database>,
+    invalid_blocks_pruning_setting: Result<(), u32>,
+    invalid_database_backend: Result<(), Database>,
 }
 
 fn handle_pruning_settings(cli: &mut Cli) -> PruningConfigValidationResult {
     let overwritten_pruning = pruning_changed(&cli.run.import_params.pruning_params);
-    let mut invalid_state_pruning_setting = Ok(());
-    let mut invalid_database_backend = Ok(());
+
+    let mut result = PruningConfigValidationResult {
+        overwritten_pruning,
+        invalid_state_pruning_setting: Ok(()),
+        invalid_blocks_pruning_setting: Ok(()),
+        invalid_database_backend: Ok(()),
+    };
+
     if !cli.aleph.pruning() {
         // We need to override state pruning to our default (archive), as substrate has 256 by default.
         // 256 does not work with our code.
         cli.run.import_params.pruning_params.state_pruning = Some(default_state_pruning());
         cli.run.import_params.pruning_params.blocks_pruning = default_blocks_pruning();
-    } else {
-        match cli.run.import_params.pruning_params.state_pruning {
-            Some(DatabasePruningMode::Custom(max_blocks)) => {
-                if max_blocks < minimum_state_pruning() {
-                    invalid_state_pruning_setting = Err(max_blocks);
+        return result;
+    }
+
+    match cli.run.import_params.pruning_params.state_pruning {
+        Some(mode) => match mode {
+            DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
+            DatabasePruningMode::Custom(max_blocks) => {
+                if max_blocks < default_state_pruning_when_pruning_enabled() {
+                    result.invalid_state_pruning_setting = Err(max_blocks);
+                    cli.run.import_params.pruning_params.state_pruning = Some(
+                        DatabasePruningMode::Custom(default_state_pruning_when_pruning_enabled()),
+                    );
                 }
             }
-            None => {
-                cli.run.import_params.pruning_params.state_pruning = Some(default_state_pruning())
-            }
-            _ => {}
+        },
+        None => {
+            cli.run.import_params.pruning_params.state_pruning = Some(DatabasePruningMode::Custom(
+                default_state_pruning_when_pruning_enabled(),
+            ))
         }
+    }
 
-        match cli.run.import_params.database_params.database {
-            Some(sc_cli::Database::ParityDb) => {}
-            Some(database) => {
-                invalid_database_backend = Err(database);
-            }
-            None => {
-                cli.run.import_params.database_params.database = Some(sc_cli::Database::ParityDb)
-            }
+    match cli.run.import_params.pruning_params.blocks_pruning {
+        DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
+        DatabasePruningMode::Custom(blocks_pruning) => {
+            result.invalid_blocks_pruning_setting = Err(blocks_pruning);
+            cli.run.import_params.pruning_params.blocks_pruning = default_blocks_pruning();
         }
     }
-    PruningConfigValidationResult {
-        overwritten_pruning,
-        invalid_state_pruning_setting,
-        invalid_database_backend,
+
+    match cli.run.import_params.database_params.database {
+        Some(database) => match database {
+            Database::ParityDb => {}
+            Database::RocksDb | Database::Auto | Database::ParityDbDeprecated => {
+                result.invalid_database_backend = Err(database);
+                cli.run.import_params.database_params.database =
+                    Some(default_database_for_pruning());
+            }
+        },
+        None => {
+            cli.run.import_params.database_params.database = Some(default_database_for_pruning());
+        }
     }
+    result
 }
 
 fn report_pruning_validation_result(
     cli: &Cli,
     pruning_config_validation_result: PruningConfigValidationResult,
 ) {
-    if !cli.aleph.pruning() && pruning_config_validation_result.overwritten_pruning {
-        warn!("Pruning not supported. Switching to keeping all block bodies and states.");
-    } else if cli.aleph.pruning() {
-        if let Err(max_blocks) = pruning_config_validation_result.invalid_state_pruning_setting {
-            warn!(
-                "State pruning was enabled but the `state_pruning` parameter
+    if !cli.aleph.pruning() {
+        if pruning_config_validation_result.overwritten_pruning {
+            warn!("Pruning not supported. Switching to keeping all block bodies and states.");
+        }
+        return;
+    }
+    if let Err(max_blocks) = pruning_config_validation_result.invalid_state_pruning_setting {
+        warn!(
+            "State pruning was enabled but the `state_pruning` parameter
                 is smaller than minimal supported value (min: {}). Further
                 execution can lead to misbehaviour, which can be punished. State
                 pruning: {};",
-                minimum_state_pruning(),
-                max_blocks
-            );
-        }
-        if let Err(database) = pruning_config_validation_result.invalid_database_backend {
-            warn!(
-                "State pruning was enabled but the selected database backend
+            default_state_pruning_when_pruning_enabled(),
+            max_blocks
+        );
+    }
+    if let Err(blocks_pruning) = pruning_config_validation_result.invalid_blocks_pruning_setting {
+        warn!(
+            "Blocks pruning was enabled but provide value for the `blocks_pruning` parameter is invalid ({blocks_pruning}).
+               Supported value are: Archive, ArchiveCanonical.",
+        );
+    }
+    if let Err(database) = pruning_config_validation_result.invalid_database_backend {
+        warn!(
+            "State pruning was enabled but the selected database backend
                 is not ParityDB which is the only supported when using pruning.
                 Further execution can lead to misbehaviour, which can be
                 punished. Database backend: {database:?};"
-            );
-        }
+        );
     }
 }
 
