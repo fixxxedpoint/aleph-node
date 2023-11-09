@@ -9,36 +9,7 @@ use sc_cli::{clap::Parser, Database, DatabasePruningMode, PruningParams, Substra
 use sc_network::config::Role;
 use sc_service::{Configuration, PartialComponents};
 
-fn default_state_pruning() -> DatabasePruningMode {
-    DatabasePruningMode::Archive
-}
-
-fn default_blocks_pruning() -> DatabasePruningMode {
-    DatabasePruningMode::ArchiveCanonical
-}
-
-fn minimum_state_pruning_when_pruning_enabled() -> u32 {
-    // Anything greater than 1800, which is two normal lenght sessions (900 each), should be enough.
-    // Every new session node needs to read state that contains a list of validators from two session before.
-    2048
-}
-
-fn default_database_for_pruning() -> sc_cli::Database {
-    Database::ParityDb
-}
-
-fn pruning_changed(params: &PruningParams) -> bool {
-    let state_pruning_changed = match params.state_pruning {
-        Some(state_pruning) => state_pruning != default_state_pruning(),
-        None => false,
-    };
-
-    let blocks_pruning_changed = params.blocks_pruning != default_blocks_pruning();
-
-    state_pruning_changed || blocks_pruning_changed
-}
-
-struct PruningConfigValidationResult {
+pub struct PruningParamsValidator {
     pruning_enabled: bool,
     overwritten_pruning: bool,
     invalid_state_pruning_setting: Result<(), u32>,
@@ -46,12 +17,12 @@ struct PruningConfigValidationResult {
     invalid_database_backend: Result<(), Database>,
 }
 
-impl PruningConfigValidationResult {
-    fn validate_and_fix_parameters(cli: &mut Cli) -> PruningConfigValidationResult {
-        let overwritten_pruning = pruning_changed(&cli.run.import_params.pruning_params);
+impl PruningParamsValidator {
+    pub fn validate_and_fix_parameters(cli: &mut Cli) -> PruningParamsValidator {
+        let overwritten_pruning = Self::pruning_changed(&cli.run.import_params.pruning_params);
         let pruning_enabled = cli.aleph.pruning();
 
-        let mut result = PruningConfigValidationResult {
+        let mut result = PruningParamsValidator {
             pruning_enabled,
             overwritten_pruning,
             invalid_state_pruning_setting: Ok(()),
@@ -62,8 +33,8 @@ impl PruningConfigValidationResult {
         if !pruning_enabled {
             // We need to override state pruning to our default (archive), as substrate has 256 by default.
             // 256 does not work with our code.
-            cli.run.import_params.pruning_params.state_pruning = Some(default_state_pruning());
-            cli.run.import_params.pruning_params.blocks_pruning = default_blocks_pruning();
+            cli.run.import_params.pruning_params.state_pruning = Some(Self::default_state_pruning());
+            cli.run.import_params.pruning_params.blocks_pruning = Self::default_blocks_pruning();
             return result;
         }
 
@@ -71,18 +42,18 @@ impl PruningConfigValidationResult {
             Some(mode) => match mode {
                 DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
                 DatabasePruningMode::Custom(max_blocks) => {
-                    if max_blocks < minimum_state_pruning_when_pruning_enabled() {
+                    if max_blocks < Self::minimum_state_pruning_when_pruning_enabled() {
                         result.invalid_state_pruning_setting = Err(max_blocks);
                         cli.run.import_params.pruning_params.state_pruning =
                             Some(DatabasePruningMode::Custom(
-                                minimum_state_pruning_when_pruning_enabled(),
+                                Self::minimum_state_pruning_when_pruning_enabled(),
                             ));
                     }
                 }
             },
             None => {
                 cli.run.import_params.pruning_params.state_pruning = Some(
-                    DatabasePruningMode::Custom(minimum_state_pruning_when_pruning_enabled()),
+                    DatabasePruningMode::Custom(Self::minimum_state_pruning_when_pruning_enabled()),
                 )
             }
         }
@@ -91,7 +62,7 @@ impl PruningConfigValidationResult {
             DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
             DatabasePruningMode::Custom(blocks_pruning) => {
                 result.invalid_blocks_pruning_setting = Err(blocks_pruning);
-                cli.run.import_params.pruning_params.blocks_pruning = default_blocks_pruning();
+                cli.run.import_params.pruning_params.blocks_pruning = Self::default_blocks_pruning();
             }
         }
 
@@ -101,12 +72,12 @@ impl PruningConfigValidationResult {
                 Database::RocksDb | Database::Auto | Database::ParityDbDeprecated => {
                     result.invalid_database_backend = Err(database);
                     cli.run.import_params.database_params.database =
-                        Some(default_database_for_pruning());
+                        Some(Self::default_database_for_pruning());
                 }
             },
             None => {
                 cli.run.import_params.database_params.database =
-                    Some(default_database_for_pruning());
+                    Some(Self::default_database_for_pruning());
             }
         }
         result
@@ -125,24 +96,52 @@ impl PruningConfigValidationResult {
                 is smaller than minimal supported value (min: {}). Further
                 execution can lead to misbehaviour, which can be punished. State
                 pruning: {};",
-                minimum_state_pruning_when_pruning_enabled(),
+                Self::minimum_state_pruning_when_pruning_enabled(),
                 max_blocks
             );
         }
         if let Err(blocks_pruning) = self.invalid_blocks_pruning_setting {
             warn!(
-            "Blocks pruning was enabled but provide value for the `blocks_pruning` parameter is invalid ({blocks_pruning}).
-               Supported value are: Archive, ArchiveCanonical.",
+            "Blocks pruning was enabled but the provided value for the `blocks_pruning` parameter is invalid ({blocks_pruning}).
+               Supported values are `Archive` and `ArchiveCanonical`.",
         );
         }
         if let Err(database) = self.invalid_database_backend {
             warn!(
-                "State pruning was enabled but the selected database backend
-                is not ParityDB which is the only supported when using pruning.
-                Further execution can lead to misbehaviour, which can be
-                punished. Database backend: {database:?};"
+                "State pruning was enabled but the selected database backend ({:?})
+                is not supported while using pruning. Forced switch to `ParityDB`.",
+                database
             );
         }
+    }
+
+    const fn default_state_pruning() -> DatabasePruningMode {
+        DatabasePruningMode::Archive
+    }
+
+    const fn default_blocks_pruning() -> DatabasePruningMode {
+        DatabasePruningMode::ArchiveCanonical
+    }
+
+    const fn minimum_state_pruning_when_pruning_enabled() -> u32 {
+        // Anything greater than 1800, which is two normal lenght sessions (900 each), should be enough.
+        // Every new session node needs to read state that contains a list of validators from two session before.
+        2048
+    }
+
+    const fn default_database_for_pruning() -> sc_cli::Database {
+        Database::ParityDb
+    }
+
+    fn pruning_changed(params: &PruningParams) -> bool {
+        let state_pruning_changed = match params.state_pruning {
+            Some(state_pruning) => state_pruning != Self::default_state_pruning(),
+            None => false,
+        };
+
+        let blocks_pruning_changed = params.blocks_pruning != Self::default_blocks_pruning();
+
+        state_pruning_changed || blocks_pruning_changed
     }
 }
 
@@ -152,7 +151,8 @@ fn enforce_heap_pages(config: &mut Configuration) {
 
 fn main() -> sc_cli::Result<()> {
     let mut cli = Cli::parse();
-    let pruning_config_validation_result = PruningConfigValidationResult::validate_and_fix_parameters(&mut cli);
+    let pruning_config_validation_result =
+        PruningParamsValidator::validate_and_fix_parameters(&mut cli);
 
     match &cli.subcommand {
         Some(Subcommand::BootstrapChain(cmd)) => cmd.run(),
@@ -298,13 +298,13 @@ fn main() -> sc_cli::Result<()> {
 mod tests {
     use sc_service::{BlocksPruning, PruningMode};
 
-    use super::{default_blocks_pruning, default_state_pruning, PruningParams};
+    use super::{PruningParamsValidator, PruningParams};
 
     #[test]
     fn pruning_sanity_check() {
         let pruning_params = PruningParams {
-            state_pruning: Some(default_state_pruning()),
-            blocks_pruning: default_blocks_pruning(),
+            state_pruning: Some(PruningParamsValidator::default_state_pruning()),
+            blocks_pruning: PruningParamsValidator::default_blocks_pruning(),
         };
 
         assert_eq!(
