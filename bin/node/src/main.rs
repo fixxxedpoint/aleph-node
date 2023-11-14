@@ -9,7 +9,7 @@ use sc_cli::{clap::Parser, Database, DatabasePruningMode, PruningParams, Substra
 use sc_network::config::Role;
 use sc_service::{Configuration, PartialComponents};
 
-pub struct PruningParamsValidator {
+pub struct PruningConfigValidator {
     pruning_enabled: bool,
     overwritten_pruning: bool,
     invalid_state_pruning_setting: Result<(), u32>,
@@ -17,12 +17,12 @@ pub struct PruningParamsValidator {
     invalid_database_backend: Result<(), Database>,
 }
 
-impl PruningParamsValidator {
-    pub fn validate_and_fix_parameters(cli: &mut Cli) -> PruningParamsValidator {
+impl PruningConfigValidator {
+    pub fn validate_and_fix_parameters(cli: &mut Cli) -> PruningConfigValidator {
         let overwritten_pruning = Self::pruning_changed(&cli.run.import_params.pruning_params);
         let pruning_enabled = cli.aleph.pruning();
 
-        let mut result = PruningParamsValidator {
+        let mut result = PruningConfigValidator {
             pruning_enabled,
             overwritten_pruning,
             invalid_state_pruning_setting: Ok(()),
@@ -152,7 +152,7 @@ fn enforce_heap_pages(config: &mut Configuration) {
 fn main() -> sc_cli::Result<()> {
     let mut cli = Cli::parse();
     let pruning_config_validation_result =
-        PruningParamsValidator::validate_and_fix_parameters(&mut cli);
+        PruningConfigValidator::validate_and_fix_parameters(&mut cli);
 
     match &cli.subcommand {
         Some(Subcommand::BootstrapChain(cmd)) => cmd.run(),
@@ -298,13 +298,13 @@ fn main() -> sc_cli::Result<()> {
 mod tests {
     use sc_service::{BlocksPruning, PruningMode};
 
-    use super::{PruningParamsValidator, PruningParams};
+    use super::{PruningConfigValidator, PruningParams};
 
     #[test]
     fn pruning_sanity_check() {
         let pruning_params = PruningParams {
-            state_pruning: Some(PruningParamsValidator::default_state_pruning()),
-            blocks_pruning: PruningParamsValidator::default_blocks_pruning(),
+            state_pruning: Some(PruningConfigValidator::default_state_pruning()),
+            blocks_pruning: PruningConfigValidator::default_blocks_pruning(),
         };
 
         assert_eq!(

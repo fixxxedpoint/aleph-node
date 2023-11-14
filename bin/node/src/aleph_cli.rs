@@ -46,7 +46,7 @@ pub struct AlephCli {
     ///
     /// TURNING THIS FLAG ON, CAN LEAD TO MALICIOUS BEHAVIOUR AND CAN BE PUNISHED ACCORDINGLY!
     #[clap(long, default_value_t = false)]
-    pruning: bool,
+    enable_pruning: bool,
 
     /// Maximum bit-rate per node in bytes per second of the alephbft validator network.
     #[clap(long, default_value_t = 64 * 1024)]
@@ -86,7 +86,7 @@ impl AlephCli {
     }
 
     pub fn pruning(&self) -> bool {
-        self.pruning
+        self.enable_pruning
     }
 
     pub fn alephbft_bit_rate_per_connection(&self) -> u64 {
