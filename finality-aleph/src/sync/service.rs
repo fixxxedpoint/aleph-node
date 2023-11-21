@@ -730,51 +730,73 @@ where
             tokio::select! {
                 maybe_data = self.network.next() => match maybe_data {
                     Ok((data, peer)) => self.handle_network_data(data, peer),
-                    Err(e) => warn!(target: LOG_TARGET, "Error receiving data from network: {}.", e),
+                    Err(e) => {
+                        error!(target: LOG_TARGET, "Error receiving data from network: {}.", e);
+                        break;
+                    },
                 },
                 Some(task) = self.tasks.pop() => self.handle_task(task),
                 _ = self.broadcast_ticker.wait_and_tick() => self.broadcast(),
                 force = self.chain_extension_ticker.wait_and_tick() => self.request_chain_extension(force),
                 maybe_event = self.chain_events.next() => match maybe_event {
                     Ok(chain_event) => self.handle_chain_event(chain_event),
-                    Err(e) => warn!(target: LOG_TARGET, "Error when receiving a chain event: {}.", e),
+                    Err(e) => {
+                        error!(target: LOG_TARGET, "Error when receiving a chain event: {}.", e);
+                        break;
+                    },
                 },
                 maybe_justification = self.justifications_from_user.next() => match maybe_justification {
                     Some(justification) => {
                         debug!(target: LOG_TARGET, "Received new justification from user: {:?}.", justification);
                         self.handle_justification_from_user(justification);
                     },
-                    None => warn!(target: LOG_TARGET, "Channel with justifications from user closed."),
+                    None => {
+                        error!(target: LOG_TARGET, "Channel with justifications from user closed.");
+                        break;
+                    },
                 },
                 maybe_justification = self.additional_justifications_from_user.next() => match maybe_justification {
                     Some(justification) => {
                         debug!(target: LOG_TARGET, "Received new additional justification from user: {:?}.", justification);
                         self.handle_justification_from_user(justification);
                     },
-                    None => warn!(target: LOG_TARGET, "Channel with additional justifications from user closed."),
+                    None => {
+                        error!(target: LOG_TARGET, "Channel with additional justifications from user closed.");
+                        break;
+                    },
                 },
                 maybe_header = self.block_requests_from_user.next() => match maybe_header {
                     Some(header) => {
                         debug!(target: LOG_TARGET, "Received new internal block request from user: {:?}.", header);
                         self.handle_internal_request(header)
                     },
-                    None => warn!(target: LOG_TARGET, "Channel with internal block request from user closed."),
+                    None => {
+                        error!(target: LOG_TARGET, "Channel with internal block request from user closed.");
+                        break;
+                    },
                 },
                 maybe_block_id = self.legacy_block_requests_from_user.next() => match maybe_block_id {
                     Some(block_id) => {
                         debug!(target: LOG_TARGET, "Received new internal block request from user: {:?}.", block_id);
                         self.handle_legacy_internal_request(block_id)
                     },
-                    None => warn!(target: LOG_TARGET, "Channel with legacy internal block request from user closed."),
+                    None => {
+                        error!(target: LOG_TARGET, "Channel with legacy internal block request from user closed.");
+                        break;
+                    },
                 },
                 maybe_own_block = self.blocks_from_creator.next() => match maybe_own_block {
                     Some(block) => {
                         debug!(target: LOG_TARGET, "Received new own block: {:?}.", block.header().id());
                         self.handle_own_block(block)
                     },
-                    None => warn!(target: LOG_TARGET, "Channel with own blocks closed."),
+                    None => {
+                        warn!(target: LOG_TARGET, "Channel with own blocks closed.");
+                        break;
+                    },
                 },
             }
         }
+        debug!(target: LOG_TARGET, "Sync service finished");
     }
 }

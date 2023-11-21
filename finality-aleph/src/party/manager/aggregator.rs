@@ -124,7 +124,7 @@ where
     loop {
         trace!(target: "aleph-party", "Aggregator Loop started a next iteration");
         tokio::select! {
-            maybe_block = blocks_from_interpreter.next() => {
+            maybe_block = blocks_from_interpreter.next(), if !no_more_blocks => {
                 if let Some(block) = maybe_block {
                     hash_of_last_block = Some(block.hash());
                     process_new_block_data::<CN, LN>(

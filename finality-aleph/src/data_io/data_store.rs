@@ -12,7 +12,8 @@ use futures::{
         mpsc::{self, UnboundedSender},
         oneshot,
     },
-    StreamExt,
+    stream::{unfold, FusedStream},
+    FutureExt, StreamExt, pin_mut,
 };
 use futures_timer::Delay;
 use log::{debug, error, info, trace, warn};
@@ -239,21 +240,39 @@ where
 
     pub async fn run(&mut self, mut exit: oneshot::Receiver<()>) {
         let mut maintenance_clock = Delay::new(self.config.periodic_maintenance_interval);
-        let mut import_stream = self.client.import_notification_stream();
+        let mut import_stream = self.client.import_notification_stream().fuse();
         let mut finality_stream = self.client.finality_notification_stream();
+        let mut messages_from_network_terminated = false;
         loop {
+            if import_stream.is_terminated() {
+                debug!(target: "aleph-data-store", "Blocks import notification stream was closed.");
+                break;
+            }
+            if finality_stream.is_terminated() {
+                debug!(target: "aleph-data-store", "Finalized blocks notification stream was closed.");
+                break;
+            }
+
             self.prune_pending_messages();
             self.prune_triggers();
             tokio::select! {
-                Some(message) = self.messages_from_network.next() => {
-                    trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
-                    self.on_message_received(message);
+                message = self.messages_from_network.next(), if !messages_from_network_terminated => {
+                    match message {
+                        Some(message) => {
+                            trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
+                            self.on_message_received(message);
+                        },
+                        None => {
+                            debug!(target: "aleph-data-store", "`messages_from_network` Receiver terminated");
+                            messages_from_network_terminated = true;
+                        },
+                    }
                 }
-                Some(block) = &mut import_stream.next() => {
+                block = import_stream.select_next_some() => {
                     trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
                     self.on_block_imported((block.header.hash(), *block.header.number()).into());
                 },
-                Some(block) = &mut finality_stream.next() => {
+                block = finality_stream.select_next_some() => {
                     trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
                     self.on_block_finalized((block.header.hash(), *block.header.number()).into());
                 }

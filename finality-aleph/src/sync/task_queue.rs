@@ -5,7 +5,7 @@ use std::{
 };
 
 use log::warn;
-use tokio::time::{sleep, Duration, Instant};
+use tokio::time::{sleep, Duration, Instant, sleep_until};
 
 use crate::sync::LOG_TARGET;
 
@@ -95,12 +95,7 @@ impl<T> TaskQueue<T> {
     /// Cancellation safe, since doesn't mutate &self.
     async fn sleep_until_the_next_task_is_ready(&self) {
         if let Some(scheduled_task) = self.queue.peek() {
-            let duration = scheduled_task
-                .scheduled_time
-                .saturating_duration_since(Instant::now());
-            if !duration.is_zero() {
-                sleep(duration).await;
-            }
+            sleep_until(scheduled_task.scheduled_time).await;
         }
     }
 }

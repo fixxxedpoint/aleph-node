@@ -2,7 +2,7 @@ use std::{fmt::Debug, pin::Pin, time::Duration};
 
 use futures::{
     channel::{mpsc, oneshot},
-    Future, StreamExt,
+    Future, StreamExt, stream::Fuse,
 };
 use log::{info, trace, warn};
 use substrate_prometheus_endpoint::Registry;
@@ -90,7 +90,7 @@ pub struct Service<SK: SecretKey, D: Data, A: Data, ND: Dialer<A>, NL: Listener,
 where
     SK::PublicKey: PeerId,
 {
-    commands_from_interface: mpsc::UnboundedReceiver<ServiceCommand<SK::PublicKey, D, A>>,
+    commands_from_interface: Fuse<mpsc::UnboundedReceiver<ServiceCommand<SK::PublicKey, D, A>>>,
     next_to_interface: mpsc::UnboundedSender<D>,
     manager: Manager<SK::PublicKey, A, D>,
     dialer: ND,
@@ -126,7 +126,7 @@ where
         };
         (
             Self {
-                commands_from_interface,
+                commands_from_interface: commands_from_interface.fuse(),
                 next_to_interface,
                 manager: Manager::new(secret_key.public_key(), metrics.clone()),
                 dialer,
@@ -208,8 +208,10 @@ where
     /// Run the service until a signal from exit.
     pub async fn run(mut self, mut exit: oneshot::Receiver<()>) {
         let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
-        let (result_for_parent, mut worker_results) = mpsc::unbounded();
-        let (authorization_requests_sender, mut authorization_requests) = mpsc::unbounded();
+        let (result_for_parent, worker_results) = mpsc::unbounded();
+        let mut worker_results = worker_results.fuse();
+        let (authorization_requests_sender, authorization_requests) = mpsc::unbounded();
+        let mut authorization_requests = authorization_requests.fuse();
         use ServiceCommand::*;
         loop {
             tokio::select! {

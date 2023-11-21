@@ -1,5 +1,5 @@
 use futures::{future, StreamExt};
-use log::warn;
+use log::{warn, debug};
 use sc_client_api::{FinalityNotifications, ImportNotifications};
 use sp_api::{BlockT, HeaderT};
 use sp_blockchain::{lowest_common_ancestor, HeaderMetadata};
@@ -111,6 +111,7 @@ pub async fn run_chain_state_metrics<
                     }
                     None => {
                         warn!(target: LOG_TARGET, "Import notification stream ended unexpectedly");
+                        break;
                     }
                 }
             },
@@ -126,12 +127,18 @@ pub async fn run_chain_state_metrics<
                     }
                     None => {
                         warn!(target: LOG_TARGET, "Finality notification stream ended unexpectedly");
+                        break;
                     }
                 }
             },
         }
     }
+    debug!(
+        target: LOG_TARGET,
+        "ChainSateMetrics finished"
+    );
 }
+
 fn detect_reorgs<HE: HeaderT<Hash = B::Hash>, B: BlockT<Header = HE>, BE: HeaderMetadata<B>>(
     backend: &BE,
     prev_best: Option<HE>,

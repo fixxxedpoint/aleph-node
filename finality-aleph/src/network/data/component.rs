@@ -1,6 +1,6 @@
 use std::{fmt::Display, marker::PhantomData};
 
-use futures::{channel::mpsc, StreamExt};
+use futures::{channel::mpsc, StreamExt, FutureExt};
 use log::warn;
 
 use crate::{

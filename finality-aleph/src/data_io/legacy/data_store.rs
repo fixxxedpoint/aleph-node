@@ -12,7 +12,7 @@ use futures::{
         mpsc::{self, UnboundedSender},
         oneshot,
     },
-    StreamExt,
+    StreamExt, FutureExt, stream::FusedStream,
 };
 use futures_timer::Delay;
 use log::{debug, error, info, trace, warn};
@@ -234,28 +234,45 @@ where
     }
 
     pub async fn run(&mut self, mut exit: oneshot::Receiver<()>) {
-        let mut maintenance_clock = Delay::new(self.config.periodic_maintenance_interval);
+        let mut maintenance_clock = Delay::new(self.config.periodic_maintenance_interval).fuse();
         let mut import_stream = self.client.import_notification_stream();
         let mut finality_stream = self.client.finality_notification_stream();
         loop {
             self.prune_pending_messages();
             self.prune_triggers();
+
+            if import_stream.is_terminated() {
+                debug!(target: "aleph-data-store", "Block import notification stream was closed");
+                break;
+            }
+            if finality_stream.is_terminated() {
+                debug!(target: "aleph-data-store", "Finalized block import notification stream was closed");
+                break;
+            }
+
             tokio::select! {
-                Some(message) = self.messages_from_network.next() => {
+                message = self.messages_from_network.next() => {
+                    let message = match message {
+                        Some(message) => message,
+                        None => {
+                            debug!(target: "aleph-data-store", "`messages_from_network` stream was closed");
+                            break;
+                        },
+                    };
                     trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
                     self.on_message_received(message);
                 }
-                Some(block) = &mut import_stream.next() => {
+                block = import_stream.select_next_some() => {
                     trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
                     self.on_block_imported((block.header.hash(), *block.header.number()).into());
                 },
-                Some(block) = &mut finality_stream.next() => {
+                block = finality_stream.select_next_some() => {
                     trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
                     self.on_block_finalized((block.header.hash(), *block.header.number()).into());
                 }
                 _ = &mut maintenance_clock => {
                     self.run_maintenance();
-                    maintenance_clock = Delay::new(self.config.periodic_maintenance_interval);
+                    maintenance_clock = Delay::new(self.config.periodic_maintenance_interval).fuse();
                 }
                 _ = &mut exit => {
                     debug!(target: "aleph-data-store", "Data Store task received exit signal. Terminating.");
@@ -263,6 +280,7 @@ where
                 }
             }
         }
+        debug!(target: "aleph-data-store", "Data store finished");
     }
 
     // Updates our highest known and highest finalized block info directly from the client.
