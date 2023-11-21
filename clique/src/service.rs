@@ -2,7 +2,8 @@ use std::{fmt::Debug, pin::Pin, time::Duration};
 
 use futures::{
     channel::{mpsc, oneshot},
-    Future, StreamExt, stream::Fuse,
+    stream::FusedStream,
+    Future, StreamExt,
 };
 use log::{info, trace, warn};
 use substrate_prometheus_endpoint::Registry;
@@ -90,7 +91,7 @@ pub struct Service<SK: SecretKey, D: Data, A: Data, ND: Dialer<A>, NL: Listener,
 where
     SK::PublicKey: PeerId,
 {
-    commands_from_interface: Fuse<mpsc::UnboundedReceiver<ServiceCommand<SK::PublicKey, D, A>>>,
+    commands_from_interface: mpsc::UnboundedReceiver<ServiceCommand<SK::PublicKey, D, A>>,
     next_to_interface: mpsc::UnboundedSender<D>,
     manager: Manager<SK::PublicKey, A, D>,
     dialer: ND,
@@ -208,12 +209,23 @@ where
     /// Run the service until a signal from exit.
     pub async fn run(mut self, mut exit: oneshot::Receiver<()>) {
         let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
-        let (result_for_parent, worker_results) = mpsc::unbounded();
-        let mut worker_results = worker_results.fuse();
-        let (authorization_requests_sender, authorization_requests) = mpsc::unbounded();
-        let mut authorization_requests = authorization_requests.fuse();
+        let (result_for_parent, mut worker_results) = mpsc::unbounded();
+        let (authorization_requests_sender, mut authorization_requests) = mpsc::unbounded();
         use ServiceCommand::*;
         loop {
+            if self.commands_from_interface.is_terminated() {
+                warn!(target: LOG_TARGET, "`commands_from_interface` channel was closed.");
+                break;
+            }
+            if authorization_requests.is_terminated() {
+                warn!(target: LOG_TARGET, "`authorization_requests` channel was closed.");
+                break;
+            }
+            if worker_results.is_terminated() {
+                warn!(target: LOG_TARGET, "`worker_results` channel was closed.");
+                break;
+            }
+
             tokio::select! {
                 // got new incoming connection from the listener - spawn an incoming worker
                 maybe_stream = self.listener.accept() => match maybe_stream {

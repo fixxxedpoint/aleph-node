@@ -117,14 +117,18 @@ where
     });
     pin_mut!(blocks_from_interpreter);
     let mut hash_of_last_block = None;
-    let mut no_more_blocks = false;
 
     let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
 
     loop {
         trace!(target: "aleph-party", "Aggregator Loop started a next iteration");
+
+        if hash_of_last_block.is_none() && blocks_from_interpreter.is_terminated() {
+            debug!(target: "aleph-party", "Aggregator processed all provided blocks. Terminating.");
+            break;
+        }
         tokio::select! {
-            maybe_block = blocks_from_interpreter.next(), if !no_more_blocks => {
+            maybe_block = blocks_from_interpreter.next() => {
                 if let Some(block) = maybe_block {
                     hash_of_last_block = Some(block.hash());
                     process_new_block_data::<CN, LN>(
@@ -134,7 +138,6 @@ where
                     ).await;
                 } else {
                     debug!(target: "aleph-party", "Blocks ended in aggregator.");
-                    no_more_blocks = true;
                 }
             }
             multisigned_hash = aggregator.next_multisigned_hash() => {
@@ -155,10 +158,6 @@ where
                 debug!(target: "aleph-party", "Aggregator received exit signal. Terminating.");
                 break;
             }
-        }
-        if hash_of_last_block.is_none() && no_more_blocks {
-            debug!(target: "aleph-party", "Aggregator processed all provided blocks. Terminating.");
-            break;
         }
     }
     debug!(target: "aleph-party", "Aggregator finished its work.");

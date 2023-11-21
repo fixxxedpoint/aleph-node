@@ -242,11 +242,11 @@ where
             self.prune_triggers();
 
             if import_stream.is_terminated() {
-                debug!(target: "aleph-data-store", "Block import notification stream was closed");
+                error!(target: "aleph-data-store", "Block import notification stream was closed");
                 break;
             }
             if finality_stream.is_terminated() {
-                debug!(target: "aleph-data-store", "Finalized block import notification stream was closed");
+                error!(target: "aleph-data-store", "Finalized block import notification stream was closed");
                 break;
             }
 
@@ -255,18 +255,18 @@ where
                     let message = match message {
                         Some(message) => message,
                         None => {
-                            debug!(target: "aleph-data-store", "`messages_from_network` stream was closed");
+                            error!(target: "aleph-data-store", "`messages_from_network` stream was closed");
                             break;
                         },
                     };
                     trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
                     self.on_message_received(message);
                 }
-                block = import_stream.select_next_some() => {
+                Some(block) = import_stream.next() => {
                     trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
                     self.on_block_imported((block.header.hash(), *block.header.number()).into());
                 },
-                block = finality_stream.select_next_some() => {
+                Some(block) = finality_stream.next() => {
                     trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
                     self.on_block_finalized((block.header.hash(), *block.header.number()).into());
                 }
