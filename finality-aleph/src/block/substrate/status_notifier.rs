@@ -8,7 +8,6 @@ use futures::{
     FutureExt, Stream, StreamExt,
 };
 use sc_client_api::client::{FinalityNotifications, ImportNotifications};
-use tokio::select;
 
 use crate::{
     aleph_primitives::{Block, Header},
@@ -20,6 +19,7 @@ use crate::{
 pub enum Error {
     JustificationStreamClosed,
     ImportStreamClosed,
+    AllStreamsClosed,
 }
 
 impl Display for Error {
@@ -31,6 +31,9 @@ impl Display for Error {
             }
             ImportStreamClosed => {
                 write!(f, "import notification stream has ended")
+            }
+            AllStreamsClosed => {
+                write!(f, "all streams have ended")
             }
         }
     }
@@ -59,7 +62,7 @@ impl ChainStatusNotifier<Header> for SubstrateChainStatusNotifier {
     type Error = Error;
 
     async fn next(&mut self) -> Result<ChainStatusNotification<Header>, Self::Error> {
-        select! {
+        futures::select! {
             maybe_block = self.finality_notifications.next() => {
                 maybe_block
                     .map(|block| ChainStatusNotification::BlockFinalized(block.header))
@@ -70,6 +73,7 @@ impl ChainStatusNotifier<Header> for SubstrateChainStatusNotifier {
                 .map(|block| ChainStatusNotification::BlockImported(block.header))
                 .ok_or(Error::ImportStreamClosed)
             }
+            complete => Err(Error::AllStreamsClosed)
         }
     }
 }

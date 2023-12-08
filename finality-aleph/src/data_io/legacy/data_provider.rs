@@ -272,21 +272,22 @@ where
     }
 
     pub async fn run(mut self, mut exit: oneshot::Receiver<()>) {
-        let mut best_block_in_session: Option<BlockId> = None;
-        loop {
-            let delay = futures_timer::Delay::new(self.config.refresh_interval);
-            tokio::select! {
-                _ = delay => {
+        tokio::select! {
+            _ = async {
+                let mut best_block_in_session: Option<BlockId> = None;
+                loop {
+                    futures_timer::Delay::new(self.config.refresh_interval).await;
                     best_block_in_session = self.get_best_block_in_session(best_block_in_session).await;
                     if let Some(best_block) = &best_block_in_session {
                         self.update_data(best_block);
                     }
-
                 }
-                _ = &mut exit => {
-                    debug!(target: "aleph-data-store", "Task for refreshing best chain received exit signal. Terminating.");
-                    return;
-                }
+            } => {
+                error!(target: "aleph-data-store", "Task for refreshing best chain unexpectedly terminated.");
+            },
+            _ = exit => {
+                debug!(target: "aleph-data-store", "Task for refreshing best chain received exit signal. Terminating.");
+                return;
             }
         }
     }

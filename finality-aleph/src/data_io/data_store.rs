@@ -12,8 +12,9 @@ use futures::{
         mpsc::{self, UnboundedSender},
         oneshot,
     },
+    pin_mut,
     stream::{unfold, FusedStream},
-    FutureExt, StreamExt, pin_mut,
+    FutureExt, StreamExt,
 };
 use futures_timer::Delay;
 use log::{debug, error, info, trace, warn};
@@ -241,41 +242,49 @@ where
     pub async fn run(&mut self, mut exit: oneshot::Receiver<()>) {
         let mut maintenance_clock = Delay::new(self.config.periodic_maintenance_interval);
         let mut import_stream = self.client.import_notification_stream();
+        if import_stream.is_terminated() {
+            error!(target: "aleph-data-store", "Blocks import notification stream was closed.");
+            return;
+        }
         let mut finality_stream = self.client.finality_notification_stream();
-        let mut messages_from_network_terminated = false;
+        if finality_stream.is_terminated() {
+            error!(target: "aleph-data-store", "Finalized-blocks notification stream was closed.");
+            return;
+        }
         loop {
             self.prune_pending_messages();
             self.prune_triggers();
 
-            if import_stream.is_terminated() {
-                error!(target: "aleph-data-store", "Blocks import notification stream was closed.");
-                break;
-            }
-            if finality_stream.is_terminated() {
-                error!(target: "aleph-data-store", "Finalized-blocks notification stream was closed.");
-                break;
-            }
-
             tokio::select! {
-                message = self.messages_from_network.next() => {
-                    match message {
-                        Some(message) => {
-                            trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
-                            self.on_message_received(message);
-                        },
-                        None => {
-                            error!(target: "aleph-data-store", "`messages_from_network` Receiver terminated");
-                            break;
-                        },
-                    }
+                message = self.messages_from_network.next() => match message {
+                    Some(message) => {
+                        trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
+                        self.on_message_received(message);
+                    },
+                    None => {
+                        error!(target: "aleph-data-store", "`messages_from_network` receiver terminated");
+                        break;
+                    },
                 }
-                Some(block) = import_stream.next() => {
-                    trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
-                    self.on_block_imported((block.header.hash(), *block.header.number()).into());
+                block = import_stream.next() => match block {
+                    Some(block) => {
+                        trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
+                        self.on_block_imported((block.header.hash(), *block.header.number()).into());
+                    },
+                    None => {
+                        error!(target: "aleph-data-store", "`import_stream` receiver terminated");
+                        break;
+                    },
                 },
-                Some(block) = finality_stream.next() => {
-                    trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
-                    self.on_block_finalized((block.header.hash(), *block.header.number()).into());
+                block = finality_stream.next() => match block {
+                    Some(block) => {
+                        trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
+                        self.on_block_finalized((block.header.hash(), *block.header.number()).into());
+                    },
+                    None => {
+                        error!(target: "aleph-data-store", "`finality_stream` receiver terminated");
+                        break;
+                    },
                 }
                 _ = &mut maintenance_clock => {
                     self.run_maintenance();

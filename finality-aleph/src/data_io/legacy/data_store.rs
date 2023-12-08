@@ -236,39 +236,49 @@ where
     pub async fn run(&mut self, mut exit: oneshot::Receiver<()>) {
         let mut maintenance_clock = Delay::new(self.config.periodic_maintenance_interval).fuse();
         let mut import_stream = self.client.import_notification_stream();
+        if import_stream.is_terminated() {
+            error!(target: "aleph-data-store", "Block import notification stream was closed");
+            return;
+        }
         let mut finality_stream = self.client.finality_notification_stream();
+        if finality_stream.is_terminated() {
+            error!(target: "aleph-data-store", "Finalized block import notification stream was closed");
+            return;
+        }
         loop {
             self.prune_pending_messages();
             self.prune_triggers();
 
-            if import_stream.is_terminated() {
-                error!(target: "aleph-data-store", "Block import notification stream was closed");
-                break;
-            }
-            if finality_stream.is_terminated() {
-                error!(target: "aleph-data-store", "Finalized block import notification stream was closed");
-                break;
-            }
-
             tokio::select! {
-                message = self.messages_from_network.next() => {
-                    let message = match message {
-                        Some(message) => message,
-                        None => {
-                            error!(target: "aleph-data-store", "`messages_from_network` stream was closed");
-                            break;
-                        },
-                    };
-                    trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
-                    self.on_message_received(message);
+                message = self.messages_from_network.next() => match message {
+                    Some(message) => {
+                        trace!(target: "aleph-data-store", "Received message at Data Store {:?}", message);
+                        self.on_message_received(message);
+                    },
+                    None => {
+                        error!(target: "aleph-data-store", "`messages_from_network` stream was closed");
+                        break;
+                    },
                 }
-                Some(block) = import_stream.next() => {
-                    trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
-                    self.on_block_imported((block.header.hash(), *block.header.number()).into());
-                },
-                Some(block) = finality_stream.next() => {
-                    trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
-                    self.on_block_finalized((block.header.hash(), *block.header.number()).into());
+                block = import_stream.next() => match block {
+                    Some(block) => {
+                        trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
+                        self.on_block_imported((block.header.hash(), *block.header.number()).into());
+                    },
+                    None => {
+                        error!(target: "aleph-data-store", "`import_stream` was closed");
+                        break;
+                    },
+                }
+                block = finality_stream.next() => match block {
+                    Some(block) => {
+                        trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
+                        self.on_block_finalized((block.header.hash(), *block.header.number()).into());
+                    },
+                    None => {
+                        error!(target: "aleph-data-store", "`finality_stream` was closed");
+                        break;
+                    },
                 }
                 _ = &mut maintenance_clock => {
                     self.run_maintenance();

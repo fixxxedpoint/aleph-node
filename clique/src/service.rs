@@ -1,8 +1,10 @@
 use std::{fmt::Debug, pin::Pin, time::Duration};
 
 use futures::{
-    channel::{mpsc, oneshot},
-    stream::FusedStream,
+    channel::{
+        mpsc::{self, UnboundedSender},
+        oneshot,
+    },
     Future, StreamExt,
 };
 use log::{info, trace, warn};
@@ -127,7 +129,7 @@ where
         };
         (
             Self {
-                commands_from_interface: commands_from_interface.fuse(),
+                commands_from_interface,
                 next_to_interface,
                 manager: Manager::new(secret_key.public_key(), metrics.clone()),
                 dialer,
@@ -206,26 +208,95 @@ where
         self.manager.add_connection(public_key, data_for_network)
     }
 
+    fn handle_command(
+        &mut self,
+        command: ServiceCommand<<SK as SecretKey>::PublicKey, D, A>,
+        result_for_parent: &UnboundedSender<(
+            <SK as SecretKey>::PublicKey,
+            Option<UnboundedSender<D>>,
+        )>,
+    ) {
+        use ServiceCommand::*;
+        match command {
+            // register new peer in manager or update its address if already there
+            // spawn a worker managing outgoing connection if the peer was not known
+            AddConnection(public_key, address) => {
+                if self.manager.add_peer(public_key.clone(), address.clone()) {
+                    self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
+                };
+            }
+            // remove the peer from the manager all workers will be killed automatically, due to closed channels
+            DelConnection(public_key) => {
+                self.manager.remove_peer(&public_key);
+            }
+            // pass the data to the manager
+            SendData(data, public_key) => match self.manager.send_to(&public_key, data) {
+                Ok(_) => trace!(target: LOG_TARGET, "Sending data to {}.", public_key),
+                Err(e) => trace!(
+                    target: LOG_TARGET,
+                    "Failed sending to {}: {}",
+                    public_key,
+                    e
+                ),
+            },
+        }
+    }
+
+    fn handle_authorization_request(
+        &mut self,
+        public_key: <SK as SecretKey>::PublicKey,
+        response_channel: oneshot::Sender<bool>,
+    ) {
+        let authorization_result = self.manager.is_authorized(&public_key);
+        if response_channel.send(authorization_result).is_err() {
+            warn!(
+                target: LOG_TARGET,
+                "Other side of the Authorization Service is already closed."
+            );
+        }
+    }
+
+    fn handle_data_for_network(
+        &mut self,
+        public_key: <SK as SecretKey>::PublicKey,
+        maybe_data_for_network: Option<UnboundedSender<D>>,
+        result_for_parent: &UnboundedSender<(
+            <SK as SecretKey>::PublicKey,
+            Option<UnboundedSender<D>>,
+        )>,
+    ) {
+        use AddResult::*;
+        match maybe_data_for_network {
+            Some(data_for_network) => {
+                match self.add_connection(public_key.clone(), data_for_network) {
+                    Uninterested => warn!(
+                        target: LOG_TARGET,
+                        "Established connection with peer {} for unknown reasons.", public_key
+                    ),
+                    Added => info!(
+                        target: LOG_TARGET,
+                        "New connection with peer {}.", public_key
+                    ),
+                    Replaced => info!(
+                        target: LOG_TARGET,
+                        "Replaced connection with peer {}.", public_key
+                    ),
+                }
+            }
+            None => {
+                if let Some(address) = self.peer_address(&public_key) {
+                    self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
+                }
+            }
+        }
+    }
+
     /// Run the service until a signal from exit.
     pub async fn run(mut self, mut exit: oneshot::Receiver<()>) {
         let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
         let (result_for_parent, mut worker_results) = mpsc::unbounded();
         let (authorization_requests_sender, mut authorization_requests) = mpsc::unbounded();
-        use ServiceCommand::*;
         loop {
-            if self.commands_from_interface.is_terminated() {
-                warn!(target: LOG_TARGET, "`commands_from_interface` channel was closed.");
-                break;
-            }
-            if authorization_requests.is_terminated() {
-                warn!(target: LOG_TARGET, "`authorization_requests` channel was closed.");
-                break;
-            }
-            if worker_results.is_terminated() {
-                warn!(target: LOG_TARGET, "`worker_results` channel was closed.");
-                break;
-            }
-
             tokio::select! {
                 // got new incoming connection from the listener - spawn an incoming worker
                 maybe_stream = self.listener.accept() => match maybe_stream {
@@ -233,47 +304,37 @@ where
                     Err(e) => warn!(target: LOG_TARGET, "Listener failed to accept connection: {}", e),
                 },
                 // got a new command from the interface
-                Some(command) = self.commands_from_interface.next() => match command {
-                    // register new peer in manager or update its address if already there
-                    // spawn a worker managing outgoing connection if the peer was not known
-                    AddConnection(public_key, address) => {
-                        if self.manager.add_peer(public_key.clone(), address.clone()) {
-                            self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
-                        };
+                command = self.commands_from_interface.next() => match command {
+                    Some(command) => {
+                        self.handle_command(command, &result_for_parent);
                     },
-                    // remove the peer from the manager all workers will be killed automatically, due to closed channels
-                    DelConnection(public_key) => {
-                        self.manager.remove_peer(&public_key);
+                    None => {
+                        warn!(
+                            target: LOG_TARGET,
+                            "`commands_from_interface` channel was closed."
+                        );
+                        break;
                     },
-                    // pass the data to the manager
-                    SendData(data, public_key) => {
-                        match self.manager.send_to(&public_key, data) {
-                                Ok(_) => trace!(target: LOG_TARGET, "Sending data to {}.", public_key),
-                                Err(e) => trace!(target: LOG_TARGET, "Failed sending to {}: {}", public_key, e),
-                            }
-                    }
                 },
-                Some((public_key, response_channel)) = authorization_requests.next() => {
-                    let authorization_result = self.manager.is_authorized(&public_key);
-                    if response_channel.send(authorization_result).is_err() {
-                        warn!(target: LOG_TARGET, "Other side of the Authorization Service is already closed.");
-                    }
-                },
+                authorization_request = authorization_requests.next() => match authorization_request {
+                        Some((public_key, response_channel)) => self.handle_authorization_request(public_key, response_channel),
+                        None => {
+                            warn!(
+                                target: LOG_TARGET,
+                                "`authorization_requests` channel was closed."
+                            );
+                            break;
+                        },
+                    },
                 // received information from a spawned worker managing a connection
                 // check if we still want to be connected to the peer, and if so, spawn a new worker or actually add proper connection
-                Some((public_key, maybe_data_for_network)) = worker_results.next() => {
-                    use AddResult::*;
-                    match maybe_data_for_network {
-                        Some(data_for_network) => match self.add_connection(public_key.clone(), data_for_network) {
-                            Uninterested => warn!(target: LOG_TARGET, "Established connection with peer {} for unknown reasons.", public_key),
-                            Added => info!(target: LOG_TARGET, "New connection with peer {}.", public_key),
-                            Replaced => info!(target: LOG_TARGET, "Replaced connection with peer {}.", public_key),
+                data_for_network = worker_results.next() => match data_for_network {
+                        Some((public_key, maybe_data_for_network)) => self.handle_data_for_network(public_key, maybe_data_for_network, &result_for_parent),
+                        None => {
+                            warn!(target: LOG_TARGET, "`worker_results` channel was closed.");
+                            break;
                         },
-                        None => if let Some(address) = self.peer_address(&public_key) {
-                            self.spawn_new_outgoing(public_key, address, result_for_parent.clone());
-                        }
-                    }
-                },
+                    },
                 // periodically reporting what we are trying to do
                 _ = status_ticker.tick() => {
                     info!(target: LOG_TARGET, "Clique Network status: {}", self.manager.status_report());

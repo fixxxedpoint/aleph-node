@@ -1,6 +1,6 @@
 use std::{collections::HashSet, time::Duration};
 
-use futures::{channel::mpsc, StreamExt};
+use futures::{channel::mpsc, StreamExt, stream::FusedStream};
 use log::{debug, error, trace, warn};
 use substrate_prometheus_endpoint::Registry;
 
@@ -726,6 +726,13 @@ where
 
     /// Stay synchronized.
     pub async fn run(mut self) {
+        if self.additional_justifications_from_user.is_terminated() {
+            error!(target: LOG_TARGET, "Channel with additional justifications from user closed before we started.");
+            return;
+        }
+        if self.blocks_from_creator.is_terminated() {
+            error!(target: LOG_TARGET, "Channel with own blocks closed before we started.");
+        }
         loop {
             tokio::select! {
                 maybe_data = self.network.next() => match maybe_data {

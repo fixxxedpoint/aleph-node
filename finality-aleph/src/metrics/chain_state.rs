@@ -10,7 +10,6 @@ use sp_runtime::{
 use substrate_prometheus_endpoint::{
     register, Gauge, Histogram, HistogramOpts, PrometheusError, Registry, U64,
 };
-use tokio::select;
 
 use crate::{metrics::LOG_TARGET, BlockNumber};
 
@@ -98,7 +97,7 @@ pub async fn run_chain_state_metrics<
 
     let mut previous_best: Option<HE> = None;
     loop {
-        select! {
+        futures::select! {
             maybe_block = best_block_notifications.next() => {
                 match maybe_block {
                     Some(block) => {
@@ -130,6 +129,10 @@ pub async fn run_chain_state_metrics<
                         break;
                     }
                 }
+            },
+            complete => {
+                warn!(target: LOG_TARGET, "All streams ended");
+                break;
             },
         }
     }
