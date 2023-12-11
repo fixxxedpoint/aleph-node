@@ -123,8 +123,8 @@ impl NetworkSender for SubstrateNetworkSender {
 }
 
 pub struct NetworkEventStream<B: Block, H: ExHashT> {
-    stream: Fuse<Pin<Box<dyn Stream<Item = SubstrateEvent> + Send>>>,
-    sync_stream: Fuse<Pin<Box<dyn Stream<Item = SyncEvent> + Send>>>,
+    stream: Pin<Box<dyn Stream<Item = SubstrateEvent> + Send>>,
+    sync_stream: Pin<Box<dyn Stream<Item = SyncEvent> + Send>>,
     naming: ProtocolNaming,
     network: Arc<NetworkService<B, H>>,
 }
@@ -236,8 +236,8 @@ impl<B: Block, H: ExHashT> SubstrateNetwork<B, H> {
 
     pub fn event_stream(&self) -> NetworkEventStream<B, H> {
         NetworkEventStream {
-            stream: self.network.event_stream("aleph-network").fuse(),
-            sync_stream: self.sync_network.event_stream("aleph-syncing-network").fuse(),
+            stream: self.network.event_stream("aleph-network"),
+            sync_stream: self.sync_network.event_stream("aleph-syncing-network"),
             naming: self.naming.clone(),
             network: self.network.clone(),
         }

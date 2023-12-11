@@ -98,36 +98,32 @@ pub async fn run_chain_state_metrics<
     let mut previous_best: Option<HE> = None;
     loop {
         futures::select! {
-            maybe_block = best_block_notifications.next() => {
-                match maybe_block {
-                    Some(block) => {
-                        let number = (*block.header.number()).saturated_into::<BlockNumber>();
-                        metrics.update_best_block(number);
-                        if let Some(reorg_len) = detect_reorgs(backend, previous_best, block.header.clone()) {
-                            metrics.report_reorg(reorg_len);
-                        }
-                        previous_best = Some(block.header);
+            maybe_block = best_block_notifications.next() => match maybe_block {
+                Some(block) => {
+                    let number = (*block.header.number()).saturated_into::<BlockNumber>();
+                    metrics.update_best_block(number);
+                    if let Some(reorg_len) = detect_reorgs(backend, previous_best, block.header.clone()) {
+                        metrics.report_reorg(reorg_len);
                     }
-                    None => {
-                        warn!(target: LOG_TARGET, "Import notification stream ended unexpectedly");
-                        break;
-                    }
+                    previous_best = Some(block.header);
+                }
+                None => {
+                    warn!(target: LOG_TARGET, "Import notification stream ended unexpectedly");
+                    break;
                 }
             },
-            maybe_block = finality_notifications.next() => {
-                match maybe_block {
-                    Some(block) => {
-                        // Sometimes finalization can also cause best block update. However,
-                        // RPC best block subscription won't notify about that immediately, so
-                        // we also don't update there. Also in that case, substrate sets best_block to
-                        // the newly finalized block (see test), so the best block will be updated
-                        // after importing anything on the newly finalized branch.
-                        metrics.update_top_finalized_block(*block.header.number());
-                    }
-                    None => {
-                        warn!(target: LOG_TARGET, "Finality notification stream ended unexpectedly");
-                        break;
-                    }
+            maybe_block = finality_notifications.next() => match maybe_block {
+                Some(block) => {
+                    // Sometimes finalization can also cause best block update. However,
+                    // RPC best block subscription won't notify about that immediately, so
+                    // we also don't update there. Also in that case, substrate sets best_block to
+                    // the newly finalized block (see test), so the best block will be updated
+                    // after importing anything on the newly finalized branch.
+                    metrics.update_top_finalized_block(*block.header.number());
+                }
+                None => {
+                    warn!(target: LOG_TARGET, "Finality notification stream ended unexpectedly");
+                    break;
                 }
             },
             complete => {

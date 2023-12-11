@@ -5,7 +5,7 @@ use std::{
 };
 
 use log::warn;
-use tokio::time::{sleep, Duration, Instant, sleep_until};
+use tokio::time::{sleep_until, Duration, Instant};
 
 use crate::sync::LOG_TARGET;
 

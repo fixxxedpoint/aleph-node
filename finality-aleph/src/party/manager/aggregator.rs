@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use futures::{
     channel::{mpsc, oneshot},
-    pin_mut, StreamExt,
+    pin_mut, StreamExt, stream::FusedStream,
 };
 use log::{debug, error, trace};
 use sc_client_api::HeaderBackend;
@@ -117,17 +117,14 @@ where
     });
     pin_mut!(blocks_from_interpreter);
     let mut hash_of_last_block = None;
-    let mut no_more_blocks = false;
+    let mut no_more_blocks = blocks_from_interpreter.is_terminated();
 
     let mut status_ticker = time::interval(STATUS_REPORT_INTERVAL);
 
     loop {
         trace!(target: "aleph-party", "Aggregator Loop started a next iteration");
-        if blocks_from_interpreter.is_terminated() {
-            no_more_blocks = true;
-        }
         tokio::select! {
-            maybe_block = blocks_from_interpreter.next() if !blocks_from_interpreter.is_terminated() => match maybe_block {
+            maybe_block = blocks_from_interpreter.next(), if !no_more_blocks => match maybe_block {
                 Some(block) => {
                     hash_of_last_block = Some(block.hash());
                     process_new_block_data::<CN, LN>(

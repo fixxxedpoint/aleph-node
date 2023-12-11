@@ -269,7 +269,7 @@ where
                         error!(target: "aleph-data-store", "`import_stream` was closed");
                         break;
                     },
-                }
+                },
                 block = finality_stream.next() => match block {
                     Some(block) => {
                         trace!(target: "aleph-data-store", "Finalized block import notification at Data Store for block {:?}", block);
@@ -279,7 +279,7 @@ where
                         error!(target: "aleph-data-store", "`finality_stream` was closed");
                         break;
                     },
-                }
+                },
                 _ = &mut maintenance_clock => {
                     self.run_maintenance();
                     maintenance_clock = Delay::new(self.config.periodic_maintenance_interval).fuse();

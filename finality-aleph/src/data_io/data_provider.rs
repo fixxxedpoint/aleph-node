@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, sync::Arc, time::Duration};
 
-use futures::{channel::oneshot, future::Either};
+use futures::channel::oneshot;
 use log::{debug, warn};
 use parking_lot::Mutex;
 use sc_client_api::HeaderBackend;
@@ -280,23 +280,21 @@ where
         }
     }
 
-    pub async fn run(mut self, mut exit: oneshot::Receiver<()>) {
+    async fn main_loop(&mut self) {
+        let mut best_block_in_session: Option<BlockId> = None;
+        loop {
+            futures_timer::Delay::new(self.config.refresh_interval).await;
+            best_block_in_session = self.get_best_block_in_session(best_block_in_session).await;
+            if let Some(best_block) = &best_block_in_session {
+                self.update_data(best_block);
+            }
+        }
+    }
+
+    pub async fn run(mut self, exit: oneshot::Receiver<()>) {
         tokio::select! {
-            _ = async {
-                let mut best_block_in_session: Option<BlockId> = None;
-                loop {
-                    futures_timer::Delay::new(self.config.refresh_interval).await;
-                    best_block_in_session = self.get_best_block_in_session(best_block_in_session).await;
-                    if let Some(best_block) = &best_block_in_session {
-                        self.update_data(best_block);
-                    }
-                }
-            } => {
-                error!(target: "aleph-data-store", "Task for refreshing best chain unexpectedly terminated.");
-            },
-            _ = exit => {
-                debug!(target: "aleph-data-store", "Task for refreshing best chain received exit signal. Terminating.");
-            },
+            _ = self.main_loop() => {},
+            _ = exit => debug!(target: "aleph-data-store", "Task for refreshing best chain received exit signal. Terminating."),
         }
     }
 }

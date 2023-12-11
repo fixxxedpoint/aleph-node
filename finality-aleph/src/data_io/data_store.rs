@@ -12,9 +12,8 @@ use futures::{
         mpsc::{self, UnboundedSender},
         oneshot,
     },
-    pin_mut,
-    stream::{unfold, FusedStream},
-    FutureExt, StreamExt,
+    stream::FusedStream,
+    StreamExt,
 };
 use futures_timer::Delay;
 use log::{debug, error, info, trace, warn};

@@ -1,12 +1,6 @@
-use std::{
-    fmt::{Display, Error as FmtError, Formatter},
-    pin::Pin,
-};
+use std::fmt::{Display, Error as FmtError, Formatter};
 
-use futures::{
-    stream::{poll_fn, unfold, FusedStream, Pending},
-    FutureExt, Stream, StreamExt,
-};
+use futures::StreamExt;
 use sc_client_api::client::{FinalityNotifications, ImportNotifications};
 
 use crate::{
