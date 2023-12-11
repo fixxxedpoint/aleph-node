@@ -259,7 +259,7 @@ where
                         error!(target: "aleph-data-store", "`messages_from_network` stream was closed");
                         break;
                     },
-                }
+                },
                 block = import_stream.next() => match block {
                     Some(block) => {
                         trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);

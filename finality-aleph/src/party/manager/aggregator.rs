@@ -127,30 +127,32 @@ where
             no_more_blocks = true;
         }
         tokio::select! {
-            maybe_block = blocks_from_interpreter.next() if !blocks_from_interpreter.is_terminated() => {
-                if let Some(block) = maybe_block {
+            maybe_block = blocks_from_interpreter.next() if !blocks_from_interpreter.is_terminated() => match maybe_block {
+                Some(block) => {
                     hash_of_last_block = Some(block.hash());
                     process_new_block_data::<CN, LN>(
                         &mut aggregator,
                         block,
                         &mut metrics
                     ).await;
-                } else {
+                },
+                None => {
                     debug!(target: "aleph-party", "Blocks ended in aggregator.");
                     no_more_blocks = true;
-                }
-            }
-            multisigned_hash = aggregator.next_multisigned_hash() => {
-                if let Some((hash, multisignature)) = multisigned_hash {
+                },
+            },
+            multisigned_hash = aggregator.next_multisigned_hash() => match multisigned_hash {
+                Some((hash, multisignature)) => {
                     process_hash(hash, multisignature, &mut justifications_for_chain, &justification_translator, &client)?;
                     if Some(hash) == hash_of_last_block {
                         hash_of_last_block = None;
                     }
-                } else {
+                },
+                None => {
                     debug!(target: "aleph-party", "The stream of multisigned hashes has ended. Terminating.");
                     break;
-                }
-            }
+                },
+            },
             _ = status_ticker.tick() => {
                 aggregator.status_report();
             },

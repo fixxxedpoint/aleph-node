@@ -265,7 +265,7 @@ where
                         error!(target: "aleph-data-store", "`messages_from_network` receiver terminated");
                         break;
                     },
-                }
+                },
                 block = import_stream.next() => match block {
                     Some(block) => {
                         trace!(target: "aleph-data-store", "Block import notification at Data Store for block {:?}", block);
@@ -285,7 +285,7 @@ where
                         error!(target: "aleph-data-store", "`finality_stream` receiver terminated");
                         break;
                     },
-                }
+                },
                 _ = &mut maintenance_clock => {
                     self.run_maintenance();
                     maintenance_clock = Delay::new(self.config.periodic_maintenance_interval);
