@@ -137,73 +137,69 @@ impl<B: Block, H: ExHashT> EventStream<PeerId> for NetworkEventStream<B, H> {
         use SyncEvent::*;
         loop {
             tokio::select! {
-                Some(event) = self.stream.next() => {
-                    match event {
-                        NotificationStreamOpened {
-                            remote, protocol, ..
-                        } => match self.naming.to_protocol(protocol.as_ref()) {
-                            Some(protocol) => return Some(StreamOpened(remote, protocol)),
+                Some(event) = self.stream.next() => match event {
+                    NotificationStreamOpened {
+                        remote, protocol, ..
+                    } => match self.naming.to_protocol(protocol.as_ref()) {
+                        Some(protocol) => return Some(StreamOpened(remote, protocol)),
+                        None => continue,
+                    },
+                    NotificationStreamClosed { remote, protocol } => {
+                        match self.naming.to_protocol(protocol.as_ref()) {
+                            Some(protocol) => return Some(StreamClosed(remote, protocol)),
                             None => continue,
-                        },
-                        NotificationStreamClosed { remote, protocol } => {
-                            match self.naming.to_protocol(protocol.as_ref()) {
-                                Some(protocol) => return Some(StreamClosed(remote, protocol)),
-                                None => continue,
-                            }
                         }
-                        NotificationsReceived { messages, remote } => {
-                            return Some(Messages(
-                                remote,
-                                messages
-                                    .into_iter()
-                                    .filter_map(|(protocol, data)| {
-                                        self.naming
-                                            .to_protocol(protocol.as_ref())
-                                            .map(|protocol| (protocol, data))
-                                    })
-                                    .collect(),
-                            ));
-                        }
-                        Dht(_) => continue,
                     }
+                    NotificationsReceived { messages, remote } => {
+                        return Some(Messages(
+                            remote,
+                            messages
+                                .into_iter()
+                                .filter_map(|(protocol, data)| {
+                                    self.naming
+                                        .to_protocol(protocol.as_ref())
+                                        .map(|protocol| (protocol, data))
+                                })
+                                .collect(),
+                        ));
+                    }
+                    Dht(_) => continue,
                 },
-                Some(event) = self.sync_stream.next() => {
-                    match event {
-                        PeerConnected(remote) => {
-                            let multiaddress: Multiaddr =
-                                iter::once(MultiaddressProtocol::P2p(remote.into())).collect();
-                            trace!(target: "aleph-network", "Connected event from address {:?}", multiaddress);
-                            if let Err(e) = self.network.add_peers_to_reserved_set(
-                                self.naming.protocol_name(&Protocol::Authentication),
-                                iter::once(multiaddress.clone()).collect(),
-                            ) {
-                                error!(target: "aleph-network", "add_reserved failed for authentications: {}", e);
-                            }
-                            if let Err(e) = self.network.add_peers_to_reserved_set(
-                                self.naming.protocol_name(&Protocol::BlockSync),
-                                iter::once(multiaddress).collect(),
-                            ) {
-                                error!(target: "aleph-network", "add_reserved failed for block sync: {}", e);
-                            }
-                            continue;
+                Some(event) = self.sync_stream.next() => match event {
+                    PeerConnected(remote) => {
+                        let multiaddress: Multiaddr =
+                            iter::once(MultiaddressProtocol::P2p(remote.into())).collect();
+                        trace!(target: "aleph-network", "Connected event from address {:?}", multiaddress);
+                        if let Err(e) = self.network.add_peers_to_reserved_set(
+                            self.naming.protocol_name(&Protocol::Authentication),
+                            iter::once(multiaddress.clone()).collect(),
+                        ) {
+                            error!(target: "aleph-network", "add_reserved failed for authentications: {}", e);
                         }
-                        PeerDisconnected(remote) => {
-                            trace!(target: "aleph-network", "Disconnected event for peer {:?}", remote);
-                            let addresses: Vec<_> = iter::once(remote).collect();
-                            if let Err(e) = self.network.remove_peers_from_reserved_set(
-                                self.naming.protocol_name(&Protocol::Authentication),
-                                addresses.clone(),
-                            ) {
-                                warn!(target: "aleph-network", "Error while removing peer from Protocol::Authentication reserved set: {}", e)
-                            }
-                            if let Err(e) = self.network.remove_peers_from_reserved_set(
-                                self.naming.protocol_name(&Protocol::BlockSync),
-                                addresses,
-                            ) {
-                                warn!(target: "aleph-network", "Error while removing peer from Protocol::BlockSync reserved set: {}", e)
-                            }
-                            continue;
+                        if let Err(e) = self.network.add_peers_to_reserved_set(
+                            self.naming.protocol_name(&Protocol::BlockSync),
+                            iter::once(multiaddress).collect(),
+                        ) {
+                            error!(target: "aleph-network", "add_reserved failed for block sync: {}", e);
                         }
+                        continue;
+                    }
+                    PeerDisconnected(remote) => {
+                        trace!(target: "aleph-network", "Disconnected event for peer {:?}", remote);
+                        let addresses: Vec<_> = iter::once(remote).collect();
+                        if let Err(e) = self.network.remove_peers_from_reserved_set(
+                            self.naming.protocol_name(&Protocol::Authentication),
+                            addresses.clone(),
+                        ) {
+                            warn!(target: "aleph-network", "Error while removing peer from Protocol::Authentication reserved set: {}", e)
+                        }
+                        if let Err(e) = self.network.remove_peers_from_reserved_set(
+                            self.naming.protocol_name(&Protocol::BlockSync),
+                            addresses,
+                        ) {
+                            warn!(target: "aleph-network", "Error while removing peer from Protocol::BlockSync reserved set: {}", e)
+                        }
+                        continue;
                     }
                 },
                 else => return None,

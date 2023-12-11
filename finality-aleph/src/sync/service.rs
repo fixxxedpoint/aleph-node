@@ -732,6 +732,7 @@ where
         }
         if self.blocks_from_creator.is_terminated() {
             error!(target: LOG_TARGET, "Channel with own blocks closed before we started.");
+            return;
         }
         loop {
             tokio::select! {

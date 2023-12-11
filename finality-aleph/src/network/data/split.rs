@@ -2,7 +2,7 @@
 // you might find that it will require you to leak all private types declared here.
 use std::{marker::PhantomData, sync::Arc};
 
-use futures::channel::mpsc;
+use futures::{channel::mpsc, stream::Fuse, StreamExt};
 use log::{debug, trace};
 use parity_scale_codec::{Decode, Encode};
 use tokio::sync::Mutex;
@@ -103,7 +103,7 @@ struct SplitReceiver<
     TranslatedData: Data,
 > {
     receiver: Arc<Mutex<R>>,
-    translated_receiver: mpsc::UnboundedReceiver<TranslatedData>,
+    translated_receiver: Fuse<mpsc::UnboundedReceiver<TranslatedData>>,
     left_sender: mpsc::UnboundedSender<LeftData>,
     right_sender: mpsc::UnboundedSender<RightData>,
     name: &'static str,
@@ -204,14 +204,14 @@ fn split_receiver<LeftData: Data, RightData: Data, R: Receiver<Split<LeftData, R
     (
         LeftReceiver {
             receiver: receiver.clone(),
-            translated_receiver: left_receiver,
+            translated_receiver: left_receiver.fuse(),
             left_sender: left_sender.clone(),
             right_sender: right_sender.clone(),
             name: left_name,
         },
         RightReceiver {
             receiver,
-            translated_receiver: right_receiver,
+            translated_receiver: right_receiver.fuse(),
             left_sender,
             right_sender,
             name: right_name,
