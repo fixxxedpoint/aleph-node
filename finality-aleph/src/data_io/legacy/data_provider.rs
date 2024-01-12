@@ -83,7 +83,7 @@ where
         // The hashes in `branch` are ordered from top to bottom -- need to reverse.
         branch.reverse();
         Ok(AlephData {
-            head_proposal: UnvalidatedAlephProposal::new(branch, num_last),
+            head_proposal: Some(UnvalidatedAlephProposal::new(branch, num_last)),
         })
     } else {
         // By backtracking from the best block we reached a block conflicting with best finalized.
@@ -322,17 +322,20 @@ pub struct DataProvider {
 //    at most MAX_DATA_BRANCH_LEN.
 impl DataProvider {
     pub async fn get_data(&mut self) -> Option<AlephData> {
-        let data_to_propose = (*self.data_to_propose.lock()).take();
+        let data_to_propose = (*self.data_to_propose.lock()).take().unwrap_or_default();
 
-        if let Some(data) = &data_to_propose {
-            let number = data.head_proposal.number;
-            let hash = *data.head_proposal.branch.last().unwrap();
+        if let Some(head_proposal) = &data_to_propose.head_proposal {
+            let number = head_proposal.number;
+            let hash = *head_proposal.branch.last().unwrap();
             self.metrics
                 .report_block(BlockId::new(hash, number), Checkpoint::Proposed, None);
-            debug!(target: LOG_TARGET, "Outputting {:?} in get_data", data);
-        };
+            debug!(
+                target: LOG_TARGET,
+                "Outputting {:?} in get_data", &data_to_propose
+            );
+        }
 
-        data_to_propose
+        Some(data_to_propose)
     }
 }
 

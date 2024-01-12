@@ -720,8 +720,12 @@ where
 
     fn on_message_received(&mut self, message: Message) {
         let mut proposals = Vec::new();
-        for data in message.included_data() {
-            let unvalidated_proposal = data.head_proposal;
+        for unvalidated_proposal in message
+            .included_data()
+            .iter()
+            .map(|data| &data.head_proposal)
+            .flatten()
+        {
             match unvalidated_proposal.validate_bounds(&self.session_boundaries) {
                 Ok(proposal) => proposals.push(proposal),
                 Err(error) => {

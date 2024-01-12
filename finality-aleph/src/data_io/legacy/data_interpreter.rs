@@ -87,7 +87,10 @@ where
     }
 
     pub fn blocks_to_finalize_from_data(&mut self, new_data: AlephData) -> Vec<BlockId> {
-        let unvalidated_proposal = new_data.head_proposal;
+        let unvalidated_proposal = match new_data.head_proposal {
+            Some(head_proposal) => head_proposal,
+            None => return Vec::new(),
+        };
         let proposal = match unvalidated_proposal.validate_bounds(&self.session_boundaries) {
             Ok(proposal) => proposal,
             Err(error) => {

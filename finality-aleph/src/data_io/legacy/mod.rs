@@ -21,7 +21,15 @@ pub const MAX_DATA_BRANCH_LEN: usize = 7;
 /// The data ordered by the Aleph consensus.
 #[derive(Clone, Debug, Encode, Decode, Hash, PartialEq, Eq)]
 pub struct AlephData {
-    pub head_proposal: UnvalidatedAlephProposal,
+    pub head_proposal: Option<UnvalidatedAlephProposal>,
+}
+
+impl Default for AlephData {
+    fn default() -> Self {
+        Self {
+            head_proposal: Default::default(),
+        }
+    }
 }
 
 /// A trait allowing to check the data contained in an AlephBFT network message, for the purpose of
@@ -50,7 +58,7 @@ mod test {
 
     pub fn aleph_data_from_headers(headers: Vec<THeader>) -> AlephData {
         AlephData {
-            head_proposal: unvalidated_proposal_from_headers(headers),
+            head_proposal: Some(unvalidated_proposal_from_headers(headers)),
         }
     }
 }

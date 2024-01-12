@@ -96,7 +96,7 @@ where
         };
         let tail: Vec<_> = branch.rev().map(|id| id.hash()).collect();
         Ok(Some(AlephData {
-            head_proposal: UnvalidatedAlephProposal::new(head.into_unverified(), tail),
+            head_proposal: Some(UnvalidatedAlephProposal::new(head.into_unverified(), tail)),
         }))
     } else {
         // By backtracking from the best block we reached a block conflicting with best finalized.
@@ -330,16 +330,19 @@ pub struct DataProvider<UH: UnverifiedHeader> {
 //    at most MAX_DATA_BRANCH_LEN.
 impl<UH: UnverifiedHeader> DataProvider<UH> {
     pub async fn get_data(&mut self) -> Option<AlephData<UH>> {
-        let data_to_propose = (*self.data_to_propose.lock()).take();
+        let data_to_propose = (*self.data_to_propose.lock()).take().unwrap_or_default();
 
-        if let Some(data) = &data_to_propose {
-            let top_block = data.head_proposal.top_block();
+        if let Some(head_proposal) = &data_to_propose.head_proposal {
+            let top_block = head_proposal.top_block();
             self.metrics
                 .report_block(top_block, Checkpoint::Proposed, None);
-            debug!(target: LOG_TARGET, "Outputting {:?} in get_data", data);
-        };
+            debug!(
+                target: LOG_TARGET,
+                "Outputting {:?} in get_data", &data_to_propose
+            );
+        }
 
-        data_to_propose
+        Some(data_to_propose)
     }
 }
 

@@ -30,12 +30,20 @@ pub const MAX_DATA_BRANCH_LEN: usize = 7;
 /// The data ordered by the Aleph consensus.
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq)]
 pub struct AlephData<UH: UnverifiedHeader> {
-    pub head_proposal: UnvalidatedAlephProposal<UH>,
+    pub head_proposal: Option<UnvalidatedAlephProposal<UH>>,
 }
 
 impl<UH: UnverifiedHeader> Hash for AlephData<UH> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.head_proposal.hash(state);
+    }
+}
+
+impl<UH: UnverifiedHeader> Default for AlephData<UH> {
+    fn default() -> Self {
+        Self {
+            head_proposal: Default::default(),
+        }
     }
 }
 
