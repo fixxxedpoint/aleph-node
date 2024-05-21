@@ -23,16 +23,21 @@ const LOG_TARGET: &str = "aleph-session-updater";
 type SessionMap = HashMap<SessionId, SessionAuthorityData>;
 type SessionSubscribers = HashMap<SessionId, Vec<OneShotSender<SessionAuthorityData>>>;
 
-pub trait AuthorityProvider: Clone + Send + Sync + 'static {
+pub trait AuthorityProvider<BlockIdentity = BlockNumber>: Clone + Send + Sync + 'static {
     /// returns authority data for block
-    fn authority_data(&self, block_number: BlockNumber) -> Option<SessionAuthorityData>;
+    fn authority_data(&self, block_number: BlockIdentity) -> Option<SessionAuthorityData>;
     /// returns next session authority data where current session is for block
-    fn next_authority_data(&self, block_number: BlockNumber) -> Option<SessionAuthorityData>;
+    fn next_authority_data(&self, block_number: BlockIdentity) -> Option<SessionAuthorityData>;
     /// returns list of Aura authorities for a given block number
-    fn aura_authorities(&self, block_number: BlockNumber) -> Option<Vec<AuraId>>;
+    fn aura_authorities(&self, block_number: BlockIdentity) -> Option<Vec<AuraId>>;
     /// returns list of next session Aura authorities for a given block number
-    fn next_aura_authorities(&self, block_number: BlockNumber) -> Option<Vec<(AccountId, AuraId)>>;
+    fn next_aura_authorities(&self, block_number: BlockIdentity) -> Option<Vec<(AccountId, AuraId)>>;
 }
+
+// pub trait AuthorityProviderExt {
+//     fn authority_data(&self, identifier: BlockId) -> Option<SessionAuthorityData>;
+//     fn aura_authorities(&self, identifier: BlockId) -> Option<Vec<AuraId>>;
+// }
 
 /// Default implementation of authority provider trait.
 /// If state pruning is on and set to `n`, will no longer be able to

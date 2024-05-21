@@ -4,6 +4,7 @@ use std::{
 };
 
 use parity_scale_codec::Encode;
+use primitives::{Hash, BlockId};
 use sc_consensus_aura::{find_pre_digest, CompatibleDigestItem};
 use sp_consensus_aura::sr25519::{AuthorityPair, AuthoritySignature as AuraSignature};
 use sp_consensus_slots::Slot;
@@ -28,8 +29,10 @@ use crate::{
         BlockId, Header as HeaderT, HeaderVerifier, JustificationVerifier, VerifiedHeader,
     },
     session::{SessionBoundaryInfo, SessionId},
-    session_map::AuthorityProvider,
+    session_map::{AuthorityProvider, AuthorityProviderExt},
 };
+
+use super::verifier::SessionVerificationError;
 
 // How many slots in the future (according to the system time) can the verified header be.
 // Must be non-negative. Chosen arbitrarily by timorl.
@@ -123,6 +126,58 @@ fn download_data<AP: AuthorityProvider>(
 
 // Equivocations only happen per time slot _and_ session..
 type SessionSlot = (SessionId, Slot);
+
+#[derive(Debug)]
+pub struct SimpleVerificationError {}
+
+impl Display for SimpleVerificationError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "haha, error")
+    }
+}
+
+impl From<SessionVerificationError> for SimpleVerificationError {
+    fn from(value: SessionVerificationError) -> Self {
+        todo!()
+    }
+}
+
+pub struct SimpleVerifier<AP, H> {
+    authority_provider: AP,
+    genesis_header: H,
+}
+
+// impl<AP, FS> JustificationVerifier<Justification> for SimpleVerifier
+impl<AP> JustificationVerifier<Justification> for SimpleVerifier<AP, Header>
+where
+    AP: AuthorityProvider<BlockId>,
+{
+    type Error = SimpleVerificationError;
+
+    fn verify_justification(
+        &mut self,
+        justification: Justification,
+    ) -> Result<Justification, Self::Error> {
+        let header = &justification.header;
+        let hash = header.hash();
+
+        match &justification.inner_justification {
+            InnerJustification::AlephJustification(aleph_justification) => {
+                let block_id = BlockId::hash(header.hash());
+                let authority = self.authority_provider.authority_data(block_id).ok_or(Self::Error{})?;
+                let verifier = SessionVerifier::from(authority);
+                verifier.verify_bytes(aleph_justification, header.hash().encode())?;
+                Ok(justification)
+            }
+            InnerJustification::Genesis => match header == &self.genesis_header {
+                true => Ok(justification),
+                false => Err(Self::Error {}),
+            },
+        }
+    }
+}
+
+pub struct CompositeVerifier {}
 
 /// Cache storing SessionVerifier structs and Aura authorities for multiple sessions.
 /// Keeps up to `cache_size` verifiers of top sessions.
