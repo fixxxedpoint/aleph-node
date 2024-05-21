@@ -4,14 +4,13 @@ use std::{
 };
 
 use parity_scale_codec::Encode;
-use primitives::{Hash, BlockId};
 use sc_consensus_aura::{find_pre_digest, CompatibleDigestItem};
 use sp_consensus_aura::sr25519::{AuthorityPair, AuthoritySignature as AuraSignature};
 use sp_consensus_slots::Slot;
 use sp_core::{Pair, H256};
 use sp_runtime::{
     traits::{Header as SubstrateHeader, Zero},
-    SaturatedConversion,
+    SaturatedConversion, generic,
 };
 
 use crate::{
@@ -26,10 +25,10 @@ use crate::{
             },
             InnerJustification, Justification,
         },
-        BlockId, Header as HeaderT, HeaderVerifier, JustificationVerifier, VerifiedHeader,
+        Header as HeaderT, HeaderVerifier, JustificationVerifier, VerifiedHeader, self,
     },
     session::{SessionBoundaryInfo, SessionId},
-    session_map::{AuthorityProvider, AuthorityProviderExt},
+    session_map::AuthorityProvider, BlockId,
 };
 
 use super::verifier::SessionVerificationError;
@@ -150,7 +149,7 @@ pub struct SimpleVerifier<AP, H> {
 // impl<AP, FS> JustificationVerifier<Justification> for SimpleVerifier
 impl<AP> JustificationVerifier<Justification> for SimpleVerifier<AP, Header>
 where
-    AP: AuthorityProvider<BlockId>,
+    AP: AuthorityProvider<generic::BlockId<Block>>,
 {
     type Error = SimpleVerificationError;
 
@@ -163,15 +162,18 @@ where
 
         match &justification.inner_justification {
             InnerJustification::AlephJustification(aleph_justification) => {
-                let block_id = BlockId::hash(header.hash());
-                let authority = self.authority_provider.authority_data(block_id).ok_or(Self::Error{})?;
+                let block_id = generic::BlockId::hash(header.hash());
+                let authority = self
+                    .authority_provider
+                    .authority_data(block_id)
+                    .ok_or({todo!(); Self::Error {}})?;
                 let verifier = SessionVerifier::from(authority);
                 verifier.verify_bytes(aleph_justification, header.hash().encode())?;
                 Ok(justification)
             }
             InnerJustification::Genesis => match header == &self.genesis_header {
                 true => Ok(justification),
-                false => Err(Self::Error {}),
+                false => Err(todo!()),
             },
         }
     }

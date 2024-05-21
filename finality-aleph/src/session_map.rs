@@ -6,7 +6,10 @@ use pallet_aleph_runtime_api::AlephSessionApi;
 use sc_client_api::{Backend, FinalityNotification};
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_consensus_aura::AuraApi;
-use sp_runtime::traits::{Block, Header};
+use sp_runtime::{
+    generic::{self},
+    traits::{Block, Header},
+};
 use tokio::sync::{
     oneshot::{Receiver as OneShotReceiver, Sender as OneShotSender},
     RwLock,
@@ -31,7 +34,10 @@ pub trait AuthorityProvider<BlockIdentity = BlockNumber>: Clone + Send + Sync + 
     /// returns list of Aura authorities for a given block number
     fn aura_authorities(&self, block_number: BlockIdentity) -> Option<Vec<AuraId>>;
     /// returns list of next session Aura authorities for a given block number
-    fn next_aura_authorities(&self, block_number: BlockIdentity) -> Option<Vec<(AccountId, AuraId)>>;
+    fn next_aura_authorities(
+        &self,
+        block_number: BlockIdentity,
+    ) -> Option<Vec<(AccountId, AuraId)>>;
 }
 
 // pub trait AuthorityProviderExt {
@@ -98,6 +104,19 @@ where
             }
         }
     }
+
+    fn block_hash_from_id(&self, block_id: &generic::BlockId<B>) -> Option<BlockHash> {
+        match self.client.block_hash_from_id(block_id) {
+            Ok(r) => r,
+            Err(e) => {
+                error!(
+                    target: LOG_TARGET,
+                    "Error while retrieving hash for block #{}. {}", block_id, e
+                );
+                None
+            }
+        }
+    }
 }
 
 impl<C, B, BE, RA> AuthorityProvider for AuthorityProviderImpl<C, B, BE, RA>
@@ -110,21 +129,54 @@ where
     RA: RuntimeApi,
 {
     fn aura_authorities(&self, block_number: BlockNumber) -> Option<Vec<AuraId>> {
+        let block_id = generic::BlockId::<B>::number(block_number);
+        self.aura_authorities(block_id)
+    }
+
+    fn next_aura_authorities(&self, block_number: BlockNumber) -> Option<Vec<(AccountId, AuraId)>> {
+        let block_id = generic::BlockId::<B>::number(block_number);
+        self.next_aura_authorities(block_id)
+    }
+
+    fn authority_data(&self, block_number: BlockNumber) -> Option<SessionAuthorityData> {
+        let block_id = generic::BlockId::<B>::number(block_number);
+        self.authority_data(block_id)
+    }
+
+    fn next_authority_data(&self, block_number: BlockNumber) -> Option<SessionAuthorityData> {
+        let block_id = generic::BlockId::<B>::number(block_number);
+        self.next_authority_data(block_id)
+    }
+}
+
+impl<C, B, BE, RA> AuthorityProvider<generic::BlockId<B>> for AuthorityProviderImpl<C, B, BE, RA>
+where
+    C: ClientForAleph<B, BE> + Send + Sync + 'static,
+    C::Api: AlephSessionApi<B> + AuraApi<B, AuraId>,
+    B: Block<Hash = BlockHash>,
+    B::Header: Header<Number = BlockNumber>,
+    BE: Backend<B> + 'static,
+    RA: RuntimeApi,
+{
+    fn aura_authorities(&self, block_id: generic::BlockId<B>) -> Option<Vec<AuraId>> {
         AuraApi::authorities(
             self.client.runtime_api().deref(),
-            self.block_hash(block_number)?,
+            self.block_hash_from_id(&block_id)?,
         )
         .ok()
     }
 
-    fn next_aura_authorities(&self, block_number: BlockNumber) -> Option<Vec<(AccountId, AuraId)>> {
+    fn next_aura_authorities(
+        &self,
+        block_id: generic::BlockId<B>,
+    ) -> Option<Vec<(AccountId, AuraId)>> {
         self.api
-            .next_aura_authorities(self.block_hash(block_number)?)
+            .next_aura_authorities(self.block_hash_from_id(&block_id)?)
             .ok()
     }
 
-    fn authority_data(&self, block_number: BlockNumber) -> Option<SessionAuthorityData> {
-        let block_hash = self.block_hash(block_number)?;
+    fn authority_data(&self, block_id: generic::BlockId<B>) -> Option<SessionAuthorityData> {
+        let block_hash = self.block_hash_from_id(&block_id)?;
         match self.client.runtime_api().authority_data(block_hash) {
             Ok(data) => Some(data),
             Err(_) => AlephSessionApi::authorities(self.client.runtime_api().deref(), block_hash)
@@ -133,8 +185,8 @@ where
         }
     }
 
-    fn next_authority_data(&self, block_number: BlockNumber) -> Option<SessionAuthorityData> {
-        let block_hash = self.block_hash(block_number)?;
+    fn next_authority_data(&self, block_id: generic::BlockId<B>) -> Option<SessionAuthorityData> {
+        let block_hash = self.block_hash_from_id(&block_id)?;
         match self
             .client
             .runtime_api()
