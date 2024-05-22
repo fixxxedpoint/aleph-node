@@ -13,7 +13,7 @@ use sc_consensus_aura::{
 };
 use sp_consensus_aura::sr25519::{AuthorityPair, AuthoritySignature as AuraSignature};
 use sp_consensus_slots::Slot;
-use sp_core::{Pair, H256};
+use sp_core::{H256};
 use sp_runtime::{
     generic,
     traits::{Header as SubstrateHeader, Zero},
@@ -265,11 +265,14 @@ where
     }
 
     fn own_block(&self, header: &Header) -> bool {
-        todo!()
+        false
     }
 }
 
-pub struct CompositeVerifier {}
+// pub struct CompositeVerifier<A, B> {
+//     verifier_first: A,
+//     verifier_second: B
+// }
 
 /// Cache storing SessionVerifier structs and Aura authorities for multiple sessions.
 /// Keeps up to `cache_size` verifiers of top sessions.
@@ -469,7 +472,7 @@ where
                 session_slot.1,
             )));
         }
-        if !AuthorityPair::verify(sig, pre_hash.as_ref(), author) {
+        if !<AuthorityPair as sp_core::Pair>::verify(sig, pre_hash.as_ref(), author) {
             return Err(VerificationError::HeaderVerification(IncorrectAuthority));
         }
         Ok(())
@@ -585,6 +588,62 @@ where
 
     fn own_block(&self, header: &Header) -> bool {
         self.own_blocks_cache.contains(&header.id())
+    }
+}
+
+#[derive(Debug)]
+pub enum Either<A, B> {
+    Left(A),
+    Right(B),
+}
+
+impl<A: Display, B: Display> Display for Either<A, B> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Either::Left(left) => write!(f, "Left: {left}"),
+            Either::Right(right) => write!(f, "Right: {right}"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Pair<A, B>(A, B);
+
+impl<A: Display, B: Display> Display for Pair<A, B> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "First: {} ; Second: {}", self.0, self.1)
+    }
+}
+
+// impl<A, B> Display for (A, B)
+//     where A: Display,
+//           B: Display,
+// {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "First error: {}", self.0)?;
+//         write!(f, "; Second error: {}", self.1)
+//     }
+// }
+
+impl<A, B> JustificationVerifier<Justification> for (A, B)
+where A: JustificationVerifier<Justification>,
+      B: JustificationVerifier<Justification>,
+{
+    // type Error = (A::Error, B::Error);
+    type Error = Pair<A::Error, B::Error>;
+
+    fn verify_justification(&mut self, justification: <Justification as block::Justification>::Unverified) -> Result<Justification, Self::Error> {
+        let (left, right) = self;
+        let left_result = left.verify_justification(justification.clone());
+        let err_left = match left_result {
+            Ok(result) => return Ok(result),
+            Err(err) => err,
+        };
+        let right_result = right.verify_justification(justification);
+        match right_result {
+            Ok(result) => Ok(result),
+            Err(err_right) => Err(Pair(err_left, err_right)),
+        }
     }
 }
 
