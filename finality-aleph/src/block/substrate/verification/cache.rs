@@ -3,14 +3,21 @@ use std::{
     fmt::{Debug, Display, Error as FmtError, Formatter},
 };
 
+use log::warn;
 use parity_scale_codec::Encode;
-use sc_consensus_aura::{find_pre_digest, CompatibleDigestItem};
+use sc_client_api::AuxStore;
+use sc_consensus_aura::{
+    find_pre_digest,
+    standalone::{check_equivocation, check_header_slot_and_seal, slot_author},
+    CompatibleDigestItem,
+};
 use sp_consensus_aura::sr25519::{AuthorityPair, AuthoritySignature as AuraSignature};
 use sp_consensus_slots::Slot;
 use sp_core::{Pair, H256};
 use sp_runtime::{
+    generic,
     traits::{Header as SubstrateHeader, Zero},
-    SaturatedConversion, generic,
+    SaturatedConversion,
 };
 
 use crate::{
@@ -18,6 +25,7 @@ use crate::{
         AccountId, AuraId, AuthoritySignature, Block, BlockNumber, Header, MILLISECS_PER_BLOCK,
     },
     block::{
+        self,
         substrate::{
             verification::{
                 verifier::SessionVerifier, EquivocationProof, FinalizationInfo,
@@ -25,10 +33,11 @@ use crate::{
             },
             InnerJustification, Justification,
         },
-        Header as HeaderT, HeaderVerifier, JustificationVerifier, VerifiedHeader, self,
+        Header as HeaderT, HeaderVerifier, JustificationVerifier, VerifiedHeader,
     },
     session::{SessionBoundaryInfo, SessionId},
-    session_map::AuthorityProvider, BlockId,
+    session_map::AuthorityProvider,
+    BlockId,
 };
 
 use super::verifier::SessionVerificationError;
@@ -36,6 +45,8 @@ use super::verifier::SessionVerificationError;
 // How many slots in the future (according to the system time) can the verified header be.
 // Must be non-negative. Chosen arbitrarily by timorl.
 const HEADER_VERIFICATION_SLOT_OFFSET: u64 = 10;
+
+const LOG_TARGET: &str = "aleph-verifier";
 
 /// Ways in which a justification can fail verification.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -141,13 +152,36 @@ impl From<SessionVerificationError> for SimpleVerificationError {
     }
 }
 
-pub struct SimpleVerifier<AP, H> {
+#[derive(Clone)]
+pub struct SimpleVerifier<AP, H, C> {
+    client: C,
     authority_provider: AP,
     genesis_header: H,
 }
 
+impl<AP, C: AuxStore> SimpleVerifier<AP, Header, C> {
+    fn check_equivocation(
+        &mut self,
+        slot_now: Slot,
+        slot: Slot,
+        header: &Header,
+        expected_author: &AuraId,
+    ) -> Option<EquivocationProof>
+    where
+        AP: AuthorityProvider<generic::BlockId<Block>>,
+    {
+        match check_equivocation(&self.client, slot_now, slot, header, expected_author) {
+            Ok(maybe_proof) => Some(maybe_proof?.into()),
+            Err(e) => {
+                warn!(target: LOG_TARGET, "problem with testing for equivocation proof for a block: {e}");
+                None
+            }
+        }
+    }
+}
+
 // impl<AP, FS> JustificationVerifier<Justification> for SimpleVerifier
-impl<AP> JustificationVerifier<Justification> for SimpleVerifier<AP, Header>
+impl<AP, C> JustificationVerifier<Justification> for SimpleVerifier<AP, Header, C>
 where
     AP: AuthorityProvider<generic::BlockId<Block>>,
 {
@@ -161,21 +195,77 @@ where
         let hash = header.hash();
 
         match &justification.inner_justification {
-            InnerJustification::AlephJustification(aleph_justification) => {
-                let block_id = generic::BlockId::hash(header.hash());
-                let authority = self
-                    .authority_provider
-                    .authority_data(block_id)
-                    .ok_or({todo!(); Self::Error {}})?;
-                let verifier = SessionVerifier::from(authority);
-                verifier.verify_bytes(aleph_justification, header.hash().encode())?;
-                Ok(justification)
-            }
             InnerJustification::Genesis => match header == &self.genesis_header {
                 true => Ok(justification),
                 false => Err(todo!()),
             },
+            InnerJustification::AlephJustification(aleph_justification) => {
+                let block_id = generic::BlockId::hash(hash);
+                let authority_data = self.authority_provider.authority_data(block_id).ok_or({
+                    todo!();
+                    Self::Error {}
+                })?;
+                let verifier = SessionVerifier::from(authority_data);
+                verifier.verify_bytes(aleph_justification, header.hash().encode())?;
+                Ok(justification)
+            }
         }
+    }
+}
+
+impl<AP, C> HeaderVerifier<Header> for SimpleVerifier<AP, Header, C>
+where
+    AP: AuthorityProvider<generic::BlockId<Block>>,
+    C: AuxStore + Clone + Send + Sync + 'static,
+{
+    type Error = VerificationError;
+    type EquivocationProof = EquivocationProof;
+
+    fn verify_header(
+        &mut self,
+        header: <Header as HeaderT>::Unverified,
+        _just_created: bool,
+    ) -> Result<VerifiedHeader<Header, Self::EquivocationProof>, Self::Error> {
+        // compare genesis header directly to the one we know
+        if header.number().is_zero() {
+            return match header == self.genesis_header {
+                true => Ok(VerifiedHeader {
+                    header,
+                    maybe_equivocation_proof: None,
+                }),
+                false => Err(VerificationError::HeaderVerification(
+                    HeaderVerificationError::IncorrectGenesis,
+                )),
+            };
+        }
+
+        // let slot =
+        //     find_pre_digest::<Block, AuthoritySignature>(&header).map_err(HeaderVerificationError::PreDigestLookupError)?;
+        let slot_now = Slot::from_timestamp(
+            sp_timestamp::Timestamp::current(),
+            sp_consensus_slots::SlotDuration::from_millis(MILLISECS_PER_BLOCK),
+        );
+        let authorities = self
+            .authority_provider
+            .aura_authorities(generic::BlockId::hash(*header.parent_hash()))
+            .ok_or(HeaderVerificationError::MissingAuthorityData)?;
+        let (header, slot, _) = check_header_slot_and_seal::<Block, AuthorityPair>(slot_now, header, &authorities)
+            .map_err(|_| HeaderVerificationError::IncorrectSeal)?;
+
+        let expected_author =
+            slot_author::<AuthorityPair>(slot, &authorities).ok_or(HeaderVerificationError::IncorrectAuthority)?;
+
+        let maybe_equivocation_proof =
+            self.check_equivocation(slot_now, slot, &header, &expected_author);
+
+        Ok(VerifiedHeader {
+            header,
+            maybe_equivocation_proof,
+        })
+    }
+
+    fn own_block(&self, header: &Header) -> bool {
+        todo!()
     }
 }
 

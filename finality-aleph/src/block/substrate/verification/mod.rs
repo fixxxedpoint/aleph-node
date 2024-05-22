@@ -88,6 +88,18 @@ impl EquivocationProofT for EquivocationProof {
     }
 }
 
+impl From<sp_consensus_slots::EquivocationProof<Header, AuraId>> for EquivocationProof {
+    fn from(value: sp_consensus_slots::EquivocationProof<Header, AuraId>) -> Self {
+        Self {
+            header_a: value.first_header,
+            header_b: value.second_header,
+            author: value.offender,
+            account_id: None,
+            are_we_equivocating: false,
+        }
+    }
+}
+
 impl Display for EquivocationProof {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), FmtError> {
         match &self.account_id {
@@ -126,6 +138,12 @@ impl From<SessionVerificationError> for VerificationError {
 impl From<CacheError> for VerificationError {
     fn from(e: CacheError) -> Self {
         VerificationError::Cache(e)
+    }
+}
+
+impl From<HeaderVerificationError> for VerificationError {
+    fn from(value: HeaderVerificationError) -> Self {
+        Self::HeaderVerification(value)
     }
 }
 
