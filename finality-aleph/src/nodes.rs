@@ -14,7 +14,9 @@ use sp_consensus_aura::AuraApi;
 use crate::{
     aleph_primitives::{AuraId, Block},
     block::{
-        substrate::{JustificationTranslator, SubstrateFinalizationInfo, VerifierCache, SimpleVerifier},
+        substrate::{
+            JustificationTranslator, SimpleVerifier, SubstrateFinalizationInfo, VerifierCache,
+        },
         BlockchainEvents, ChainStatus, FinalizationStatus, Justification,
     },
     crypto::AuthorityPen,
@@ -175,9 +177,14 @@ where
         SubstrateFinalizationInfo::new(client.clone()),
         AuthorityProviderImpl::new(client.clone(), RuntimeApiImpl::new(client.clone())),
         VERIFIER_CACHE_SIZE,
+        genesis_header.clone(),
+    );
+    let simple_verifier = SimpleVerifier::new(
+        client.clone(),
+        AuthorityProviderImpl::new(client.clone(), RuntimeApiImpl::new(client.clone())),
         genesis_header,
     );
-    let simple_verifier = SimpleVerifier::
+    let verifier = (verifier, simple_verifier);
     let finalizer = AlephFinalizer::new(client.clone(), metrics.clone());
     import_queue_handle.attach_metrics(metrics.clone());
     let justifications_for_sync = justification_channel_provider.get_sender();

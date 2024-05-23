@@ -19,7 +19,7 @@ pub use justification::{
     InnerJustification, Justification, JustificationTranslator, TranslateError,
 };
 pub use status_notifier::SubstrateChainStatusNotifier;
-pub use verification::{SessionVerifier, SubstrateFinalizationInfo, VerifierCache, SimpleVerifier};
+pub use verification::{SessionVerifier, SimpleVerifier, SubstrateFinalizationInfo, VerifierCache};
 
 use crate::block::{BestBlockSelector, BlockchainEvents};
 

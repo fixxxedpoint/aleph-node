@@ -41,8 +41,14 @@ pub trait AuthorityProvider<BlockIdentity = BlockNumber>: Clone + Send + Sync + 
     ) -> Option<Vec<(AccountId, AuraId)>>;
 }
 
-pub trait EquivocationProver<H, P> {
-    fn check_equivocation(slot_now: Slot, slot: Slot, header: &H, signer: &P);
+pub trait EquivocationProver<H, P, Proof> {
+    fn check_equivocation(
+        &mut self,
+        slot_now: Slot,
+        slot: Slot,
+        header: &H,
+        signer: &P,
+    ) -> Option<Proof>;
 }
 
 // pub trait AuthorityProviderExt {

@@ -1,6 +1,7 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::{Debug, Display, Error as FmtError, Formatter},
+    sync::Arc,
 };
 
 use log::warn;
@@ -13,7 +14,7 @@ use sc_consensus_aura::{
 };
 use sp_consensus_aura::sr25519::{AuthorityPair, AuthoritySignature as AuraSignature};
 use sp_consensus_slots::Slot;
-use sp_core::{H256};
+use sp_core::H256;
 use sp_runtime::{
     generic,
     traits::{Header as SubstrateHeader, Zero},
@@ -36,7 +37,7 @@ use crate::{
         Header as HeaderT, HeaderVerifier, JustificationVerifier, VerifiedHeader,
     },
     session::{SessionBoundaryInfo, SessionId},
-    session_map::AuthorityProvider,
+    session_map::{AuthorityProvider, EquivocationProver},
     BlockId,
 };
 
@@ -152,11 +153,47 @@ impl From<SessionVerificationError> for SimpleVerificationError {
     }
 }
 
-#[derive(Clone)]
+// pub struct SimpleEquivocationProver<C> {
+//     client: C,
+// }
+
+// impl<C: AuxStore> EquivocationProver<Header, AuthorityPair, EquivocationProof> for SimpleEquivocationProver<C> {
+//     fn check_equivocation(&mut self, slot_now: Slot, slot: Slot, header: &Header, signer: &AuthorityPair) -> Option<EquivocationProof> {
+//         match check_equivocation(&self.client, slot_now, slot, header, signer) {
+//             Ok(maybe_proof) => Some(maybe_proof?.into()),
+//             Err(e) => {
+//                 warn!(target: LOG_TARGET, "problem with testing for equivocation proof for a block: {e}");
+//                 None
+//             }
+//         }
+//     }
+// }
+
+// #[derive(Clone)]
 pub struct SimpleVerifier<AP, H, C> {
-    client: C,
+    client: Arc<C>,
     authority_provider: AP,
     genesis_header: H,
+}
+
+impl<AP: Clone, H: Clone, C> Clone for SimpleVerifier<AP, H, C> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            authority_provider: self.authority_provider.clone(),
+            genesis_header: self.genesis_header.clone(),
+        }
+    }
+}
+
+impl<AP, H, C> SimpleVerifier<AP, H, C> {
+    pub fn new(client: Arc<C>, authority_provider: AP, genesis_header: H) -> Self {
+        Self {
+            client,
+            authority_provider,
+            genesis_header,
+        }
+    }
 }
 
 impl<AP, C: AuxStore> SimpleVerifier<AP, Header, C> {
@@ -170,7 +207,13 @@ impl<AP, C: AuxStore> SimpleVerifier<AP, Header, C> {
     where
         AP: AuthorityProvider<generic::BlockId<Block>>,
     {
-        match check_equivocation(&self.client, slot_now, slot, header, expected_author) {
+        match check_equivocation(
+            self.client.as_ref(),
+            slot_now,
+            slot,
+            header,
+            expected_author,
+        ) {
             Ok(maybe_proof) => Some(maybe_proof?.into()),
             Err(e) => {
                 warn!(target: LOG_TARGET, "problem with testing for equivocation proof for a block: {e}");
@@ -216,7 +259,7 @@ where
 impl<AP, C> HeaderVerifier<Header> for SimpleVerifier<AP, Header, C>
 where
     AP: AuthorityProvider<generic::BlockId<Block>>,
-    C: AuxStore + Clone + Send + Sync + 'static,
+    C: AuxStore + Send + Sync + 'static,
 {
     type Error = VerificationError;
     type EquivocationProof = EquivocationProof;
@@ -249,11 +292,12 @@ where
             .authority_provider
             .aura_authorities(generic::BlockId::hash(*header.parent_hash()))
             .ok_or(HeaderVerificationError::MissingAuthorityData)?;
-        let (header, slot, _) = check_header_slot_and_seal::<Block, AuthorityPair>(slot_now, header, &authorities)
-            .map_err(|_| HeaderVerificationError::IncorrectSeal)?;
+        let (header, slot, _) =
+            check_header_slot_and_seal::<Block, AuthorityPair>(slot_now, header, &authorities)
+                .map_err(|_| HeaderVerificationError::IncorrectSeal)?;
 
-        let expected_author =
-            slot_author::<AuthorityPair>(slot, &authorities).ok_or(HeaderVerificationError::IncorrectAuthority)?;
+        let expected_author = slot_author::<AuthorityPair>(slot, &authorities)
+            .ok_or(HeaderVerificationError::IncorrectAuthority)?;
 
         let maybe_equivocation_proof =
             self.check_equivocation(slot_now, slot, &header, &expected_author);
@@ -606,7 +650,11 @@ impl<A: Display, B: Display> Display for Either<A, B> {
     }
 }
 
-impl<A, B> block::EquivocationProof for Either<A, B> where A: block::EquivocationProof, B: block::EquivocationProof {
+impl<A, B> block::EquivocationProof for Either<A, B>
+where
+    A: block::EquivocationProof,
+    B: block::EquivocationProof,
+{
     fn are_we_equivocating(&self) -> bool {
         match self {
             Either::Left(left) => left.are_we_equivocating(),
@@ -635,13 +683,17 @@ impl<A: Display, B: Display> Display for Pair<A, B> {
 // }
 
 impl<A, B> JustificationVerifier<Justification> for (A, B)
-where A: JustificationVerifier<Justification>,
-      B: JustificationVerifier<Justification>,
+where
+    A: JustificationVerifier<Justification>,
+    B: JustificationVerifier<Justification>,
 {
     // type Error = (A::Error, B::Error);
     type Error = Pair<A::Error, B::Error>;
 
-    fn verify_justification(&mut self, justification: <Justification as block::Justification>::Unverified) -> Result<Justification, Self::Error> {
+    fn verify_justification(
+        &mut self,
+        justification: <Justification as block::Justification>::Unverified,
+    ) -> Result<Justification, Self::Error> {
         let (left, right) = self;
         let left_result = left.verify_justification(justification.clone());
         let err_left = match left_result {
@@ -657,8 +709,9 @@ where A: JustificationVerifier<Justification>,
 }
 
 impl<A, B> HeaderVerifier<Header> for (A, B)
-where A: HeaderVerifier<Header>,
-      B: HeaderVerifier<Header>,
+where
+    A: HeaderVerifier<Header>,
+    B: HeaderVerifier<Header>,
 {
     type EquivocationProof = Either<A::EquivocationProof, B::EquivocationProof>;
     type Error = Pair<A::Error, B::Error>;
@@ -669,16 +722,30 @@ where A: HeaderVerifier<Header>,
         just_created: bool,
     ) -> Result<VerifiedHeader<Header, Self::EquivocationProof>, Self::Error> {
         let (left, right) = self;
-        let left_result = left.verify_header(header, just_created);
+        let left_result = left.verify_header(header.clone(), just_created);
         let err_left = match left_result {
-            Ok(VerifiedHeader { header, maybe_equivocation_proof }) => return Ok(VerifiedHeader { header, maybe_equivocation_proof: maybe_equivocation_proof.map(|proof| Either::Left(proof)) }),
+            Ok(VerifiedHeader {
+                header,
+                maybe_equivocation_proof,
+            }) => {
+                return Ok(VerifiedHeader {
+                    header,
+                    maybe_equivocation_proof: maybe_equivocation_proof
+                        .map(|proof| Either::Left(proof)),
+                })
+            }
             Err(err) => err,
         };
         let right_result = right.verify_header(header, just_created);
         match right_result {
-            Ok(VerifiedHeader { header, maybe_equivocation_proof }) => {
-                Ok(VerifiedHeader { header, maybe_equivocation_proof: maybe_equivocation_proof.map(|proof| Either::Right(proof)) })
-            },
+            Ok(VerifiedHeader {
+                header,
+                maybe_equivocation_proof,
+            }) => Ok(VerifiedHeader {
+                header,
+                maybe_equivocation_proof: maybe_equivocation_proof
+                    .map(|proof| Either::Right(proof)),
+            }),
             Err(err_right) => Err(Pair(err_left, err_right)),
         }
     }
