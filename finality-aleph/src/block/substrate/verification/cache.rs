@@ -245,7 +245,7 @@ where
             InnerJustification::AlephJustification(aleph_justification) => {
                 let block_id = generic::BlockId::hash(hash);
                 let authority_data = self.authority_provider.authority_data(block_id).ok_or({
-                    todo!();
+                    // todo!();
                     Self::Error {}
                 })?;
                 let verifier = SessionVerifier::from(authority_data);

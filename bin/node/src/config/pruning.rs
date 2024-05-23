@@ -98,10 +98,14 @@ impl PruningConfigValidator {
             .database
             .get_or_insert(DEFAULT_DATABASE_FOR_PRUNING)
         {
-            Database::ParityDb => {}
-            db @ (Database::RocksDb | Database::Auto | Database::ParityDbDeprecated) => {
+            // Database::ParityDb => {}
+            db @ (Database::ParityDb
+            | Database::RocksDb
+            | Database::Auto
+            | Database::ParityDbDeprecated) => {
                 self.invalid_database_backend = Err(());
-                *db = DEFAULT_DATABASE_FOR_PRUNING;
+                // *db = DEFAULT_DATABASE_FOR_PRUNING;
+                *db = Database::RocksDb;
             }
         }
     }
@@ -126,9 +130,11 @@ impl PruningConfigValidator {
         {
             DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
             DatabasePruningMode::Custom(max_blocks) => {
+                *max_blocks = 900;
                 if *max_blocks < MINIMAL_STATE_PRUNING {
                     self.invalid_state_pruning_setting = Err(*max_blocks);
-                    *max_blocks = MINIMAL_STATE_PRUNING;
+                    // *max_blocks = MINIMAL_STATE_PRUNING;
+                    *max_blocks = 900;
                 }
             }
         }
