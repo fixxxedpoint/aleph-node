@@ -606,6 +606,15 @@ impl<A: Display, B: Display> Display for Either<A, B> {
     }
 }
 
+impl<A, B> block::EquivocationProof for Either<A, B> where A: block::EquivocationProof, B: block::EquivocationProof {
+    fn are_we_equivocating(&self) -> bool {
+        match self {
+            Either::Left(left) => left.are_we_equivocating(),
+            Either::Right(right) => right.are_we_equivocating(),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Pair<A, B>(A, B);
 
@@ -644,6 +653,38 @@ where A: JustificationVerifier<Justification>,
             Ok(result) => Ok(result),
             Err(err_right) => Err(Pair(err_left, err_right)),
         }
+    }
+}
+
+impl<A, B> HeaderVerifier<Header> for (A, B)
+where A: HeaderVerifier<Header>,
+      B: HeaderVerifier<Header>,
+{
+    type EquivocationProof = Either<A::EquivocationProof, B::EquivocationProof>;
+    type Error = Pair<A::Error, B::Error>;
+
+    fn verify_header(
+        &mut self,
+        header: <Header as HeaderT>::Unverified,
+        just_created: bool,
+    ) -> Result<VerifiedHeader<Header, Self::EquivocationProof>, Self::Error> {
+        let (left, right) = self;
+        let left_result = left.verify_header(header, just_created);
+        let err_left = match left_result {
+            Ok(VerifiedHeader { header, maybe_equivocation_proof }) => return Ok(VerifiedHeader { header, maybe_equivocation_proof: maybe_equivocation_proof.map(|proof| Either::Left(proof)) }),
+            Err(err) => err,
+        };
+        let right_result = right.verify_header(header, just_created);
+        match right_result {
+            Ok(VerifiedHeader { header, maybe_equivocation_proof }) => {
+                Ok(VerifiedHeader { header, maybe_equivocation_proof: maybe_equivocation_proof.map(|proof| Either::Right(proof)) })
+            },
+            Err(err_right) => Err(Pair(err_left, err_right)),
+        }
+    }
+
+    fn own_block(&self, header: &Header) -> bool {
+        self.0.own_block(header) || self.1.own_block(header)
     }
 }
 
