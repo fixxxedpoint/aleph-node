@@ -4,10 +4,7 @@ use std::{
 };
 
 use parity_scale_codec::Encode;
-use sc_consensus_aura::{
-    find_pre_digest,
-    CompatibleDigestItem,
-};
+use sc_consensus_aura::{find_pre_digest, CompatibleDigestItem};
 use sp_consensus_aura::sr25519::{AuthorityPair, AuthoritySignature as AuraSignature};
 use sp_consensus_slots::Slot;
 use sp_core::H256;

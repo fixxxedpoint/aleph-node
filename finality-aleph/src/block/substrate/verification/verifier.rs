@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use log::{debug, info, warn};
+use log::debug;
 use parity_scale_codec::Encode;
 use sc_client_api::AuxStore;
 use sc_consensus_aura::standalone::{check_equivocation, check_header_slot_and_seal, slot_author};
@@ -174,7 +174,7 @@ impl<AP, C: AuxStore> Verifier<AP, Header, C> {
         ) {
             Ok(maybe_proof) => Some(maybe_proof?.into()),
             Err(e) => {
-                warn!(target: LOG_TARGET, "Error while testing for equivocation for a block: {e}");
+                debug!(target: LOG_TARGET, "Error while testing for equivocation for a block: {e}");
                 None
             }
         }
@@ -256,9 +256,8 @@ where
             .ok_or(SubstrateHeaderVerificationError::IncorrectAuthority)?;
 
         let maybe_equivocation_proof =
-            self.check_equivocation(slot_now, slot, &header, &expected_author);
+            self.check_equivocation(slot_now, slot, &header, expected_author);
 
-        info!(target: "aleph-simple-verifier", "Verifier accepted a header.");
         Ok(VerifiedHeader {
             header,
             maybe_equivocation_proof,

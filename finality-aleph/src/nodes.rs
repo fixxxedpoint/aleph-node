@@ -14,9 +14,7 @@ use sp_consensus_aura::AuraApi;
 use crate::{
     aleph_primitives::{AuraId, Block},
     block::{
-        substrate::{
-            JustificationTranslator, Verifier, SubstrateFinalizationInfo, VerifierCache,
-        },
+        substrate::{JustificationTranslator, SubstrateFinalizationInfo, Verifier, VerifierCache},
         BlockchainEvents, ChainStatus, FinalizationStatus, Justification,
     },
     crypto::AuthorityPen,
