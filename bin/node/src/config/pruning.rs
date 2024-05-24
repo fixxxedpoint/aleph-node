@@ -100,35 +100,42 @@ impl PruningConfigValidator {
     }
 
     fn process_state_pruning(&mut self, cli: &mut Cli) {
+        let might_be_rocksdb = match cli
+            .run
+            .import_params
+            .database_params
+            .database
+            .unwrap_or(Database::RocksDb)
+        {
+            Database::RocksDb | Database::Auto => true,
+            _ => false,
+        };
+
+        let minimal_state_pruning = if might_be_rocksdb {
+            ROCKSDB_PRUNING_THRESHOLD
+        } else {
+            MINIMAL_STATE_PRUNING
+        };
         match cli
             .run
             .import_params
             .pruning_params
             .state_pruning
-            .get_or_insert(DatabasePruningMode::Custom(MINIMAL_STATE_PRUNING))
+            .get_or_insert(DatabasePruningMode::Custom(minimal_state_pruning))
         {
             DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
             DatabasePruningMode::Custom(max_blocks) => {
-                match cli
-                    .run
-                    .import_params
-                    .database_params
-                    .database
-                    .get_or_insert(Database::RocksDb)
-                {
-                    Database::RocksDb | Database::Auto => {
-                        if *max_blocks > ROCKSDB_PRUNING_THRESHOLD
-                            || *max_blocks < DEFAULT_SESSION_PERIOD
-                        {
-                            self.invalid_state_pruning_setting = Err(*max_blocks);
-                            *max_blocks = ROCKSDB_PRUNING_THRESHOLD;
-                        }
+                if might_be_rocksdb {
+                    if *max_blocks > ROCKSDB_PRUNING_THRESHOLD
+                        || *max_blocks < DEFAULT_SESSION_PERIOD
+                    {
+                        self.invalid_state_pruning_setting = Err(*max_blocks);
+                        *max_blocks = ROCKSDB_PRUNING_THRESHOLD;
                     }
-                    _ => {
-                        if *max_blocks < MINIMAL_STATE_PRUNING {
-                            self.invalid_state_pruning_setting = Err(*max_blocks);
-                            *max_blocks = MINIMAL_STATE_PRUNING;
-                        }
+                } else {
+                    if *max_blocks < MINIMAL_STATE_PRUNING {
+                        self.invalid_state_pruning_setting = Err(*max_blocks);
+                        *max_blocks = MINIMAL_STATE_PRUNING;
                     }
                 }
             }
