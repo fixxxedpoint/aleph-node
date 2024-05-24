@@ -103,19 +103,6 @@ where
         }
     }
 
-    fn block_hash(&self, block: BlockNumber) -> Option<BlockHash> {
-        match self.client.block_hash(block) {
-            Ok(r) => r,
-            Err(e) => {
-                error!(
-                    target: LOG_TARGET,
-                    "Error while retrieving hash for block #{}. {}", block, e
-                );
-                None
-            }
-        }
-    }
-
     fn block_hash_from_id(&self, block_id: &generic::BlockId<B>) -> Option<BlockHash> {
         match self.client.block_hash_from_id(block_id) {
             Ok(r) => r,

@@ -1,22 +1,17 @@
 use std::{
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::{Debug, Display, Error as FmtError, Formatter},
-    sync::Arc,
 };
 
-use log::{info, warn};
 use parity_scale_codec::Encode;
-use sc_client_api::AuxStore;
 use sc_consensus_aura::{
     find_pre_digest,
-    standalone::{check_equivocation, check_header_slot_and_seal, slot_author},
     CompatibleDigestItem,
 };
 use sp_consensus_aura::sr25519::{AuthorityPair, AuthoritySignature as AuraSignature};
 use sp_consensus_slots::Slot;
 use sp_core::H256;
 use sp_runtime::{
-    generic,
     traits::{Header as SubstrateHeader, Zero},
     SaturatedConversion,
 };
@@ -26,7 +21,6 @@ use crate::{
         AccountId, AuraId, AuthoritySignature, Block, BlockNumber, Header, MILLISECS_PER_BLOCK,
     },
     block::{
-        self,
         substrate::{
             verification::{
                 verifier::SessionVerifier, EquivocationProof, FinalizationInfo,
@@ -41,13 +35,9 @@ use crate::{
     BlockId,
 };
 
-use super::verifier::SessionVerificationError;
-
 // How many slots in the future (according to the system time) can the verified header be.
 // Must be non-negative. Chosen arbitrarily by timorl.
 const HEADER_VERIFICATION_SLOT_OFFSET: u64 = 10;
-
-const LOG_TARGET: &str = "aleph-verifier";
 
 /// Ways in which a justification can fail verification.
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -137,190 +127,6 @@ fn download_data<AP: AuthorityProvider>(
 
 // Equivocations only happen per time slot _and_ session..
 type SessionSlot = (SessionId, Slot);
-
-#[derive(Debug)]
-pub struct SimpleVerificationError {}
-
-impl Display for SimpleVerificationError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "haha, error")
-    }
-}
-
-impl From<SessionVerificationError> for SimpleVerificationError {
-    fn from(value: SessionVerificationError) -> Self {
-        todo!()
-    }
-}
-
-// pub struct SimpleEquivocationProver<C> {
-//     client: C,
-// }
-
-// impl<C: AuxStore> EquivocationProver<Header, AuthorityPair, EquivocationProof> for SimpleEquivocationProver<C> {
-//     fn check_equivocation(&mut self, slot_now: Slot, slot: Slot, header: &Header, signer: &AuthorityPair) -> Option<EquivocationProof> {
-//         match check_equivocation(&self.client, slot_now, slot, header, signer) {
-//             Ok(maybe_proof) => Some(maybe_proof?.into()),
-//             Err(e) => {
-//                 warn!(target: LOG_TARGET, "problem with testing for equivocation proof for a block: {e}");
-//                 None
-//             }
-//         }
-//     }
-// }
-
-// #[derive(Clone)]
-pub struct SimpleVerifier<AP, H, C> {
-    client: Arc<C>,
-    authority_provider: AP,
-    genesis_header: H,
-}
-
-impl<AP: Clone, H: Clone, C> Clone for SimpleVerifier<AP, H, C> {
-    fn clone(&self) -> Self {
-        Self {
-            client: self.client.clone(),
-            authority_provider: self.authority_provider.clone(),
-            genesis_header: self.genesis_header.clone(),
-        }
-    }
-}
-
-impl<AP, H, C> SimpleVerifier<AP, H, C> {
-    pub fn new(client: Arc<C>, authority_provider: AP, genesis_header: H) -> Self {
-        Self {
-            client,
-            authority_provider,
-            genesis_header,
-        }
-    }
-}
-
-impl<AP, C: AuxStore> SimpleVerifier<AP, Header, C> {
-    fn check_equivocation(
-        &mut self,
-        slot_now: Slot,
-        slot: Slot,
-        header: &Header,
-        expected_author: &AuraId,
-    ) -> Option<EquivocationProof>
-    where
-        AP: AuthorityProvider<generic::BlockId<Block>>,
-    {
-        match check_equivocation(
-            self.client.as_ref(),
-            slot_now,
-            slot,
-            header,
-            expected_author,
-        ) {
-            Ok(maybe_proof) => Some(maybe_proof?.into()),
-            Err(e) => {
-                warn!(target: LOG_TARGET, "problem with testing for equivocation proof for a block: {e}");
-                None
-            }
-        }
-    }
-}
-
-// impl<AP, FS> JustificationVerifier<Justification> for SimpleVerifier
-impl<AP, C> JustificationVerifier<Justification> for SimpleVerifier<AP, Header, C>
-where
-    AP: AuthorityProvider<generic::BlockId<Block>>,
-{
-    type Error = SimpleVerificationError;
-
-    fn verify_justification(
-        &mut self,
-        justification: Justification,
-    ) -> Result<Justification, Self::Error> {
-        info!(target: "aleph-simple-verifier", "SimpleVerifier is checking a justification.");
-        let header = &justification.header;
-        let hash = header.hash();
-
-        match &justification.inner_justification {
-            InnerJustification::Genesis => match header == &self.genesis_header {
-                true => Ok(justification),
-                false => Err(todo!()),
-            },
-            InnerJustification::AlephJustification(aleph_justification) => {
-                let block_id = generic::BlockId::hash(hash);
-                let authority_data = self.authority_provider.authority_data(block_id).ok_or({
-                    // todo!();
-                    Self::Error {}
-                })?;
-                let verifier = SessionVerifier::from(authority_data);
-                verifier.verify_bytes(aleph_justification, header.hash().encode())?;
-                info!(target: "aleph-simple-verifier", "SimpleVerifier accepted a justification..");
-                Ok(justification)
-            }
-        }
-    }
-}
-
-impl<AP, C> HeaderVerifier<Header> for SimpleVerifier<AP, Header, C>
-where
-    AP: AuthorityProvider<generic::BlockId<Block>>,
-    C: AuxStore + Send + Sync + 'static,
-{
-    type Error = VerificationError;
-    type EquivocationProof = EquivocationProof;
-
-    fn verify_header(
-        &mut self,
-        header: <Header as HeaderT>::Unverified,
-        _just_created: bool,
-    ) -> Result<VerifiedHeader<Header, Self::EquivocationProof>, Self::Error> {
-        info!(target: "aleph-simple-verifier", "SimpleVerifier is checking a header.");
-        // compare genesis header directly to the one we know
-        if header.number().is_zero() {
-            return match header == self.genesis_header {
-                true => Ok(VerifiedHeader {
-                    header,
-                    maybe_equivocation_proof: None,
-                }),
-                false => Err(VerificationError::HeaderVerification(
-                    HeaderVerificationError::IncorrectGenesis,
-                )),
-            };
-        }
-
-        // let slot =
-        //     find_pre_digest::<Block, AuthoritySignature>(&header).map_err(HeaderVerificationError::PreDigestLookupError)?;
-        let slot_now = Slot::from_timestamp(
-            sp_timestamp::Timestamp::current(),
-            sp_consensus_slots::SlotDuration::from_millis(MILLISECS_PER_BLOCK),
-        );
-        let authorities = self
-            .authority_provider
-            .aura_authorities(generic::BlockId::hash(*header.parent_hash()))
-            .ok_or(HeaderVerificationError::MissingAuthorityData)?;
-        let (header, slot, _) =
-            check_header_slot_and_seal::<Block, AuthorityPair>(slot_now, header, &authorities)
-                .map_err(|_| HeaderVerificationError::IncorrectSeal)?;
-
-        let expected_author = slot_author::<AuthorityPair>(slot, &authorities)
-            .ok_or(HeaderVerificationError::IncorrectAuthority)?;
-
-        let maybe_equivocation_proof =
-            self.check_equivocation(slot_now, slot, &header, &expected_author);
-
-        info!(target: "aleph-simple-verifier", "SimpleVerifier accepted a header.");
-        Ok(VerifiedHeader {
-            header,
-            maybe_equivocation_proof,
-        })
-    }
-
-    fn own_block(&self, header: &Header) -> bool {
-        false
-    }
-}
-
-// pub struct CompositeVerifier<A, B> {
-//     verifier_first: A,
-//     verifier_second: B
-// }
 
 /// Cache storing SessionVerifier structs and Aura authorities for multiple sessions.
 /// Keeps up to `cache_size` verifiers of top sessions.
@@ -636,126 +442,6 @@ where
 
     fn own_block(&self, header: &Header) -> bool {
         self.own_blocks_cache.contains(&header.id())
-    }
-}
-
-#[derive(Debug)]
-pub enum Either<A, B> {
-    Left(A),
-    Right(B),
-}
-
-impl<A: Display, B: Display> Display for Either<A, B> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Either::Left(left) => write!(f, "Left: {left}"),
-            Either::Right(right) => write!(f, "Right: {right}"),
-        }
-    }
-}
-
-impl<A, B> block::EquivocationProof for Either<A, B>
-where
-    A: block::EquivocationProof,
-    B: block::EquivocationProof,
-{
-    fn are_we_equivocating(&self) -> bool {
-        match self {
-            Either::Left(left) => left.are_we_equivocating(),
-            Either::Right(right) => right.are_we_equivocating(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct Pair<A, B>(A, B);
-
-impl<A: Display, B: Display> Display for Pair<A, B> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "First: {} ; Second: {}", self.0, self.1)
-    }
-}
-
-// impl<A, B> Display for (A, B)
-//     where A: Display,
-//           B: Display,
-// {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "First error: {}", self.0)?;
-//         write!(f, "; Second error: {}", self.1)
-//     }
-// }
-
-impl<A, B> JustificationVerifier<Justification> for (A, B)
-where
-    A: JustificationVerifier<Justification>,
-    B: JustificationVerifier<Justification>,
-{
-    // type Error = (A::Error, B::Error);
-    type Error = Pair<A::Error, B::Error>;
-
-    fn verify_justification(
-        &mut self,
-        justification: <Justification as block::Justification>::Unverified,
-    ) -> Result<Justification, Self::Error> {
-        let (left, right) = self;
-        let left_result = left.verify_justification(justification.clone());
-        let err_left = match left_result {
-            Ok(result) => return Ok(result),
-            Err(err) => err,
-        };
-        let right_result = right.verify_justification(justification);
-        match right_result {
-            Ok(result) => Ok(result),
-            Err(err_right) => Err(Pair(err_left, err_right)),
-        }
-    }
-}
-
-impl<A, B> HeaderVerifier<Header> for (A, B)
-where
-    A: HeaderVerifier<Header>,
-    B: HeaderVerifier<Header>,
-{
-    type EquivocationProof = Either<A::EquivocationProof, B::EquivocationProof>;
-    type Error = Pair<A::Error, B::Error>;
-
-    fn verify_header(
-        &mut self,
-        header: <Header as HeaderT>::Unverified,
-        just_created: bool,
-    ) -> Result<VerifiedHeader<Header, Self::EquivocationProof>, Self::Error> {
-        let (left, right) = self;
-        let left_result = left.verify_header(header.clone(), just_created);
-        let err_left = match left_result {
-            Ok(VerifiedHeader {
-                header,
-                maybe_equivocation_proof,
-            }) => {
-                return Ok(VerifiedHeader {
-                    header,
-                    maybe_equivocation_proof: maybe_equivocation_proof
-                        .map(|proof| Either::Left(proof)),
-                })
-            }
-            Err(err) => err,
-        };
-        let right_result = right.verify_header(header, just_created);
-        match right_result {
-            Ok(VerifiedHeader {
-                header,
-                maybe_equivocation_proof,
-            }) => Ok(VerifiedHeader {
-                header,
-                maybe_equivocation_proof: maybe_equivocation_proof
-                    .map(|proof| Either::Right(proof)),
-            }),
-            Err(err_right) => Err(Pair(err_left, err_right)),
-        }
-    }
-
-    fn own_block(&self, header: &Header) -> bool {
-        self.0.own_block(header) || self.1.own_block(header)
     }
 }
 

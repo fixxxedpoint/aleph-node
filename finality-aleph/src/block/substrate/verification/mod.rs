@@ -19,8 +19,8 @@ use crate::{
 mod cache;
 mod verifier;
 
-pub use cache::{SimpleVerifier, VerifierCache};
-pub use verifier::SessionVerifier;
+pub use cache::VerifierCache;
+pub use verifier::{SessionVerifier, Verifier};
 
 /// Supplies finalized number. Will be unified together with other traits we used in A0-1839.
 pub trait FinalizationInfo: Clone + Send + Sync + 'static {

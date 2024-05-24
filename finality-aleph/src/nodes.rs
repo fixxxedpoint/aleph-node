@@ -15,7 +15,7 @@ use crate::{
     aleph_primitives::{AuraId, Block},
     block::{
         substrate::{
-            JustificationTranslator, SimpleVerifier, SubstrateFinalizationInfo, VerifierCache,
+            JustificationTranslator, Verifier, SubstrateFinalizationInfo, VerifierCache,
         },
         BlockchainEvents, ChainStatus, FinalizationStatus, Justification,
     },
@@ -172,19 +172,19 @@ where
         }
         _ => panic!("the genesis block should be finalized"),
     };
-    let verifier = VerifierCache::new(
+    let verifier_cache = VerifierCache::new(
         session_info.clone(),
         SubstrateFinalizationInfo::new(client.clone()),
         AuthorityProviderImpl::new(client.clone(), RuntimeApiImpl::new(client.clone())),
         VERIFIER_CACHE_SIZE,
         genesis_header.clone(),
     );
-    let simple_verifier = SimpleVerifier::new(
+    let verifier = Verifier::new(
         client.clone(),
         AuthorityProviderImpl::new(client.clone(), RuntimeApiImpl::new(client.clone())),
         genesis_header,
     );
-    let verifier = (verifier, simple_verifier);
+    let verifier = (verifier_cache, verifier);
     let finalizer = AlephFinalizer::new(client.clone(), metrics.clone());
     import_queue_handle.attach_metrics(metrics.clone());
     let justifications_for_sync = justification_channel_provider.get_sender();
