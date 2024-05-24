@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use log::warn;
+use log::{info, warn};
 use parity_scale_codec::Encode;
 use sc_client_api::AuxStore;
 use sc_consensus_aura::{
@@ -37,7 +37,7 @@ use crate::{
         Header as HeaderT, HeaderVerifier, JustificationVerifier, VerifiedHeader,
     },
     session::{SessionBoundaryInfo, SessionId},
-    session_map::{AuthorityProvider, EquivocationProver},
+    session_map::AuthorityProvider,
     BlockId,
 };
 
@@ -234,6 +234,7 @@ where
         &mut self,
         justification: Justification,
     ) -> Result<Justification, Self::Error> {
+        info!(target: "aleph-simple-verifier", "SimpleVerifier is checking a justification.");
         let header = &justification.header;
         let hash = header.hash();
 
@@ -250,6 +251,7 @@ where
                 })?;
                 let verifier = SessionVerifier::from(authority_data);
                 verifier.verify_bytes(aleph_justification, header.hash().encode())?;
+                info!(target: "aleph-simple-verifier", "SimpleVerifier accepted a justification..");
                 Ok(justification)
             }
         }
@@ -269,6 +271,7 @@ where
         header: <Header as HeaderT>::Unverified,
         _just_created: bool,
     ) -> Result<VerifiedHeader<Header, Self::EquivocationProof>, Self::Error> {
+        info!(target: "aleph-simple-verifier", "SimpleVerifier is checking a header.");
         // compare genesis header directly to the one we know
         if header.number().is_zero() {
             return match header == self.genesis_header {
@@ -302,6 +305,7 @@ where
         let maybe_equivocation_proof =
             self.check_equivocation(slot_now, slot, &header, &expected_author);
 
+        info!(target: "aleph-simple-verifier", "SimpleVerifier accepted a header.");
         Ok(VerifiedHeader {
             header,
             maybe_equivocation_proof,

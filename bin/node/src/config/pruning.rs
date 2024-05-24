@@ -1,4 +1,4 @@
-use log::warn;
+use log::{warn, info};
 use primitives::DEFAULT_SESSION_PERIOD;
 use sc_cli::{Database, DatabasePruningMode, PruningParams};
 use static_assertions::const_assert;
@@ -15,6 +15,8 @@ const DEFAULT_STATE_PRUNING: DatabasePruningMode = DatabasePruningMode::Archive;
 const DEFAULT_BLOCKS_PRUNING: DatabasePruningMode = DatabasePruningMode::ArchiveCanonical;
 
 const DEFAULT_DATABASE_FOR_PRUNING: sc_cli::Database = Database::ParityDb;
+
+const ROCKSDB_PRUNING_THRESHOLD: u32 = 1000;
 
 pub struct PruningConfigValidator {
     pruning_enabled: bool,
@@ -45,6 +47,8 @@ impl PruningConfigValidator {
             invalid_database_backend: Ok(()),
         };
 
+        println!("pruning is {}", pruning_enabled);
+        // panic!("what the hell {}", pruning_enabled);
         if !pruning_enabled {
             // We need to override state pruning to our default (archive), as substrate has 256 by default.
             // 256 does not work with our code.
@@ -53,6 +57,7 @@ impl PruningConfigValidator {
             return result;
         }
 
+        warn!("processing pruning options");
         result.process_state_pruning(cli);
         result.process_blocks_pruning(cli);
         result.process_database(cli);
@@ -91,23 +96,23 @@ impl PruningConfigValidator {
     }
 
     fn process_database(&mut self, cli: &mut Cli) {
-        match cli
-            .run
-            .import_params
-            .database_params
-            .database
-            .get_or_insert(DEFAULT_DATABASE_FOR_PRUNING)
-        {
-            // Database::ParityDb => {}
-            db @ (Database::ParityDb
-            | Database::RocksDb
-            | Database::Auto
-            | Database::ParityDbDeprecated) => {
-                self.invalid_database_backend = Err(());
-                // *db = DEFAULT_DATABASE_FOR_PRUNING;
-                *db = Database::RocksDb;
-            }
-        }
+        // match cli
+        //     .run
+        //     .import_params
+        //     .database_params
+        //     .database
+        //     .get_or_insert(DEFAULT_DATABASE_FOR_PRUNING)
+        // {
+        //     // Database::ParityDb => {}
+        //     db @ (Database::ParityDb
+        //     | Database::RocksDb
+        //     | Database::Auto
+        //     | Database::ParityDbDeprecated) => {
+        //         self.invalid_database_backend = Err(());
+        //         // *db = DEFAULT_DATABASE_FOR_PRUNING;
+        //         *db = Database::RocksDb;
+        //     }
+        // }
     }
 
     fn process_blocks_pruning(&mut self, cli: &mut Cli) {
@@ -121,21 +126,43 @@ impl PruningConfigValidator {
     }
 
     fn process_state_pruning(&mut self, cli: &mut Cli) {
+        println!("processing state pruning");
         match cli
             .run
             .import_params
             .pruning_params
             .state_pruning
-            .get_or_insert(DatabasePruningMode::Custom(MINIMAL_STATE_PRUNING))
+            .get_or_insert(DatabasePruningMode::Custom(DEFAULT_SESSION_PERIOD))
+            // .get_or_insert(DatabasePruningMode::Custom(MINIMAL_STATE_PRUNING))
         {
             DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
             DatabasePruningMode::Custom(max_blocks) => {
-                *max_blocks = 900;
-                if *max_blocks < MINIMAL_STATE_PRUNING {
-                    self.invalid_state_pruning_setting = Err(*max_blocks);
-                    // *max_blocks = MINIMAL_STATE_PRUNING;
-                    *max_blocks = 900;
-                }
+
+                match cli
+                    .run
+                    .import_params
+                    .database_params
+                    .database
+                    .get_or_insert(Database::RocksDb) {
+                        Database::RocksDb | Database::Auto => {
+                            println!("processing pruning options {}", *max_blocks);
+                            // lower bound is because of the SessionMap
+                            if *max_blocks > ROCKSDB_PRUNING_THRESHOLD || *max_blocks < DEFAULT_SESSION_PERIOD {
+                                warn!("resetting pruning state option");
+                                self.invalid_state_pruning_setting = Err(*max_blocks);
+                                *max_blocks = ROCKSDB_PRUNING_THRESHOLD;
+                            }
+                        },
+                        _ => {
+                            println!("different db selected");
+                            if *max_blocks < MINIMAL_STATE_PRUNING {
+                                println!("eeeee");
+                                self.invalid_state_pruning_setting = Err(*max_blocks);
+                                *max_blocks = MINIMAL_STATE_PRUNING;
+                            }
+                        },
+                    }
+
             }
         }
     }
