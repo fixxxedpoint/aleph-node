@@ -51,11 +51,6 @@ pub trait EquivocationProver<H, P, Proof> {
     ) -> Option<Proof>;
 }
 
-// pub trait AuthorityProviderExt {
-//     fn authority_data(&self, identifier: BlockId) -> Option<SessionAuthorityData>;
-//     fn aura_authorities(&self, identifier: BlockId) -> Option<Vec<AuraId>>;
-// }
-
 /// Default implementation of authority provider trait.
 /// If state pruning is on and set to `n`, will no longer be able to
 /// answer for `num < finalized_number - n`.

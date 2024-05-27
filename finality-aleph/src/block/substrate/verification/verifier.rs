@@ -161,6 +161,7 @@ impl<AP, C: AuxStore> Verifier<AP, Header, C> {
         slot: Slot,
         header: &Header,
         expected_author: &AuraId,
+        just_created: bool,
     ) -> Option<block::substrate::verification::EquivocationProof>
     where
         AP: AuthorityProvider<generic::BlockId<Block>>,
@@ -172,7 +173,16 @@ impl<AP, C: AuxStore> Verifier<AP, Header, C> {
             header,
             expected_author,
         ) {
-            Ok(maybe_proof) => Some(maybe_proof?.into()),
+            Ok(maybe_proof) => {
+                let mut proof =
+                    block::substrate::verification::EquivocationProof::from(maybe_proof?);
+                proof.are_we_equivocating = just_created;
+                // let authority_data = self
+                //     .authority_provider
+                //     .authority_data(generic::BlockId::hash(*header.parent_hash()));
+                // let maybe_account_id = authority_data.map(|data| data.authorities());
+                Some(proof)
+            }
             Err(e) => {
                 debug!(target: LOG_TARGET, "Error while testing for equivocation for a block: {e}");
                 None
@@ -224,7 +234,7 @@ where
     fn verify_header(
         &mut self,
         header: <Header as HeaderT>::Unverified,
-        _just_created: bool,
+        just_created: bool,
     ) -> Result<VerifiedHeader<Header, Self::EquivocationProof>, Self::Error> {
         // compare genesis header directly to the one we know
         if header.number().is_zero() {
@@ -256,7 +266,7 @@ where
             .ok_or(SubstrateHeaderVerificationError::IncorrectAuthority)?;
 
         let maybe_equivocation_proof =
-            self.check_equivocation(slot_now, slot, &header, expected_author);
+            self.check_equivocation(slot_now, slot, &header, expected_author, just_created);
 
         Ok(VerifiedHeader {
             header,

@@ -1,4 +1,5 @@
 use std::{
+    cmp::min,
     collections::{hash_map::Entry, HashMap, HashSet},
     fmt::{Debug, Display, Error as FmtError, Formatter},
 };
@@ -90,35 +91,53 @@ fn download_data<AP: AuthorityProvider>(
     authority_provider: &AP,
     session_id: SessionId,
     session_info: &SessionBoundaryInfo,
+    best_finalized: BlockNumber,
 ) -> Result<CachedData, CacheError> {
-    Ok(match session_id {
-        SessionId(0) => CachedData {
-            session_verifier: authority_provider
-                .authority_data(0)
-                .ok_or(CacheError::UnknownAuthorities(session_id))?
-                .into(),
-            aura_authorities: authority_provider
-                .aura_authorities(0)
-                .ok_or(CacheError::UnknownAuraAuthorities(session_id))?
-                .into_iter()
-                .map(|auth| (None, auth))
-                .collect(),
-        },
+    let no_accounts_map = |auths: Vec<_>| {
+        auths
+            .into_iter()
+            .map(|auth| (None, auth))
+            .collect::<Vec<(Option<AccountId>, AuraId)>>()
+    };
+
+    let (session_verifier, aura_authorities) = match session_id {
+        SessionId(0) => (
+            authority_provider.authority_data(0),
+            authority_provider.aura_authorities(0).map(no_accounts_map),
+        ),
         SessionId(id) => {
-            let prev_first = session_info.first_block_of_session(SessionId(id - 1));
-            CachedData {
-                session_verifier: authority_provider
-                    .next_authority_data(prev_first)
-                    .ok_or(CacheError::UnknownAuthorities(session_id))?
-                    .into(),
-                aura_authorities: authority_provider
-                    .next_aura_authorities(prev_first)
-                    .ok_or(CacheError::UnknownAuraAuthorities(session_id))?
-                    .into_iter()
-                    .map(|(acc, auth)| (Some(acc), auth))
-                    .collect(),
+            let best_finalized_within_session = min(
+                session_info.last_block_of_session(session_id),
+                best_finalized,
+            );
+            let last_block_of_previous_session =
+                session_info.last_block_of_session(SessionId(id - 1));
+            match best_finalized_within_session <= last_block_of_previous_session {
+                true => (
+                    authority_provider.next_authority_data(best_finalized_within_session),
+                    authority_provider
+                        .next_aura_authorities(best_finalized_within_session)
+                        .map(|auths| {
+                            auths
+                                .into_iter()
+                                .map(|(acc, auth)| (Some(acc), auth))
+                                .collect()
+                        }),
+                ),
+                false => (
+                    authority_provider.authority_data(best_finalized_within_session),
+                    authority_provider
+                        .aura_authorities(best_finalized_within_session)
+                        .map(no_accounts_map),
+                ),
             }
         }
+    };
+    Ok(CachedData {
+        session_verifier: session_verifier
+            .ok_or(CacheError::UnknownAuthorities(session_id))?
+            .into(),
+        aura_authorities: aura_authorities.ok_or(CacheError::UnknownAuraAuthorities(session_id))?,
     })
 }
 
@@ -217,11 +236,12 @@ where
             return Err(CacheError::SessionTooOld(session_id, self.lower_bound));
         }
 
+        let best_finalized = self.finalization_info.finalized_number();
         // We are sure about authorities in all session that have first block
         // from previous session finalized.
         let upper_bound = SessionId(
             self.session_info
-                .session_id_from_block_num(self.finalization_info.finalized_number())
+                .session_id_from_block_num(best_finalized)
                 .0
                 + 1,
         );
@@ -237,9 +257,13 @@ where
                 &self.authority_provider,
                 session_id,
                 &self.session_info,
+                best_finalized,
             )?),
         })
     }
+
+    // TODO this "check two sessions back" should detail of authority provider
+    //     cache should be just cache
 
     /// Returns session verifier for block number if available. Updates cache if necessary.
     /// Must be called using the number of the verified block.

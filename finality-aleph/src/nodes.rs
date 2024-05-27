@@ -182,7 +182,8 @@ where
         AuthorityProviderImpl::new(client.clone(), RuntimeApiImpl::new(client.clone())),
         genesis_header,
     );
-    let verifier = (verifier_cache, verifier);
+    // let verifier = (verifier_cache, verifier);
+    let verifier = verifier_cache;
     let finalizer = AlephFinalizer::new(client.clone(), metrics.clone());
     import_queue_handle.attach_metrics(metrics.clone());
     let justifications_for_sync = justification_channel_provider.get_sender();
