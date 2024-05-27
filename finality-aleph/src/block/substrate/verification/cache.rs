@@ -106,30 +106,31 @@ fn download_data<AP: AuthorityProvider>(
             authority_provider.aura_authorities(0).map(no_accounts_map),
         ),
         SessionId(id) => {
-            let best_finalized_within_session = min(
+            let best_finalized_within_bounds = min(
                 session_info.last_block_of_session(session_id),
                 best_finalized,
             );
             let last_block_of_previous_session =
                 session_info.last_block_of_session(SessionId(id - 1));
-            match best_finalized_within_session <= last_block_of_previous_session {
-                true => (
-                    authority_provider.next_authority_data(best_finalized_within_session),
+            if best_finalized_within_bounds <= last_block_of_previous_session {
+                (
+                    authority_provider.next_authority_data(best_finalized_within_bounds),
                     authority_provider
-                        .next_aura_authorities(best_finalized_within_session)
+                        .next_aura_authorities(best_finalized_within_bounds)
                         .map(|auths| {
                             auths
                                 .into_iter()
                                 .map(|(acc, auth)| (Some(acc), auth))
                                 .collect()
                         }),
-                ),
-                false => (
-                    authority_provider.authority_data(best_finalized_within_session),
+                )
+            } else {
+                (
+                    authority_provider.authority_data(best_finalized_within_bounds),
                     authority_provider
-                        .aura_authorities(best_finalized_within_session)
+                        .aura_authorities(best_finalized_within_bounds)
                         .map(no_accounts_map),
-                ),
+                )
             }
         }
     };
