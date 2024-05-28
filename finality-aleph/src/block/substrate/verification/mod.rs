@@ -5,7 +5,7 @@ use std::{
 
 use hex::ToHex;
 use sc_client_api::HeaderBackend;
-use sc_consensus_aura::standalone::PreDigestLookupError;
+use sc_consensus_aura::standalone::{PreDigestLookupError, SealVerificationError};
 use sp_consensus_slots::Slot;
 
 use crate::{
@@ -74,6 +74,19 @@ impl Display for HeaderVerificationError {
     }
 }
 
+impl<Header> From<SealVerificationError<Header>> for HeaderVerificationError {
+    fn from(value: SealVerificationError<Header>) -> Self {
+        match value {
+            SealVerificationError::Deferred(_, slot) => Self::HeaderTooNew(slot),
+            SealVerificationError::Unsealed => Self::MissingSeal,
+            SealVerificationError::BadSeal => Self::IncorrectSeal,
+            SealVerificationError::BadSignature => Self::IncorrectAuthority,
+            SealVerificationError::SlotAuthorNotFound => Self::MissingAuthorityData,
+            SealVerificationError::InvalidPreDigest(err) => Self::PreDigestLookupError(err),
+        }
+    }
+}
+
 pub struct EquivocationProof {
     header_a: Header,
     header_b: Header,
@@ -85,18 +98,6 @@ pub struct EquivocationProof {
 impl EquivocationProofT for EquivocationProof {
     fn are_we_equivocating(&self) -> bool {
         self.are_we_equivocating
-    }
-}
-
-impl From<sp_consensus_slots::EquivocationProof<Header, AuraId>> for EquivocationProof {
-    fn from(value: sp_consensus_slots::EquivocationProof<Header, AuraId>) -> Self {
-        Self {
-            header_a: value.first_header,
-            header_b: value.second_header,
-            author: value.offender,
-            account_id: None,
-            are_we_equivocating: false,
-        }
     }
 }
 

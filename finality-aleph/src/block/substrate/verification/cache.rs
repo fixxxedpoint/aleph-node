@@ -14,9 +14,7 @@ use sp_runtime::{
 };
 
 use crate::{
-    aleph_primitives::{
-        AccountId, AuraId, Block, BlockNumber, Header, MILLISECS_PER_BLOCK,
-    },
+    aleph_primitives::{AccountId, AuraId, Block, BlockNumber, Header, MILLISECS_PER_BLOCK},
     block::{
         substrate::{
             verification::{
@@ -249,9 +247,6 @@ where
         })
     }
 
-    // TODO this "check two sessions back" should detail of authority provider
-    //     cache should be just cache
-
     /// Returns session verifier for block number if available. Updates cache if necessary.
     /// Must be called using the number of the verified block.
     pub fn get(&mut self, number: BlockNumber) -> Result<&SessionVerifier, CacheError> {
@@ -276,13 +271,12 @@ where
     fn slot_author(
         slot: Slot,
         authorities: &CachedData,
-    ) -> Result<(Option<&AccountId>, &AuraId), ()> {
+    ) -> Result<(Option<AccountId>, AuraId), ()> {
         let expected_author =
             slot_author::<AuthorityPair>(slot, &authorities.aura_authorities).ok_or(())?;
 
-        let accounts = match &authorities.authority_accounts {
-            Some(accounts) => accounts,
-            None => return Ok((None, expected_author)),
+        let Some(accounts) = &authorities.authority_accounts else {
+            return Ok((None, expected_author.clone()));
         };
         // find this author on our list
         // Aura: round robin
@@ -296,7 +290,24 @@ where
                 .position(|auth| auth == expected_author)
                 .ok_or(())?
         };
-        Ok((Some(accounts.get(idx as usize).ok_or(())?), expected_author))
+        Ok((
+            Some(accounts.get(idx).ok_or(())?).cloned(),
+            expected_author.clone(),
+        ))
+    }
+
+    // This function assumes that:
+    // 1. This is not a genesis header
+    // 2. Headers are created by Aura.
+    // 3. Slot number is calculated using the current system time.
+    fn check_header_slot_and_seal(
+        slot_now: Slot,
+        header: Header,
+        authorities: &Vec<AuraId>,
+    ) -> Result<(Header, Slot), HeaderVerificationError> {
+        let (header, slot, _) =
+            check_header_slot_and_seal::<Block, AuthorityPair>(slot_now, header, authorities)?;
+        Ok((header, slot))
     }
 
     // This function assumes that:
@@ -394,7 +405,7 @@ where
         let slot_now = Slot::from_timestamp(
             sp_timestamp::Timestamp::current(),
             sp_consensus_slots::SlotDuration::from_millis(MILLISECS_PER_BLOCK),
-        );
+        ) + HEADER_VERIFICATION_SLOT_OFFSET;
 
         let parent_number = header.number() - 1;
         let session_id = self.session_id_from_block_num(parent_number);
@@ -402,18 +413,13 @@ where
             .get_aura_authorities(session_id)
             .map_err(|_| HeaderVerificationError::MissingAuthorityData)?;
 
-        let (header, slot, _) = check_header_slot_and_seal::<Block, AuthorityPair>(
-            slot_now,
-            header,
-            &authorities.aura_authorities,
-        )
-        .map_err(|_| HeaderVerificationError::IncorrectSeal)?;
+        let (header, slot) =
+            Self::check_header_slot_and_seal(slot_now, header, &authorities.aura_authorities)
+                .map_err(HeaderVerificationError::from)?;
         let session_slot = (session_id, slot);
 
         let (maybe_account_id, expected_author) = Self::slot_author(slot, &authorities)
             .map_err(|_| HeaderVerificationError::MissingAuthorityData)?;
-        let expected_author = expected_author.clone();
-        let maybe_account_id = maybe_account_id.cloned();
 
         let maybe_equivocation_proof = self.check_for_equivocation(
             &header,
