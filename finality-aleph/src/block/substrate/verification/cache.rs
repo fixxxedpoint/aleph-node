@@ -93,45 +93,29 @@ fn download_data<AP: AuthorityProvider>(
     session_info: &SessionBoundaryInfo,
     best_finalized: BlockNumber,
 ) -> Result<CachedData, CacheError> {
-    let no_accounts_map = |auths: Vec<_>| {
-        auths
-            .into_iter()
-            .map(|auth| (None, auth))
-            .collect::<Vec<(Option<AccountId>, AuraId)>>()
-    };
-
     let (session_verifier, aura_authorities) = match session_id {
         SessionId(0) => (
             authority_provider.authority_data(0),
-            authority_provider.aura_authorities(0).map(no_accounts_map),
+            authority_provider
+                .aura_authorities(0)
+                .map(|auths| auths.into_iter().map(|auth| (None, auth)).collect()),
         ),
         SessionId(id) => {
-            let best_finalized_within_bounds = min(
-                session_info.last_block_of_session(session_id),
-                best_finalized,
-            );
             let last_block_of_previous_session =
                 session_info.last_block_of_session(SessionId(id - 1));
-            if best_finalized_within_bounds <= last_block_of_previous_session {
-                (
-                    authority_provider.next_authority_data(best_finalized_within_bounds),
-                    authority_provider
-                        .next_aura_authorities(best_finalized_within_bounds)
-                        .map(|auths| {
-                            auths
-                                .into_iter()
-                                .map(|(acc, auth)| (Some(acc), auth))
-                                .collect()
-                        }),
-                )
-            } else {
-                (
-                    authority_provider.authority_data(best_finalized_within_bounds),
-                    authority_provider
-                        .aura_authorities(best_finalized_within_bounds)
-                        .map(no_accounts_map),
-                )
-            }
+            let best_finalized_within_bounds = min(last_block_of_previous_session, best_finalized);
+
+            (
+                authority_provider.next_authority_data(best_finalized_within_bounds),
+                authority_provider
+                    .next_aura_authorities(best_finalized_within_bounds)
+                    .map(|auths| {
+                        auths
+                            .into_iter()
+                            .map(|(acc, auth)| (Some(acc), auth))
+                            .collect()
+                    }),
+            )
         }
     };
     Ok(CachedData {
