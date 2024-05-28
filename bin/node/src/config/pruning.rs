@@ -7,14 +7,17 @@ use crate::Cli;
 
 /// Anything greater than 1800, which is two normal length sessions, should be enough.
 /// We need to be able to read back so many states to retrieve the list of authorities for a session.
-const MINIMAL_STATE_PRUNING: u32 = 2048;
-const_assert!(MINIMAL_STATE_PRUNING >= 2 * DEFAULT_SESSION_PERIOD);
+const MINIMAL_STATE_PRUNING: u32 = 1000;
+const_assert!(MINIMAL_STATE_PRUNING >= DEFAULT_SESSION_PERIOD);
 
 const DEFAULT_STATE_PRUNING: DatabasePruningMode = DatabasePruningMode::Archive;
 
 const DEFAULT_BLOCKS_PRUNING: DatabasePruningMode = DatabasePruningMode::ArchiveCanonical;
 
+/// Max value for the state-pruning after which RocksDB backend complains about possible memory consumption.
+/// Setting to some greater value can cause out-of-memory errors.
 const ROCKSDB_PRUNING_THRESHOLD: u32 = 1000;
+const_assert!(MINIMAL_STATE_PRUNING <= ROCKSDB_PRUNING_THRESHOLD);
 
 pub struct PruningConfigValidator {
     pruning_enabled: bool,
@@ -89,55 +92,45 @@ impl PruningConfigValidator {
         }
     }
 
-    fn process_blocks_pruning(&mut self, cli: &mut Cli) {
-        match cli.run.import_params.pruning_params.blocks_pruning {
-            DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
-            DatabasePruningMode::Custom(blocks_pruning) => {
-                self.invalid_blocks_pruning_setting = Err(blocks_pruning);
-                cli.run.import_params.pruning_params.blocks_pruning = DEFAULT_BLOCKS_PRUNING;
-            }
-        }
-    }
-
     fn process_state_pruning(&mut self, cli: &mut Cli) {
         let might_be_rocksdb = match cli
             .run
             .import_params
             .database_params
             .database
-            .unwrap_or(Database::RocksDb)
+            .unwrap_or(Database::Auto)
         {
             Database::RocksDb | Database::Auto => true,
             _ => false,
         };
 
-        let minimal_state_pruning = if might_be_rocksdb {
-            ROCKSDB_PRUNING_THRESHOLD
-        } else {
-            MINIMAL_STATE_PRUNING
-        };
         match cli
             .run
             .import_params
             .pruning_params
             .state_pruning
-            .get_or_insert(DatabasePruningMode::Custom(minimal_state_pruning))
+            .get_or_insert(DatabasePruningMode::Custom(MINIMAL_STATE_PRUNING))
         {
             DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
             DatabasePruningMode::Custom(max_blocks) => {
-                if might_be_rocksdb {
-                    if *max_blocks > ROCKSDB_PRUNING_THRESHOLD
-                        || *max_blocks < DEFAULT_SESSION_PERIOD
-                    {
-                        self.invalid_state_pruning_setting = Err(*max_blocks);
-                        *max_blocks = ROCKSDB_PRUNING_THRESHOLD;
-                    }
-                } else {
-                    if *max_blocks < MINIMAL_STATE_PRUNING {
-                        self.invalid_state_pruning_setting = Err(*max_blocks);
-                        *max_blocks = MINIMAL_STATE_PRUNING;
-                    }
+                if might_be_rocksdb && *max_blocks > ROCKSDB_PRUNING_THRESHOLD {
+                    self.invalid_state_pruning_setting = Err(*max_blocks);
+                    *max_blocks = MINIMAL_STATE_PRUNING;
                 }
+                if *max_blocks < MINIMAL_STATE_PRUNING {
+                    self.invalid_state_pruning_setting = Err(*max_blocks);
+                    *max_blocks = MINIMAL_STATE_PRUNING;
+                }
+            }
+        }
+    }
+
+    fn process_blocks_pruning(&mut self, cli: &mut Cli) {
+        match cli.run.import_params.pruning_params.blocks_pruning {
+            DatabasePruningMode::Archive | DatabasePruningMode::ArchiveCanonical => {}
+            DatabasePruningMode::Custom(blocks_pruning) => {
+                self.invalid_blocks_pruning_setting = Err(blocks_pruning);
+                cli.run.import_params.pruning_params.blocks_pruning = DEFAULT_BLOCKS_PRUNING;
             }
         }
     }
