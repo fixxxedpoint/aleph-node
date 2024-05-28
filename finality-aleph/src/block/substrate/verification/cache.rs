@@ -265,7 +265,7 @@ where
     /// This method assumes that the queued Aura authorities will indeed become Aura authorities
     /// in the next session.
     fn get_aura_authorities(&mut self, session_id: SessionId) -> Result<&CachedData, CacheError> {
-        Ok(self.get_data(session_id)?)
+        self.get_data(session_id)
     }
 
     fn slot_author(
@@ -303,10 +303,13 @@ where
     fn check_header_slot_and_seal(
         slot_now: Slot,
         header: Header,
-        authorities: &Vec<AuraId>,
+        authorities: &[AuraId],
     ) -> Result<(Header, Slot), HeaderVerificationError> {
-        let (header, slot, _) =
-            check_header_slot_and_seal::<Block, AuthorityPair>(slot_now, header, authorities)?;
+        let (header, slot, _) = check_header_slot_and_seal::<Block, AuthorityPair>(
+            slot_now + HEADER_VERIFICATION_SLOT_OFFSET,
+            header,
+            authorities,
+        )?;
         Ok((header, slot))
     }
 
@@ -405,7 +408,7 @@ where
         let slot_now = Slot::from_timestamp(
             sp_timestamp::Timestamp::current(),
             sp_consensus_slots::SlotDuration::from_millis(MILLISECS_PER_BLOCK),
-        ) + HEADER_VERIFICATION_SLOT_OFFSET;
+        );
 
         let parent_number = header.number() - 1;
         let session_id = self.session_id_from_block_num(parent_number);
@@ -418,7 +421,7 @@ where
                 .map_err(HeaderVerificationError::from)?;
         let session_slot = (session_id, slot);
 
-        let (maybe_account_id, expected_author) = Self::slot_author(slot, &authorities)
+        let (maybe_account_id, expected_author) = Self::slot_author(slot, authorities)
             .map_err(|_| HeaderVerificationError::MissingAuthorityData)?;
 
         let maybe_equivocation_proof = self.check_for_equivocation(
