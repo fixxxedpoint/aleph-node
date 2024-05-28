@@ -175,7 +175,7 @@ where
         SubstrateFinalizationInfo::new(client.clone()),
         AuthorityProviderImpl::new(client.clone(), RuntimeApiImpl::new(client.clone())),
         VERIFIER_CACHE_SIZE,
-        genesis_header.clone(),
+        genesis_header,
     );
     let finalizer = AlephFinalizer::new(client.clone(), metrics.clone());
     import_queue_handle.attach_metrics(metrics.clone());

@@ -17,7 +17,7 @@ use parity_scale_codec::{Decode, Encode, Output};
 use primitives as aleph_primitives;
 use primitives::{AuthorityId, Block as AlephBlock, BlockHash, BlockNumber};
 use sc_client_api::{
-    AuxStore, Backend, BlockBackend, BlockchainEvents, Finalizer, LockImportRun, ProofProvider,
+    Backend, BlockBackend, BlockchainEvents, Finalizer, LockImportRun, ProofProvider,
     StorageProvider,
 };
 use sc_consensus::BlockImport;
@@ -201,7 +201,6 @@ pub trait ClientForAleph<B, BE>:
     + BlockBackend<B>
     + StorageProvider<B, BE>
     + ProofProvider<B>
-    + AuxStore
     + 'static
 where
     BE: Backend<B>,
@@ -223,7 +222,6 @@ where
         + BlockBackend<B>
         + StorageProvider<B, BE>
         + ProofProvider<B>
-        + AuxStore
         + 'static,
 {
 }

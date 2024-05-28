@@ -6,7 +6,6 @@ use pallet_aleph_runtime_api::AlephSessionApi;
 use sc_client_api::{Backend, FinalityNotification};
 use sc_utils::mpsc::TracingUnboundedReceiver;
 use sp_consensus_aura::AuraApi;
-use sp_consensus_slots::Slot;
 use sp_runtime::{
     generic::{self},
     traits::{Block, Header},
@@ -39,16 +38,6 @@ pub trait AuthorityProvider<BlockIdentity = BlockNumber>: Clone + Send + Sync + 
         &self,
         block_number: BlockIdentity,
     ) -> Option<Vec<(AccountId, AuraId)>>;
-}
-
-pub trait EquivocationProver<H, P, Proof> {
-    fn check_equivocation(
-        &mut self,
-        slot_now: Slot,
-        slot: Slot,
-        header: &H,
-        signer: &P,
-    ) -> Option<Proof>;
 }
 
 /// Default implementation of authority provider trait.
