@@ -280,9 +280,9 @@ where
         };
         // find this author on our list
         // Aura: round robin
-        let idx = *slot % (authorities.aura_authorities.len() as u64);
-        let idx = if expected_author == authorities.aura_authorities.get(idx as usize).ok_or(())? {
-            idx as usize
+        let idx = (*slot % (authorities.aura_authorities.len() as u64)) as usize;
+        let idx = if expected_author == authorities.aura_authorities.get(idx).ok_or(())? {
+            idx
         } else {
             authorities
                 .aura_authorities
@@ -419,14 +419,13 @@ where
         let (header, slot) =
             Self::check_header_slot_and_seal(slot_now, header, &authorities.aura_authorities)
                 .map_err(HeaderVerificationError::from)?;
-        let session_slot = (session_id, slot);
 
         let (maybe_account_id, expected_author) = Self::slot_author(slot, authorities)
             .map_err(|_| HeaderVerificationError::MissingAuthorityData)?;
 
         let maybe_equivocation_proof = self.check_for_equivocation(
             &header,
-            session_slot,
+            (session_id, slot),
             expected_author,
             maybe_account_id,
             just_created,
