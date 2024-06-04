@@ -194,11 +194,9 @@ where
                     + 1,
             );
             self.cached_data.retain(|&id, _| id >= new_lower_bound);
-            self.equivocation_cache.retain(|_, (header, _)| {
-                self.session_info
-                    .session_id_from_block_num(header.id().number())
-                    >= new_lower_bound
-            });
+            let blocks_lower_bound = self.session_info.first_block_of_session(new_lower_bound);
+            self.equivocation_cache
+                .retain(|_, (header, _)| header.id().number() >= blocks_lower_bound);
             self.own_blocks_cache = self
                 .equivocation_cache
                 .iter()
@@ -224,12 +222,7 @@ where
         let best_finalized = self.finalization_info.finalized_number();
         // We are sure about authorities in all session that have first block
         // from previous session finalized.
-        let upper_bound = SessionId(
-            self.session_info
-                .session_id_from_block_num(best_finalized)
-                .0
-                + 1,
-        );
+        let upper_bound = SessionId(self.session_id_from_block_num(best_finalized).0 + 1);
         if session_id > upper_bound {
             return Err(CacheError::SessionInFuture(session_id, upper_bound));
         }
