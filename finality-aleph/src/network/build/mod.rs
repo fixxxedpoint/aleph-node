@@ -28,6 +28,7 @@ mod base;
 mod own_protocols;
 mod rpc;
 mod transactions;
+mod transport;
 
 use base::network as base_network;
 use own_protocols::Networks;
