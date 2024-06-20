@@ -1,5 +1,5 @@
 use rate_limiter::{RateLimiter, SleepingRateLimiter};
-use tokio::io::AsyncRead;
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, PeerAddressInfo, Splittable, Splitted};
 
@@ -23,6 +23,66 @@ impl<Read: AsyncRead + Unpin> AsyncRead for RateLimitedAsyncRead<Read> {
         let this = self.get_mut();
         let read = std::pin::Pin::new(&mut this.read);
         this.rate_limiter.rate_limit(read, cx, buf)
+    }
+}
+
+impl<Write: AsyncWrite + Unpin> AsyncWrite for RateLimitedAsyncRead<Write> {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<Result<usize, std::io::Error>> {
+        let this = self.get_mut();
+        let write = std::pin::Pin::new(&mut this.read);
+        write.poll_write(cx, buf)
+    }
+
+    fn poll_flush(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), std::io::Error>> {
+        let this = self.get_mut();
+        let write = std::pin::Pin::new(&mut this.read);
+        write.poll_flush(cx)
+    }
+
+    fn poll_shutdown(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), std::io::Error>> {
+        let this = self.get_mut();
+        let write = std::pin::Pin::new(&mut this.read);
+        write.poll_shutdown(cx)
+    }
+}
+
+impl<Read: futures::AsyncRead + Unpin> futures::AsyncRead for RateLimitedAsyncRead<Read> {
+    fn poll_read(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let this = self.get_mut();
+        let read = std::pin::Pin::new(&mut this.read);
+        read.poll_read(cx, buf)
+    }
+}
+
+impl<Write: futures::AsyncWrite + Unpin> futures::AsyncWrite for RateLimitedAsyncRead<Write> {
+    fn poll_write(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let this = self.get_mut();
+        let write = std::pin::Pin::new(&mut this.read);
+        write.poll_write(cx, buf)
+    }
+
+    fn poll_flush(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        let write = std::pin::Pin::new(&mut this.read);
+        write.poll_flush(cx)
+    }
+
+    fn poll_close(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<std::io::Result<()>> {
+        let this = self.get_mut();
+        let write = std::pin::Pin::new(&mut this.read);
+        write.poll_close(cx)
     }
 }
 
