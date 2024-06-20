@@ -62,7 +62,10 @@ impl TokenBucket {
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
     /// configured rate limit.
-    pub fn rate_limit(&mut self, requested: usize, now: Instant) -> Option<Duration> {
+    pub fn rate_limit<'a>(
+        &'a mut self,
+        requested: usize,
+    ) -> Option<impl FnOnce(Instant) -> Option<Duration> + 'a> {
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {} of requested bytes. Internal state: {:?}.",
@@ -70,17 +73,20 @@ impl TokenBucket {
             self
         );
         if self.requested > 0 || self.available < requested {
-            assert!(
-                now >= self.last_update,
-                "Provided value for `now` should be at least equal to `self.last_update`: now = {:#?} self.last_update = {:#?}.",
-                now,
-                self.last_update
-            );
-            if self.update_units(now) < requested {
-                self.requested = self.requested.saturating_add(requested);
-                let required_delay = self.calculate_delay();
-                return Some(required_delay);
-            }
+            return Some(move |now| {
+                assert!(
+                    now >= self.last_update,
+                    "Provided value for `now` should be at least equal to `self.last_update`: now = {:#?} self.last_update = {:#?}.",
+                    now,
+                    self.last_update
+                );
+                if self.update_units(now) < requested {
+                    self.requested = self.requested.saturating_add(requested);
+                    let required_delay = self.calculate_delay();
+                    return Some(required_delay);
+                }
+                None
+            });
         }
         self.available -= requested;
         self.available = min(self.available, self.token_limit());

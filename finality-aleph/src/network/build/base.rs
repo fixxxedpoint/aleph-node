@@ -8,6 +8,7 @@ use sc_network::{
     },
     error::Error as NetworkError,
     peer_store::PeerStore,
+    transport::build_default_transport,
     NetworkService, NetworkWorker,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -19,7 +20,10 @@ use substrate_prometheus_endpoint::Registry;
 
 use crate::{
     network::build::{
-        own_protocols::Networks, transactions::build_transactions_prototype, SPAWN_CATEGORY,
+        own_protocols::Networks,
+        transactions::build_transactions_prototype,
+        transport::{SubstrateTransportBuilder, TransportBuilder},
+        SPAWN_CATEGORY,
     },
     BlockHash, BlockNumber, ClientForAleph,
 };
@@ -135,7 +139,15 @@ where
         block_announce_config: base_protocol_config,
     };
 
-    let network_service = NetworkWorker::new(network_params)?;
+    let network_service = NetworkWorker::new_with_transport(network_params, |config| {
+        let default_substrate_transport_builder = SubstrateTransportBuilder {
+            keypair: config.keypair,
+            memory_only: config.memory_only,
+            yamux_window_size: config.yamux_window_size,
+            yamux_maximum_buffer_size: config.yamux_maximum_buffer_size,
+        };
+        default_substrate_transport_builder.build_transport()
+    })?;
     let network = network_service.service().clone();
     spawn_handle.spawn_blocking("network-worker", SPAWN_CATEGORY, network_service.run());
     Ok((network, networks, transactions_prototype))

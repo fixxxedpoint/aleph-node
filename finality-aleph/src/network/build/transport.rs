@@ -1,30 +1,74 @@
-use libp2p::core::transport::{Transport, upgrade::Multiplexed};
 use libp2p::core::muxing::StreamMuxer;
+use libp2p::core::transport::{upgrade::Multiplexed, Transport};
 use libp2p::identity::PeerId;
 
-// pub struct TransportBuilder {}
-
 pub trait TransportBuilder {
-    // type Muxer: StreamMuxer;
-    // type AuthenticatedTransport: Transport<Output = (PeerId, Self::Muxer)>;
-
-    // fn build_transport(self) -> Multiplexed<Self::AuthenticatedTransport>;
-
-    fn build_transport(self) -> Multiplexed<impl Transport<Output = (PeerId, impl StreamMuxer)>>;
+    fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)>;
 }
 
-    // pub fn build_transport() -> Multiplexed<impl Transport<Output = (PeerId, impl StreamMuxer)>> {
-    //     todo!()
-    // }
-
-pub struct SubstrateTransportBuilder {}
-
-// type Muxer = impl StreamMuxer;
-
-// type AuthTrans = impl Transport<Output = (PeerId, Muxer)>;
+pub struct SubstrateTransportBuilder {
+    pub keypair: identity::Keypair,
+    pub memory_only: bool,
+    pub yamux_window_size: Option<u32>,
+    pub yamux_maximum_buffer_size: usize,
+}
 
 impl TransportBuilder for SubstrateTransportBuilder {
-    fn build_transport(self) -> Multiplexed<impl Transport<Output = (PeerId, impl StreamMuxer)>> {
-        todo!()
+    fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)> {
+        sc_network::transport::build_default_transport(
+            self.keypair,
+            self.memory_only,
+            self.yamux_window_size,
+            self.yamux_maximum_buffer_size,
+        )
     }
 }
+
+pub struct RateLimitedTransportBuilder<TB> {
+    inner: TB,
+}
+
+impl<TB: TransportBuilder> TransportBuilder for RateLimitedTransportBuilder<TB> {
+    fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)> {
+        let transport = self.inner.build_transport();
+        transport.map(|(peer_id, stream_muxer), _| {
+            // TODO wrap with rate-limiter
+            stream_muxer.
+        })
+    }
+}
+
+struct StreamMuxerWrapper<SM> {
+    stream_muxer: SM,
+}
+
+impl<SM: StreamMuxer> StreamMuxer for StreamMuxerWrapper<SM> {
+    type Substream;
+
+    type Error;
+
+    fn poll_inbound(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
+        todo!()
+    }
+
+    fn poll_outbound(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
+        todo!()
+    }
+
+    fn poll_close(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+        todo!()
+    }
+
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<libp2p::core::muxing::StreamMuxerEvent, Self::Error>> {
+        todo!()
+    }
+                }
