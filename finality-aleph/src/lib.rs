@@ -257,6 +257,8 @@ type Hasher = abft::HashWrapper<BlakeTwo256>;
 pub struct RateLimiterConfig {
     /// Maximum bit-rate per node in bytes per second of the alephbft validator network.
     pub alephbft_bit_rate_per_connection: usize,
+    /// Maximum bit-rate per node in bytes per second of the substrate network (shared by sync, gossip, etc.).
+    pub substrate_bit_rate_per_connection: usize,
 }
 
 pub struct AlephConfig<C, T> {

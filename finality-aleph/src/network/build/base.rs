@@ -75,6 +75,9 @@ type BaseNetworkOutput<B> = (
 /// Create a base network with all the protocols already included. Also spawn (almost) all the necessary services.
 pub fn network<B, BE, C>(
     network_config: &NetworkConfiguration,
+    transport_builder: impl FnOnce(
+        TransportConfig,
+    ) -> impl Transport<Output = (PeerId, impl StreamMuxer)>,
     protocol_id: ProtocolId,
     client: Arc<C>,
     spawn_handle: &SpawnTaskHandle,

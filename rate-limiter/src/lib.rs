@@ -22,8 +22,7 @@ impl<Read> RateLimitedAsyncRead<Read> {
         Read: Unpin,
     {
         let this = self.get_mut();
-        let read = std::pin::Pin::new(&mut this.read);
-        read
+        std::pin::Pin::new(&mut this.read)
     }
 
     pub fn inner(&self) -> &Read {

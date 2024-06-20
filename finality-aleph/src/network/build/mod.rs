@@ -35,6 +35,8 @@ use own_protocols::Networks;
 use rpc::spawn_rpc_service;
 use transactions::spawn_transaction_handler;
 
+use self::transport::TransportBuilder;
+
 const SPAWN_CATEGORY: Option<&str> = Some("networking");
 
 /// Components created when spawning the network.
@@ -52,6 +54,7 @@ pub struct NetworkOutput<TP: TransactionPool + 'static> {
 /// This includes everything in the base network, the base protocol service, and services for handling transactions and RPCs.
 pub fn network<TP, BE, C>(
     network_config: &NetworkConfiguration,
+    transport_builder: impl TransportBuilder,
     protocol_id: ProtocolId,
     client: Arc<C>,
     major_sync: Arc<AtomicBool>,
@@ -82,6 +85,7 @@ where
         transaction_prototype,
     ) = base_network(
         network_config,
+        transport_builder,
         protocol_id,
         client.clone(),
         spawn_handle,
