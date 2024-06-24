@@ -49,10 +49,7 @@ impl SleepingRateLimiter {
                 delay,
                 read_size
             );
-            println!("we gonna sleep {delay:?}");
             sleep(delay).await;
-        } else {
-            println!("we are not going to sleep");
         }
 
         self
@@ -80,7 +77,6 @@ impl RateLimiter {
         cx: &mut std::task::Context<'_>,
         buf: &mut tokio::io::ReadBuf<'_>,
     ) -> std::task::Poll<std::io::Result<()>> {
-        println!("rate_limit called");
         let sleeping_rate_limiter = match self.rate_limiter.poll_unpin(cx) {
             std::task::Poll::Ready(rate_limiter) => rate_limiter,
             _ => return std::task::Poll::Pending,
@@ -102,7 +98,6 @@ impl RateLimiter {
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
-        println!("rate_limit called");
         let sleeping_rate_limiter = match self.rate_limiter.poll_unpin(cx) {
             std::task::Poll::Ready(rate_limiter) => rate_limiter,
             _ => return std::task::Poll::Pending,

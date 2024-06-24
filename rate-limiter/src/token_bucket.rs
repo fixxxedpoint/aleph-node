@@ -19,7 +19,6 @@ pub struct TokenBucket {
 impl TokenBucket {
     /// Constructs a instance of [TokenBucket] with given target rate-per-second.
     pub fn new(rate_per_second: usize) -> Self {
-        println!("rate_limit: {rate_per_second}");
         Self {
             rate_per_second,
             available: rate_per_second,
@@ -54,7 +53,6 @@ impl TokenBucket {
             .saturating_div(1_000_000)
             .try_into()
             .unwrap_or(usize::MAX);
-        println!("new_units: {new_units}");
         self.available = self.available.saturating_add(new_units);
         self.last_update = now;
 
@@ -71,7 +69,6 @@ impl TokenBucket {
         &mut self,
         requested: usize,
     ) -> Option<impl FnOnce(Instant) -> Option<Duration> + '_> {
-        println!("rate_limited from TockenBucket called");
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {} of requested bytes. Internal state: {:?}.",
@@ -79,7 +76,6 @@ impl TokenBucket {
             self
         );
         if self.requested > 0 || self.available < requested {
-            println!("returning cps");
             return Some(move |now| {
                 assert!(
                     now >= self.last_update,
@@ -95,7 +91,6 @@ impl TokenBucket {
                 None
             });
         }
-        println!("returning cps 2");
         self.available -= requested;
         self.available = min(self.available, self.token_limit());
         None
