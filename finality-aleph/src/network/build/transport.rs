@@ -1,67 +1,108 @@
 use libp2p::core::muxing::StreamMuxer;
-use libp2p::core::transport::{upgrade::Multiplexed, Transport};
+use libp2p::core::transport::Transport;
 use libp2p::identity::PeerId;
 use rate_limiter::{RateLimitedAsyncRead, RateLimiter, SleepingRateLimiter};
+use sc_network::service::NetworkConfig;
 
-use crate::RateLimiterConfig;
-
-pub trait TransportBuilder {
-    fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)>;
+pub trait TransportBuilder<Config> {
+    fn build_transport(
+        self,
+        config: impl Into<Config>,
+    ) -> impl Transport<
+        Output = (
+            PeerId,
+            impl StreamMuxer<Substream = impl Unpin, Error = impl Send> + Send + Unpin,
+        ),
+        Dial = impl Send,
+        ListenerUpgrade = impl Send,
+        Error = impl Send + Sync,
+    > + Send;
 }
 
-pub struct SubstrateTransportBuilder {
-    pub keypair: identity::Keypair,
-    pub memory_only: bool,
-    pub yamux_window_size: Option<u32>,
-    pub yamux_maximum_buffer_size: usize,
+pub struct SubstrateTransportBuilder {}
+
+impl SubstrateTransportBuilder {
+    pub fn new() -> Self {
+        Self {}
+    }
 }
 
-impl TransportBuilder for SubstrateTransportBuilder {
-    fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)> {
+impl Default for SubstrateTransportBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TransportBuilder<NetworkConfig> for SubstrateTransportBuilder {
+    fn build_transport(
+        self,
+        config: impl Into<NetworkConfig>,
+    ) -> impl Transport<
+        Output = (
+            PeerId,
+            impl StreamMuxer<Substream = impl Unpin, Error = impl Send> + Send + Unpin,
+        ),
+        Dial = impl Send,
+        ListenerUpgrade = impl Send,
+        Error = impl Send + Sync,
+    > + Send {
+        let config = config.into();
         sc_network::transport::build_default_transport(
-            self.keypair,
-            self.memory_only,
-            self.yamux_window_size,
-            self.yamux_maximum_buffer_size,
+            config.keypair,
+            config.memory_only,
+            config.muxer_window_size,
+            config.muxer_maximum_buffer_size,
         )
     }
 }
 
 pub struct RateLimitedTransportBuilder<TB> {
-    rate_limiter: RateLimiter,
+    rate_per_second: usize,
     inner: TB,
 }
 
 impl<TB> RateLimitedTransportBuilder<TB> {
-    pub fn new(transport_builder: TB, rate_limiter: RateLimiter) -> Self {
+    pub fn new(transport_builder: TB, rate_per_second: usize) -> Self {
         Self {
-            rate_limiter,
+            rate_per_second,
             inner: transport_builder,
         }
     }
 }
 
-impl<TB: TransportBuilder> TransportBuilder for RateLimitedTransportBuilder<TB> {
-    fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)> {
-        let transport = self.inner.build_transport();
-        transport.map(|(peer_id, stream_muxer), _| {
+impl<TC, TB: TransportBuilder<TC>> TransportBuilder<TC> for RateLimitedTransportBuilder<TB> {
+    fn build_transport(
+        self,
+        config: impl Into<TC>,
+    ) -> impl Transport<
+        Output = (
+            PeerId,
+            impl StreamMuxer<Substream = impl Unpin, Error = impl Send> + Send + Unpin,
+        ),
+        Dial = impl Send,
+        ListenerUpgrade = impl Send,
+        Error = impl Send + Sync,
+    > + Send {
+        let rate_per_second = self.rate_per_second;
+        let transport = self.inner.build_transport(config.into());
+        transport.map(move |(peer_id, stream_muxer), _| {
             (
                 peer_id,
-                StreamMuxerWrapper::new(stream_muxer, self.rate_limiter.clone()),
+                StreamMuxerWrapper::new(stream_muxer, rate_per_second),
             )
         })
     }
 }
 
 struct StreamMuxerWrapper<SM> {
-    rate_limiter: RateLimiter,
+    rate_per_second: usize,
     stream_muxer: SM,
 }
 
 impl<SM> StreamMuxerWrapper<SM> {
-    pub fn new(stream_muxer: SM, rate_limiter: RateLimiter) -> Self {
+    pub fn new(stream_muxer: SM, rate_per_second: usize) -> Self {
         Self {
-            rate_limiter,
+            rate_per_second,
             stream_muxer,
         }
     }
@@ -75,7 +116,11 @@ impl<SM> StreamMuxerWrapper<SM> {
     }
 }
 
-impl<SM: StreamMuxer> StreamMuxer for StreamMuxerWrapper<SM> {
+impl<SM> StreamMuxer for StreamMuxerWrapper<SM>
+where
+    SM: StreamMuxer + Unpin,
+    SM::Substream: Unpin,
+{
     type Substream = RateLimitedAsyncRead<SM::Substream>;
 
     type Error = SM::Error;
@@ -84,9 +129,13 @@ impl<SM: StreamMuxer> StreamMuxer for StreamMuxerWrapper<SM> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
+        let rate_per_second = self.rate_per_second;
         self.get_inner().poll_inbound(cx).map(|result| {
             result.map(|substream| {
-                RateLimitedAsyncRead::new(substream, self.get_mut().rate_limiter.clone())
+                RateLimitedAsyncRead::new(
+                    substream,
+                    RateLimiter::new(SleepingRateLimiter::new(rate_per_second)),
+                )
             })
         })
     }
@@ -95,9 +144,15 @@ impl<SM: StreamMuxer> StreamMuxer for StreamMuxerWrapper<SM> {
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
-        self.get_inner()
-            .poll_outbound(cx)
-            .map(|result| result.map(RateLimitedAsyncRead::new))
+        let rate_per_second = self.rate_per_second;
+        self.get_inner().poll_outbound(cx).map(|result| {
+            result.map(|substream| {
+                RateLimitedAsyncRead::new(
+                    substream,
+                    RateLimiter::new(SleepingRateLimiter::new(rate_per_second)),
+                )
+            })
+        })
     }
 
     fn poll_close(
@@ -115,17 +170,17 @@ impl<SM: StreamMuxer> StreamMuxer for StreamMuxerWrapper<SM> {
     }
 }
 
-impl TransportBuilder for RateLimiterConfig {
-    fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)> {
-        let default_transport_builder = SubstrateTransportBuilder {
-            keypair: todo!(),
-            memory_only: todo!(),
-            yamux_window_size: todo!(),
-            yamux_maximum_buffer_size: todo!(),
-        };
-        let rate_limiter = RateLimiter::new(SleepingRateLimiter::new(
-            self.substrate_bit_rate_per_connection,
-        ));
-        RateLimitedTransportBuilder::new(default_transport_builder, rate_limiter).build_transport()
-    }
-}
+// impl TransportBuilder for RateLimiterConfig {
+//     fn build_transport(self) -> impl Transport<Output = (PeerId, impl StreamMuxer)> {
+//         let default_transport_builder = SubstrateTransportBuilder {
+//             keypair: todo!(),
+//             memory_only: todo!(),
+//             yamux_window_size: todo!(),
+//             yamux_maximum_buffer_size: todo!(),
+//         };
+//         let rate_limiter = RateLimiter::new(SleepingRateLimiter::new(
+//             self.substrate_bit_rate_per_connection,
+//         ));
+//         RateLimitedTransportBuilder::new(default_transport_builder, rate_limiter).build_transport()
+//     }
+// }

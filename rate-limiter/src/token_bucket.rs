@@ -62,10 +62,10 @@ impl TokenBucket {
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
     /// configured rate limit.
-    pub fn rate_limit<'a>(
-        &'a mut self,
+    pub fn rate_limit(
+        &mut self,
         requested: usize,
-    ) -> Option<impl FnOnce(Instant) -> Option<Duration> + 'a> {
+    ) -> Option<impl FnOnce(Instant) -> Option<Duration> + '_> {
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {} of requested bytes. Internal state: {:?}.",
@@ -111,16 +111,21 @@ mod tests {
         let mut rate_limiter = TokenBucket::new_with_now(limit_per_second, now);
 
         assert_eq!(
-            rate_limiter.rate_limit(9, now + Duration::from_secs(1)),
+            rate_limiter
+                .rate_limit(9)
+                .and_then(|cont| cont(now + Duration::from_secs(1))),
             None
         );
 
         assert!(rate_limiter
-            .rate_limit(12, now + Duration::from_secs(1))
+            .rate_limit(12)
+            .and_then(|cont| cont(now + Duration::from_secs(1)))
             .is_some());
 
         assert_eq!(
-            rate_limiter.rate_limit(8, now + Duration::from_secs(3)),
+            rate_limiter
+                .rate_limit(8)
+                .and_then(|cont| cont(now + Duration::from_secs(3))),
             None
         );
     }
@@ -132,19 +137,27 @@ mod tests {
         let mut rate_limiter = TokenBucket::new_with_now(limit_per_second, now);
 
         assert_eq!(
-            rate_limiter.rate_limit(9, now + Duration::from_secs(1)),
+            rate_limiter
+                .rate_limit(9)
+                .and_then(|cont| cont(now + Duration::from_secs(1))),
             None
         );
         assert_eq!(
-            rate_limiter.rate_limit(5, now + Duration::from_secs(2)),
+            rate_limiter
+                .rate_limit(5)
+                .and_then(|cont| cont(now + Duration::from_secs(2))),
             None
         );
         assert_eq!(
-            rate_limiter.rate_limit(1, now + Duration::from_secs(3)),
+            rate_limiter
+                .rate_limit(1)
+                .and_then(|cont| cont(now + Duration::from_secs(3))),
             None
         );
         assert_eq!(
-            rate_limiter.rate_limit(9, now + Duration::from_secs(3)),
+            rate_limiter
+                .rate_limit(9)
+                .and_then(|cont| cont(now + Duration::from_secs(3))),
             None
         );
     }
@@ -155,13 +168,16 @@ mod tests {
         let now = Instant::now();
         let mut rate_limiter = TokenBucket::new_with_now(limit_per_second, now);
 
-        assert_eq!(rate_limiter.rate_limit(10, now), None);
+        assert_eq!(rate_limiter.rate_limit(10).and_then(|cont| cont(now)), None);
 
-        // we should wait some time after reaching the limit
-        assert!(rate_limiter.rate_limit(1, now).is_some());
+        // we should w))ait some time after reaching the limit
+        assert!(rate_limiter
+            .rate_limit(1)
+            .and_then(|cont| cont(now))
+            .is_some());
 
         assert_eq!(
-            rate_limiter.rate_limit(19, now),
+            rate_limiter.rate_limit(19).and_then(|cont| cont(now)),
             Some(Duration::from_secs(2)),
             "we should wait exactly 2 seconds"
         );
@@ -174,16 +190,22 @@ mod tests {
         let mut rate_limiter = TokenBucket::new_with_now(limit_per_second, now);
 
         assert_eq!(
-            rate_limiter.rate_limit(10, now + Duration::from_secs(2)),
+            rate_limiter
+                .rate_limit(10)
+                .and_then(|cont| cont(now + Duration::from_secs(2))),
             None
         );
 
         assert_eq!(
-            rate_limiter.rate_limit(40, now + Duration::from_secs(10)),
+            rate_limiter
+                .rate_limit(40)
+                .and_then(|cont| cont(now + Duration::from_secs(10))),
             Some(Duration::from_secs(3)),
         );
         assert_eq!(
-            rate_limiter.rate_limit(40, now + Duration::from_secs(11)),
+            rate_limiter
+                .rate_limit(40)
+                .and_then(|cont| cont(now + Duration::from_secs(11))),
             Some(Duration::from_secs(6))
         );
     }
@@ -195,22 +217,30 @@ mod tests {
         let mut rate_limiter = TokenBucket::new_with_now(limit_per_second, now);
 
         assert_eq!(
-            rate_limiter.rate_limit(10, now + Duration::from_secs(3)),
+            rate_limiter
+                .rate_limit(10)
+                .and_then(|cont| cont(now + Duration::from_secs(3))),
             None
         );
 
         assert_eq!(
-            rate_limiter.rate_limit(10, now + Duration::from_secs(3)),
+            rate_limiter
+                .rate_limit(10)
+                .and_then(|cont| cont(now + Duration::from_secs(3))),
             None
         );
 
         assert_eq!(
-            rate_limiter.rate_limit(10, now + Duration::from_secs(3)),
+            rate_limiter
+                .rate_limit(10)
+                .and_then(|cont| cont(now + Duration::from_secs(3))),
             Some(Duration::from_secs(1))
         );
 
         assert_eq!(
-            rate_limiter.rate_limit(50, now + Duration::from_secs(3)),
+            rate_limiter
+                .rate_limit(50)
+                .and_then(|cont| cont(now + Duration::from_secs(3))),
             Some(Duration::from_secs(6))
         );
     }

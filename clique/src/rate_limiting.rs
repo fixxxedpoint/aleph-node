@@ -1,5 +1,4 @@
 use rate_limiter::{RateLimitedAsyncRead, RateLimiter, SleepingRateLimiter};
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, PeerAddressInfo, Splittable, Splitted};
 

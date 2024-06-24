@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use libp2p::{core::StreamMuxer, PeerId, Transport};
 use sc_client_api::Backend;
 use sc_network::{
     config::{
@@ -8,7 +9,7 @@ use sc_network::{
     },
     error::Error as NetworkError,
     peer_store::PeerStore,
-    transport::build_default_transport,
+    service::NetworkConfig,
     NetworkService, NetworkWorker,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;
@@ -20,10 +21,7 @@ use substrate_prometheus_endpoint::Registry;
 
 use crate::{
     network::build::{
-        own_protocols::Networks,
-        transactions::build_transactions_prototype,
-        transport::{SubstrateTransportBuilder, TransportBuilder},
-        SPAWN_CATEGORY,
+        own_protocols::Networks, transactions::build_transactions_prototype, SPAWN_CATEGORY,
     },
     BlockHash, BlockNumber, ClientForAleph,
 };
@@ -73,11 +71,9 @@ type BaseNetworkOutput<B> = (
 );
 
 /// Create a base network with all the protocols already included. Also spawn (almost) all the necessary services.
-pub fn network<B, BE, C>(
+pub fn network<B, BE, C, T, SM>(
     network_config: &NetworkConfiguration,
-    transport_builder: impl FnOnce(
-        TransportConfig,
-    ) -> impl Transport<Output = (PeerId, impl StreamMuxer)>,
+    transport_builder: impl FnOnce(NetworkConfig) -> T,
     protocol_id: ProtocolId,
     client: Arc<C>,
     spawn_handle: &SpawnTaskHandle,
@@ -89,6 +85,13 @@ where
     B::Header: Header<Number = BlockNumber>,
     BE: Backend<B>,
     C: ClientForAleph<B, BE>,
+    T: Transport<Output = (PeerId, SM)> + Send + Unpin + 'static,
+    T::Dial: Send,
+    T::ListenerUpgrade: Send,
+    T::Error: Send + Sync,
+    SM: StreamMuxer + Unpin + Send + 'static,
+    SM::Substream: Unpin + Send,
+    SM::Error: Send + Sync,
 {
     let mut full_network_config = FullNetworkConfiguration::new(network_config);
     let genesis_hash = client
@@ -142,15 +145,7 @@ where
         block_announce_config: base_protocol_config,
     };
 
-    let network_service = NetworkWorker::new_with_transport(network_params, |config| {
-        let default_substrate_transport_builder = SubstrateTransportBuilder {
-            keypair: config.keypair,
-            memory_only: config.memory_only,
-            yamux_window_size: config.yamux_window_size,
-            yamux_maximum_buffer_size: config.yamux_maximum_buffer_size,
-        };
-        default_substrate_transport_builder.build_transport()
-    })?;
+    let network_service = NetworkWorker::new_with_transport(network_params, transport_builder)?;
     let network = network_service.service().clone();
     spawn_handle.spawn_blocking("network-worker", SPAWN_CATEGORY, network_service.run());
     Ok((network, networks, transactions_prototype))

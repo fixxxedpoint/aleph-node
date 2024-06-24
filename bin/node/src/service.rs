@@ -9,8 +9,9 @@ use fake_runtime_api::fake_runtime::RuntimeApi;
 use finality_aleph::{
     build_network, get_aleph_block_import, run_validator_node, AlephConfig, BlockImporter,
     BuildNetworkOutput, ChannelProvider, FavouriteSelectChainProvider, Justification,
-    JustificationTranslator, MillisecsPerBlock, RateLimiterConfig, RedirectingBlockImport,
-    SessionPeriod, SubstrateChainStatus, SyncOracle, ValidatorAddressCache,
+    JustificationTranslator, MillisecsPerBlock, RateLimitedTransportBuilder, RateLimiterConfig,
+    RedirectingBlockImport, SessionPeriod, SubstrateChainStatus, SubstrateTransportBuilder,
+    SyncOracle, ValidatorAddressCache,
 };
 use log::warn;
 use pallet_aleph_runtime_api::AlephSessionApi;
@@ -312,7 +313,7 @@ pub fn new_authority(
         system_rpc_tx,
     } = build_network(
         &config.network,
-        rate_limiter_config.clone(),
+        rate_limiter_config.clone().into(),
         config.protocol_id(),
         service_components.client.clone(),
         major_sync,

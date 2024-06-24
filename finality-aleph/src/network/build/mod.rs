@@ -5,6 +5,7 @@ use sc_client_api::Backend;
 use sc_network::{
     config::{NetworkConfiguration, ProtocolId},
     error::Error as NetworkError,
+    service::NetworkConfig,
     NetworkService,
 };
 use sc_network_sync::SyncingService;
@@ -21,14 +22,15 @@ use crate::{
         base_protocol::{setup as setup_base_protocol, Service as BaseProtocolService},
         LOG_TARGET,
     },
-    BlockHash, BlockNumber, ClientForAleph, ProtocolNetwork,
+    BlockHash, BlockNumber, ClientForAleph, ProtocolNetwork, RateLimitedTransportBuilder,
+    RateLimiterConfig, SubstrateTransportBuilder,
 };
 
 mod base;
 mod own_protocols;
 mod rpc;
 mod transactions;
-mod transport;
+pub mod transport;
 
 use base::network as base_network;
 use own_protocols::Networks;
@@ -50,11 +52,24 @@ pub struct NetworkOutput<TP: TransactionPool + 'static> {
     pub system_rpc_tx: TracingUnboundedSender<RpcRequest<TP::Block>>,
 }
 
+pub struct SubstrateNetworkConfig {
+    /// Maximum bit-rate per node in bytes per second of the substrate network (shared by sync, gossip, etc.).
+    pub substrate_bit_rate_per_connection: usize,
+}
+
+impl From<RateLimiterConfig> for SubstrateNetworkConfig {
+    fn from(value: RateLimiterConfig) -> Self {
+        Self {
+            substrate_bit_rate_per_connection: value.substrate_bit_rate_per_connection,
+        }
+    }
+}
+
 /// Start everything necessary to run the inter-node network and return the interfaces for it.
 /// This includes everything in the base network, the base protocol service, and services for handling transactions and RPCs.
 pub fn network<TP, BE, C>(
     network_config: &NetworkConfiguration,
-    transport_builder: impl TransportBuilder,
+    transport_config: SubstrateNetworkConfig,
     protocol_id: ProtocolId,
     client: Arc<C>,
     major_sync: Arc<AtomicBool>,
@@ -76,6 +91,14 @@ where
         .expect("Genesis block exists.");
     let (base_protocol_config, events_from_network) =
         setup_base_protocol::<TP::Block>(genesis_hash);
+
+    let transport_builder = RateLimitedTransportBuilder::new(
+        SubstrateTransportBuilder::new(),
+        transport_config.substrate_bit_rate_per_connection,
+    );
+
+    let transport_builder =
+        move |config| TransportBuilder::<NetworkConfig>::build_transport(transport_builder, config);
     let (
         network,
         Networks {

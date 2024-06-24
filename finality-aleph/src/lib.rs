@@ -72,7 +72,8 @@ pub use crate::{
     justification::AlephJustification,
     network::{
         address_cache::{ValidatorAddressCache, ValidatorAddressingInfo},
-        build_network, BuildNetworkOutput, ProtocolNetwork, SubstratePeerId,
+        build_network, BuildNetworkOutput, ProtocolNetwork, RateLimitedTransportBuilder,
+        SubstratePeerId, SubstrateTransportBuilder,
     },
     nodes::run_validator_node,
     session::SessionPeriod,

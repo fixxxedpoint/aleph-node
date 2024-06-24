@@ -37,8 +37,10 @@ impl SleepingRateLimiter {
             read_size
         );
 
-        let now = Instant::now();
-        let delay = self.rate_limiter.rate_limit(read_size, now);
+        let delay = self
+            .rate_limiter
+            .rate_limit(read_size)
+            .and_then(|cont| cont(Instant::now()));
 
         if let Some(delay) = delay {
             trace!(
