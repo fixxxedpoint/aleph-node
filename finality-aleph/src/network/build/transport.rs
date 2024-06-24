@@ -129,6 +129,7 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
+        println!("poll_inbound called");
         let rate_per_second = self.rate_per_second;
         self.get_inner().poll_inbound(cx).map(|result| {
             result.map(|substream| {
@@ -144,6 +145,7 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
+        println!("poll_outbound called");
         let rate_per_second = self.rate_per_second;
         self.get_inner().poll_outbound(cx).map(|result| {
             result.map(|substream| {

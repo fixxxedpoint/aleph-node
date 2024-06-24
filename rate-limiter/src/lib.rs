@@ -72,7 +72,9 @@ impl<Read: futures::AsyncRead + Unpin> futures::AsyncRead for RateLimitedAsyncRe
         cx: &mut std::task::Context<'_>,
         buf: &mut [u8],
     ) -> std::task::Poll<std::io::Result<usize>> {
-        self.get_inner().poll_read(cx, buf)
+        let this = self.get_mut();
+        let read = std::pin::Pin::new(&mut this.read);
+        this.rate_limiter.rate_limit_futures(read, cx, buf)
     }
 }
 
