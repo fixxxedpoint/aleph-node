@@ -9,7 +9,7 @@ use sc_network::{
     },
     error::Error as NetworkError,
     peer_store::PeerStore,
-    service::NetworkConfig,
+    transport::NetworkConfig,
     NetworkService, NetworkWorker,
 };
 use sc_network_light::light_client_requests::handler::LightClientRequestHandler;

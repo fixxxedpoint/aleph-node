@@ -1,12 +1,12 @@
 use libp2p::core::muxing::StreamMuxer;
 use rate_limiter::{RateLimitedAsyncRead, RateLimiter, SleepingRateLimiter};
 
-pub struct StreamMuxerWrapper<SM> {
+pub struct RateLimitedStreamMuxer<SM> {
     rate_per_second: usize,
     stream_muxer: SM,
 }
 
-impl<SM> StreamMuxerWrapper<SM> {
+impl<SM> RateLimitedStreamMuxer<SM> {
     pub fn new(stream_muxer: SM, rate_per_second: usize) -> Self {
         Self {
             rate_per_second,
@@ -14,7 +14,7 @@ impl<SM> StreamMuxerWrapper<SM> {
         }
     }
 
-    fn get_inner(self: std::pin::Pin<&mut Self>) -> std::pin::Pin<&mut SM>
+    fn inner(self: std::pin::Pin<&mut Self>) -> std::pin::Pin<&mut SM>
     where
         SM: Unpin,
     {
@@ -23,7 +23,7 @@ impl<SM> StreamMuxerWrapper<SM> {
     }
 }
 
-impl<SM> StreamMuxer for StreamMuxerWrapper<SM>
+impl<SM> StreamMuxer for RateLimitedStreamMuxer<SM>
 where
     SM: StreamMuxer + Unpin,
     SM::Substream: Unpin,
@@ -37,7 +37,7 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
         let rate_per_second = self.rate_per_second;
-        self.get_inner().poll_inbound(cx).map(|result| {
+        self.inner().poll_inbound(cx).map(|result| {
             result.map(|substream| {
                 RateLimitedAsyncRead::new(
                     substream,
@@ -52,7 +52,7 @@ where
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<Self::Substream, Self::Error>> {
         let rate_per_second = self.rate_per_second;
-        self.get_inner().poll_outbound(cx).map(|result| {
+        self.inner().poll_outbound(cx).map(|result| {
             result.map(|substream| {
                 RateLimitedAsyncRead::new(
                     substream,
@@ -66,13 +66,13 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<(), Self::Error>> {
-        self.get_inner().poll_close(cx)
+        self.inner().poll_close(cx)
     }
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<Result<libp2p::core::muxing::StreamMuxerEvent, Self::Error>> {
-        self.get_inner().poll(cx)
+        self.inner().poll(cx)
     }
 }

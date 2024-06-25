@@ -6,7 +6,7 @@ use sc_client_api::Backend;
 use sc_network::{
     config::{NetworkConfiguration, ProtocolId},
     error::Error as NetworkError,
-    service::NetworkConfig,
+    transport::NetworkConfig,
     NetworkService,
 };
 use sc_network_sync::SyncingService;
@@ -37,7 +37,7 @@ use own_protocols::Networks;
 use rpc::spawn_rpc_service;
 use transactions::spawn_transaction_handler;
 
-use self::transport::StreamMuxerWrapper;
+use self::transport::RateLimitedStreamMuxer;
 
 const SPAWN_CATEGORY: Option<&str> = Some("networking");
 
@@ -93,17 +93,12 @@ where
         setup_base_protocol::<TP::Block>(genesis_hash);
 
     let rate_per_connection = transport_config.substrate_bit_rate_per_connection;
-    let transport_builder = move |config: NetworkConfig| {
-        let default_transport = sc_network::transport::build_default_transport(
-            config.keypair,
-            config.memory_only,
-            config.muxer_window_size,
-            config.muxer_maximum_buffer_size,
-        );
+    let transport_builder = move |config| {
+        let default_transport = sc_network::transport::build_default_transport(config);
         default_transport.map(move |(peer_id, stream_muxer), _| {
             (
                 peer_id,
-                StreamMuxerWrapper::new(stream_muxer, rate_per_connection),
+                RateLimitedStreamMuxer::new(stream_muxer, rate_per_connection),
             )
         })
     };
