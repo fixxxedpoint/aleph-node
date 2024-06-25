@@ -6,7 +6,6 @@ use sc_client_api::Backend;
 use sc_network::{
     config::{NetworkConfiguration, ProtocolId},
     error::Error as NetworkError,
-    transport::NetworkConfig,
     NetworkService,
 };
 use sc_network_sync::SyncingService;
@@ -94,7 +93,7 @@ where
 
     let rate_per_connection = transport_config.substrate_bit_rate_per_connection;
     let transport_builder = move |config| {
-        let default_transport = sc_network::transport::build_default_transport(config);
+        let default_transport = sc_network::transport::build_transport(config);
         default_transport.map(move |(peer_id, stream_muxer), _| {
             (
                 peer_id,
