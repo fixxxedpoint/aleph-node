@@ -4,11 +4,7 @@ use std::{
     hash::Hash,
 };
 
-pub use build::{
-    network as build_network,
-    transport::{RateLimitedTransportBuilder, SubstrateTransportBuilder},
-    NetworkOutput as BuildNetworkOutput,
-};
+pub use build::{network as build_network, NetworkOutput as BuildNetworkOutput};
 use network_clique::{AddressingInformation, NetworkIdentity, PeerId};
 use parity_scale_codec::Codec;
 pub use substrate::{PeerId as SubstratePeerId, ProtocolNetwork};

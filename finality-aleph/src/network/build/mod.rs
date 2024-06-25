@@ -1,5 +1,6 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
+use libp2p::core::transport::Transport;
 use log::error;
 use sc_client_api::Backend;
 use sc_network::{
@@ -22,8 +23,7 @@ use crate::{
         base_protocol::{setup as setup_base_protocol, Service as BaseProtocolService},
         LOG_TARGET,
     },
-    BlockHash, BlockNumber, ClientForAleph, ProtocolNetwork, RateLimitedTransportBuilder,
-    RateLimiterConfig, SubstrateTransportBuilder,
+    BlockHash, BlockNumber, ClientForAleph, ProtocolNetwork, RateLimiterConfig,
 };
 
 mod base;
@@ -37,7 +37,7 @@ use own_protocols::Networks;
 use rpc::spawn_rpc_service;
 use transactions::spawn_transaction_handler;
 
-use self::transport::TransportBuilder;
+use self::transport::StreamMuxerWrapper;
 
 const SPAWN_CATEGORY: Option<&str> = Some("networking");
 
@@ -92,13 +92,21 @@ where
     let (base_protocol_config, events_from_network) =
         setup_base_protocol::<TP::Block>(genesis_hash);
 
-    let transport_builder = RateLimitedTransportBuilder::new(
-        SubstrateTransportBuilder::new(),
-        transport_config.substrate_bit_rate_per_connection,
-    );
-
-    let transport_builder =
-        move |config| TransportBuilder::<NetworkConfig>::build_transport(transport_builder, config);
+    let rate_per_connection = transport_config.substrate_bit_rate_per_connection;
+    let transport_builder = move |config: NetworkConfig| {
+        let default_transport = sc_network::transport::build_default_transport(
+            config.keypair,
+            config.memory_only,
+            config.muxer_window_size,
+            config.muxer_maximum_buffer_size,
+        );
+        default_transport.map(move |(peer_id, stream_muxer), _| {
+            (
+                peer_id,
+                StreamMuxerWrapper::new(stream_muxer, rate_per_connection),
+            )
+        })
+    };
     let (
         network,
         Networks {

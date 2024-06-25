@@ -9,9 +9,8 @@ use fake_runtime_api::fake_runtime::RuntimeApi;
 use finality_aleph::{
     build_network, get_aleph_block_import, run_validator_node, AlephConfig, BlockImporter,
     BuildNetworkOutput, ChannelProvider, FavouriteSelectChainProvider, Justification,
-    JustificationTranslator, MillisecsPerBlock, RateLimitedTransportBuilder, RateLimiterConfig,
-    RedirectingBlockImport, SessionPeriod, SubstrateChainStatus, SubstrateTransportBuilder,
-    SyncOracle, ValidatorAddressCache,
+    JustificationTranslator, MillisecsPerBlock, RateLimiterConfig, RedirectingBlockImport,
+    SessionPeriod, SubstrateChainStatus, SyncOracle, ValidatorAddressCache,
 };
 use log::warn;
 use pallet_aleph_runtime_api::AlephSessionApi;
