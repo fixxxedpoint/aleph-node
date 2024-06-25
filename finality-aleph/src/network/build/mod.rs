@@ -92,8 +92,13 @@ where
         setup_base_protocol::<TP::Block>(genesis_hash);
 
     let rate_per_connection = transport_config.substrate_bit_rate_per_connection;
-    let transport_builder = move |config| {
-        let default_transport = sc_network::transport::build_transport(config);
+    let transport_builder = move |config: sc_network::transport::NetworkConfig| {
+        let default_transport = sc_network::transport::build_transport(
+            config.keypair,
+            config.memory_only,
+            config.muxer_window_size,
+            config.muxer_maximum_buffer_size,
+        );
         default_transport.map(move |(peer_id, stream_muxer), _| {
             (
                 peer_id,
@@ -101,6 +106,7 @@ where
             )
         })
     };
+
     let (
         network,
         Networks {
