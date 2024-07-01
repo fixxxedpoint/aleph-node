@@ -1,8 +1,9 @@
 use std::{
     collections::HashSet,
-    fmt::{Debug, Display, Error as FmtError, Formatter},
+    fmt::{Debug, Display, Error as FmtError, Formatter}, io, marker::PhantomData,
 };
 
+use futures::{channel::oneshot, Future, StreamExt};
 use log::{debug, info, trace, warn};
 use parity_scale_codec::DecodeAll;
 use rand::{seq::IteratorRandom, thread_rng};
@@ -93,6 +94,68 @@ impl Display for ProtocolNetworkError {
                 write!(f, "Notifications event stream ended.")
             }
         }
+    }
+}
+
+pub struct ExploitedSendNetwork<N, D> {
+    inner: N,
+    data: futures::channel::mpsc::Receiver<(D, PeerId)>,
+}
+
+impl<N, D> ExploitedSendNetwork<N, D> {
+    pub fn new(network: N, receiver: futures::channel::mpsc::Receiver<(D, PeerId)>) -> Self {
+        Self { inner: network, data: receiver }
+    }
+}
+
+impl<F: FnMut(D, PeerId) -> Result<(), ()>, D: Data> ExploitedSendNetwork<F, D> {
+    pub async fn run(mut self) -> Result<(), ()> {
+        let (mut message, mut peer_id) = self.data.next().await.ok_or_else(|| panic!("where data?!"))?;
+        loop {
+            (self.inner)(message.clone(), peer_id)?;
+            if let Some(new_message) = self.data.try_next().map_err(|_| panic!("yyyy koniec"))? {
+                (message, peer_id) = new_message;
+            }
+        }
+    }
+}
+
+// pub trait Spawner {
+//     fn spawn<Fut: Future<Output = Out>, Out>(future: Fut) -> impl Future<Output = Result<Out, ()>>;
+// }
+
+pub struct ExploitedNetwork<N, F> {
+    inner: N,
+    exploit: F,
+}
+
+impl<N, F> ExploitedNetwork<N, F>
+{
+    pub fn new(network: N, exploit: F) -> Self {
+        Self { inner: network, exploit }
+    }
+}
+
+#[async_trait::async_trait]
+impl<D: Data, N: GossipNetwork<D>, F: FnMut(&D, &N::PeerId) + Send + 'static> GossipNetwork<D> for ExploitedNetwork<N, F> {
+    type Error = N::Error;
+    type PeerId = N::PeerId;
+
+    fn send_to(&mut self, data: D, peer_id: Self::PeerId) -> Result<(), Self::Error> {
+        (self.exploit)(&data, &peer_id);
+        self.inner.send_to(data, peer_id)
+    }
+
+    fn send_to_random(&mut self, data: D, peer_ids: HashSet<Self::PeerId>) -> Result<(), Self::Error> {
+        self.inner.send_to_random(data, peer_ids)
+    }
+
+    fn broadcast(&mut self, data: D) -> Result<(), Self::Error> {
+        self.inner.broadcast(data)
+    }
+
+    async fn next(&mut self) -> Result<(D, Self::PeerId), Self::Error> {
+        self.inner.next().await
     }
 }
 

@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, sync::Arc};
 
 use bip39::{Language, Mnemonic, MnemonicType};
-use futures::channel::oneshot;
+use futures::channel::{mpsc, oneshot};
 use log::{debug, error};
 use network_clique::{RateLimitingDialer, RateLimitingListener, Service, SpawnHandleT};
 use pallet_aleph_runtime_api::AlephSessionApi;
@@ -26,6 +26,7 @@ use crate::{
         address_cache::validator_address_cache_updater,
         session::{ConnectionManager, ConnectionManagerConfig},
         tcp::{new_tcp_network, KEY_TYPE},
+        ExploitedNetwork, ExploitedSendNetwork,
     },
     party::{
         impls::ChainStateImpl, manager::NodeSessionManagerImpl, ConsensusParty,
@@ -36,7 +37,7 @@ use crate::{
     session_map::{
         AuthorityProviderImpl, FinalityNotifierImpl, FinalizedBlockProviderImpl, SessionMapUpdater,
     },
-    sync::{DatabaseIO as SyncDatabaseIO, Service as SyncService, IO as SyncIO},
+    sync::{DatabaseIO as SyncDatabaseIO, PeerId, Service as SyncService, IO as SyncIO},
     AlephConfig,
 };
 
@@ -185,6 +186,12 @@ where
     let finalizer = AlephFinalizer::new(client.clone());
     import_queue_handle.attach_metrics(timing_metrics.clone());
     let justifications_for_sync = justification_channel_provider.get_sender();
+
+    let (exploit_sender, exploit_receiver) = mpsc::channel(0);
+    let exploited_sync_network = ExploitedNetwork::new(block_sync_network, move |data: &VersionedNetworkData<_>, peer_id: &sc_network::PeerId| {
+        exploit_sender.try_send((data.clone(), peer_id.clone()));
+    });
+
     let sync_io = SyncIO::new(
         SyncDatabaseIO::new(chain_status.clone(), finalizer, import_queue_handle),
         block_sync_network,
