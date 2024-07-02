@@ -7,7 +7,7 @@ use std::{
 pub use build::{network as build_network, NetworkOutput as BuildNetworkOutput};
 use network_clique::{AddressingInformation, NetworkIdentity, PeerId};
 use parity_scale_codec::Codec;
-pub use substrate::{PeerId as SubstratePeerId, ProtocolNetwork, ExploitedNetwork, ExploitedSendNetwork};
+pub use substrate::{PeerId as SubstratePeerId, ProtocolNetwork, ExploitedNetwork, ExploitedSendNetwork, ExploitedProtocNetwork};
 
 pub mod address_cache;
 mod base_protocol;

