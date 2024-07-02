@@ -99,6 +99,7 @@ where
             config.muxer_window_size,
             config.muxer_maximum_buffer_size,
         );
+        // return default_transport;
         default_transport.map(move |(peer_id, stream_muxer), _| {
             (
                 peer_id,

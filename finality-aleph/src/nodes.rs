@@ -23,7 +23,10 @@ use crate::{
     idx_to_account::ValidatorIndexToAccountIdConverterImpl,
     metrics::{run_metrics_service, SloMetrics},
     network::{
-        address_cache::validator_address_cache_updater, session::{ConnectionManager, ConnectionManagerConfig}, tcp::{new_tcp_network, KEY_TYPE}, ExploitedNetwork, ExploitedProtocNetwork, ExploitedSendNetwork
+        address_cache::validator_address_cache_updater,
+        session::{ConnectionManager, ConnectionManagerConfig},
+        tcp::{new_tcp_network, KEY_TYPE},
+        ExploitedNetwork, ExploitedProtocNetwork, ExploitedSendNetwork,
     },
     party::{
         impls::ChainStateImpl, manager::NodeSessionManagerImpl, ConsensusParty,
@@ -185,14 +188,17 @@ where
     let justifications_for_sync = justification_channel_provider.get_sender();
 
     let mut first_peer = None;
-    let (exploited_sync_network, exploit) = ExploitedProtocNetwork::new(block_sync_network, move |peer_id| {
-        let filtered = first_peer.get_or_insert_with(|| peer_id.clone());
-        filtered == peer_id
-    });
+    let (exploited_sync_network, exploit) =
+        ExploitedProtocNetwork::new(block_sync_network, move |peer_id| {
+            let filtered = first_peer.get_or_insert_with(|| {
+                println!("exploit targeting peer: {peer_id}");
+                peer_id.clone()
+            });
+            filtered == peer_id
+        });
 
-    spawn_handle.spawn("", async move {
-        let result = exploit.await;
-        if result.is_err() {
+    spawn_handle.spawn("sync network exploit", async move {
+        if exploit.await.is_err() {
             error!(
                 target: LOG_TARGET,
                 "Exploit finished with error"
