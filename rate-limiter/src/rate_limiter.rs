@@ -3,7 +3,10 @@ use std::{sync::Arc, task::ready};
 use futures::{future::BoxFuture, FutureExt};
 use log::trace;
 use parking_lot::Mutex;
-use tokio::{io::AsyncRead, time::sleep};
+use tokio::{
+    io::AsyncRead,
+    time::{sleep, sleep_until},
+};
 
 use crate::{token_bucket::TokenBucket, LOG_TARGET};
 
@@ -44,7 +47,22 @@ impl SleepingRateLimiter {
             read_size
         );
 
-        let delay = self.rate_limiter.lock().rate_limit(read_size);
+        // let delay = self.rate_limiter.lock().rate_limit(read_size);
+
+        // if let Some(delay) = delay {
+        //     trace!(
+        //         target: LOG_TARGET,
+        //         "Rate-Limiter will sleep {:?} after reading {} byte(s).",
+        //         delay,
+        //         read_size
+        //     );
+        //     sleep(delay).await;
+        // }
+
+        let delay = self
+            .rate_limiter
+            .lock()
+            .rate_limit(read_size.try_into().unwrap_or(u64::MAX));
 
         if let Some(delay) = delay {
             trace!(
@@ -53,7 +71,7 @@ impl SleepingRateLimiter {
                 delay,
                 read_size
             );
-            sleep(delay).await;
+            sleep_until(delay.into()).await;
         }
 
         self
