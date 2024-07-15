@@ -1,5 +1,6 @@
 use crate::LOG_TARGET;
 use log::trace;
+use parking_lot::Mutex;
 use std::{
     cmp::min,
     sync::{
@@ -37,6 +38,7 @@ pub struct TokenBucket<T = DefaultTimeProvider> {
     rate_per_second: u64,
     available: Arc<AtomicU64>,
     last_update: Arc<AtomicU64>,
+    last_update_lock: Arc<Mutex<()>>,
     base_instant: Instant,
     time_provider: T,
 }
@@ -66,6 +68,7 @@ impl TokenBucket {
             rate_per_second,
             available: Arc::new(AtomicU64::new(0)),
             last_update: Arc::new(AtomicU64::new(last_update)),
+            last_update_lock: Arc::new(Mutex::new(())),
             base_instant,
             time_provider,
         }
@@ -110,55 +113,66 @@ where
             requested,
             self
         );
-        // let requested: i64 = requested.try_into().expect("'request' is too big");
         let previous_available = self
             .available
-            .fetch_add(requested, std::sync::atomic::Ordering::Acquire);
+            .fetch_add(requested, std::sync::atomic::Ordering::Relaxed);
         let mut now_available = previous_available + requested;
         if now_available <= self.rate_per_second {
             return None;
         }
-        let now: u64 = self
-            .time_provider
-            .now()
-            .duration_since(self.base_instant)
-            .as_millis()
-            .try_into()
-            .expect("'u64' should be enough to store milliseconds since 'base_instant'");
-        let last_update = self
-            .last_update
-            .fetch_max(now, std::sync::atomic::Ordering::Acquire);
 
-        if last_update <= now {
+        println!("need to update the TokenBucket");
+
+        if let Some(_guard) = self.last_update_lock.try_lock() {
+            println!("updating TokenBucket");
+            let now: u64 = self
+                .time_provider
+                .now()
+                .duration_since(self.base_instant)
+                .as_millis()
+                .try_into()
+                .expect("'u64' should be enough to store milliseconds since 'base_instant'");
+            let last_update = self
+                .last_update
+                .fetch_max(now, std::sync::atomic::Ordering::Acquire);
+
             let since_last_update = now - last_update;
 
             let new_units = since_last_update
                 .saturating_mul(self.rate_per_second)
-                .saturating_mul(1_000);
+                .saturating_div(1_000);
+
+            // let new_units = self.available.fetch_min(new_units, std::sync::atomic::Ordering::Relaxed);
+            let new_units = min(now_available, new_units);
 
             let last_available = self
                 .available
-                .fetch_sub(new_units, std::sync::atomic::Ordering::Release);
+                .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed);
 
-            if last_available > new_units {
-                self.available
-                    .store(0, std::sync::atomic::Ordering::Release);
+            // if last_available < new_units {
+            //     self.available
+            //         .store(0, std::sync::atomic::Ordering::Relaxed);
+            // }
+            now_available = last_available.saturating_sub(new_units);
+
+            if now_available <= self.rate_per_second {
+                println!("new_units={}; since_last_update={}", new_units, since_last_update);
+                return None;
             }
-            now_available = last_available.saturating_sub(new_units)
-        }
-
-        if now_available <= self.rate_per_second {
-            return None;
         }
 
         let wait_milliseconds = (now_available - self.rate_per_second)
             .saturating_mul(1_000)
             .saturating_div(self.rate_per_second);
-        let now_duration = Duration::from_millis(now);
+        // let now = Duration::from_millis(now);
+        let now =
+            Duration::from_millis(self.last_update.load(std::sync::atomic::Ordering::Relaxed));
         let wait_duration = Duration::from_millis(wait_milliseconds);
-        println!("gonna wait until: {:?}", self.base_instant + now_duration + wait_duration);
-        Some(self.base_instant + now_duration + wait_duration)
-        // let now_available = self.available.load(std::sync::atomic::Ordering::Acquire);
+        println!(
+            "gonna wait until: {:?}",
+            self.base_instant + now + wait_duration
+        );
+        Some(self.base_instant + now + wait_duration)
     }
 
     // fn token_limit(&self) -> usize {
