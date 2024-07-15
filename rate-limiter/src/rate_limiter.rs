@@ -13,7 +13,8 @@ use crate::{token_bucket::TokenBucket, LOG_TARGET};
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
 pub struct SleepingRateLimiter {
-    rate_limiter: Arc<Mutex<TokenBucket>>,
+    // rate_limiter: Arc<Mutex<TokenBucket>>,
+    rate_limiter: TokenBucket,
 }
 
 impl Clone for SleepingRateLimiter {
@@ -24,23 +25,28 @@ impl Clone for SleepingRateLimiter {
     }
 }
 
-impl From<Arc<Mutex<TokenBucket>>> for SleepingRateLimiter {
-    fn from(rate_limiter: Arc<Mutex<TokenBucket>>) -> Self {
-        Self { rate_limiter }
-    }
-}
+// impl From<Arc<Mutex<TokenBucket>>> for SleepingRateLimiter {
+//     fn from(rate_limiter: Arc<Mutex<TokenBucket>>) -> Self {
+//         Self { rate_limiter }
+//     }
+// }
 
 impl SleepingRateLimiter {
     /// Constructs a instance of [SleepingRateLimiter] with given target rate-per-second.
     pub fn new(rate_per_second: usize) -> Self {
+        // Self {
+        //     rate_limiter: Arc::new(Mutex::new(TokenBucket::new(
+        //         rate_per_second.try_into().unwrap_or(u64::MAX),
+        //     ))),
+        // }
         Self {
-            rate_limiter: Arc::new(Mutex::new(TokenBucket::new(rate_per_second))),
+            rate_limiter: TokenBucket::new(rate_per_second.try_into().unwrap_or(u64::MAX)),
         }
     }
 
     /// Given `read_size`, that is an amount of units of some governed resource, delays return of `Self` to satisfy configure
     /// rate.
-    pub async fn rate_limit(self, read_size: usize) -> Self {
+    pub async fn rate_limit(mut self, read_size: usize) -> Self {
         trace!(
             target: LOG_TARGET,
             "Rate-Limiter attempting to read {}.",
@@ -59,9 +65,13 @@ impl SleepingRateLimiter {
         //     sleep(delay).await;
         // }
 
+        // let delay = self
+        //     .rate_limiter
+        //     .lock()
+        //     .rate_limit(read_size.try_into().unwrap_or(u64::MAX));
+
         let delay = self
             .rate_limiter
-            .lock()
             .rate_limit(read_size.try_into().unwrap_or(u64::MAX));
 
         if let Some(delay) = delay {

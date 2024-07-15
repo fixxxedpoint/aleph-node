@@ -61,10 +61,10 @@ impl TokenBucket {
             .duration_since(base_instant)
             .as_millis()
             .try_into()
-            .expect("something's wrong with flux capacitor");
+            .expect("something's wrong with the flux capacitor");
         TokenBucket {
             rate_per_second,
-            available: Arc::new(AtomicU64::new(rate_per_second)),
+            available: Arc::new(AtomicU64::new(0)),
             last_update: Arc::new(AtomicU64::new(last_update)),
             base_instant,
             time_provider,
@@ -114,7 +114,7 @@ where
         let previous_available = self
             .available
             .fetch_add(requested, std::sync::atomic::Ordering::Acquire);
-        let now_available = previous_available + requested;
+        let mut now_available = previous_available + requested;
         if now_available <= self.rate_per_second {
             return None;
         }
@@ -134,9 +134,7 @@ where
 
             let new_units = since_last_update
                 .saturating_mul(self.rate_per_second)
-                .saturating_mul(1_000)
-                .try_into()
-                .unwrap_or(u64::MAX);
+                .saturating_mul(1_000);
 
             let last_available = self
                 .available
@@ -146,7 +144,7 @@ where
                 self.available
                     .store(0, std::sync::atomic::Ordering::Release);
             }
-            let now_available = last_available.saturating_sub(new_units);
+            now_available = last_available.saturating_sub(new_units)
         }
 
         if now_available <= self.rate_per_second {
@@ -156,11 +154,10 @@ where
         let wait_milliseconds = (now_available - self.rate_per_second)
             .saturating_mul(1_000)
             .saturating_div(self.rate_per_second);
-        Some(
-            self.base_instant
-                + Duration::from_millis(now)
-                + Duration::from_millis(wait_milliseconds),
-        )
+        let now_duration = Duration::from_millis(now);
+        let wait_duration = Duration::from_millis(wait_milliseconds);
+        println!("gonna wait until: {:?}", self.base_instant + now_duration + wait_duration);
+        Some(self.base_instant + now_duration + wait_duration)
         // let now_available = self.available.load(std::sync::atomic::Ordering::Acquire);
     }
 
