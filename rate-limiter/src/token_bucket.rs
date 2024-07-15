@@ -129,24 +129,25 @@ where
             .last_update
             .fetch_max(now, std::sync::atomic::Ordering::Acquire);
 
-        if last_update > now {
-            return None;
-        }
+        if last_update <= now {
+            let since_last_update = now - last_update;
 
-        let since_last_update = now - last_update;
-        let new_units = since_last_update
-            .saturating_mul(self.rate_per_second)
-            .saturating_mul(1_000)
-            .try_into()
-            .unwrap_or(u64::MAX);
-        let last_available = self
-            .available
-            .fetch_sub(new_units, std::sync::atomic::Ordering::Release);
-        if last_available > new_units {
-            self.available
-                .store(0, std::sync::atomic::Ordering::Release);
+            let new_units = since_last_update
+                .saturating_mul(self.rate_per_second)
+                .saturating_mul(1_000)
+                .try_into()
+                .unwrap_or(u64::MAX);
+
+            let last_available = self
+                .available
+                .fetch_sub(new_units, std::sync::atomic::Ordering::Release);
+
+            if last_available > new_units {
+                self.available
+                    .store(0, std::sync::atomic::Ordering::Release);
+            }
+            let now_available = last_available.saturating_sub(new_units);
         }
-        let now_available = last_available.saturating_sub(new_units);
 
         if now_available <= self.rate_per_second {
             return None;
