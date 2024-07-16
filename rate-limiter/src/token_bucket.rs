@@ -1,12 +1,9 @@
 use crate::LOG_TARGET;
-use log::trace;
+use log::{trace, warn};
 use parking_lot::Mutex;
 use std::{
     cmp::min,
-    sync::{
-        atomic::{AtomicI64, AtomicU64},
-        Arc,
-    },
+    sync::{atomic::AtomicU64, Arc},
     time::{Duration, Instant},
 };
 
@@ -80,18 +77,36 @@ where
     T: TimeProvider,
 {
     // #[cfg(test)]
-    // pub fn new_with_now(rate_per_second: usize, now: Instant, time_provider: T) -> Self
+    // pub fn new_with_now(
+    //     rate_per_second: u64,
+    //     base_instant: Instant,
+    //     now: Instant,
+    //     mut time_provider: T,
+    // ) -> Self
     // where
     //     T: Clone,
     // {
+    //     let last_update: u64 = now
+    //         .duration_since(base_instant)
+    //         .as_millis()
+    //         .try_into()
+    //         .expect("something's wrong with the flux capacitor");
     //     TokenBucket {
     //         rate_per_second,
-    //         available: Arc::new(AtomicI64::new(
-    //             rate_per_second.try_into().unwrap_or(i64::MAX),
-    //         )),
-    //         last_update: now,
+    //         available: Arc::new(AtomicU64::new(0)),
+    //         last_update: Arc::new(AtomicU64::new(last_update)),
+    //         last_update_lock: Arc::new(Mutex::new(())),
+    //         base_instant,
     //         time_provider,
     //     }
+    //     // TokenBucket {
+    //     //     rate_per_second,
+    //     //     available: Arc::new(AtomicI64::new(
+    //     //         rate_per_second.try_into().unwrap_or(i64::MAX),
+    //     //     )),
+    //     //     last_update: now,
+    //     //     time_provider,
+    //     // }
     // }
 
     // fn calculate_delay(&self, available: i64, now: Instant) -> Instant {
@@ -106,57 +121,60 @@ where
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
     /// configured rate limit.
-    pub fn rate_limit(&mut self, mut requested: u64) -> Option<Instant> {
+    pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {} of requested bytes. Internal state: {:?}.",
             requested,
             self
         );
-        let previous_available = self
-            .available
-            .fetch_add(requested, std::sync::atomic::Ordering::Relaxed);
-        let mut now_available = previous_available + requested;
+        let mut now_available = requested
+            + self
+                .available
+                .fetch_add(requested, std::sync::atomic::Ordering::Relaxed);
         if now_available <= self.rate_per_second {
             return None;
         }
 
         println!("need to update the TokenBucket");
 
+        let mut now: Option<u64> = None;
         if let Some(_guard) = self.last_update_lock.try_lock() {
             println!("updating TokenBucket");
-            let now: u64 = self
+            now = self
                 .time_provider
                 .now()
                 .duration_since(self.base_instant)
                 .as_millis()
                 .try_into()
-                .expect("'u64' should be enough to store milliseconds since 'base_instant'");
+                .ok();
+            let Some(now) = now else {
+                warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'base_instant' - rate limiting will be turned off.");
+                return None;
+            };
             let last_update = self
                 .last_update
-                .fetch_max(now, std::sync::atomic::Ordering::Acquire);
+                .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
 
             let since_last_update = now - last_update;
 
             let new_units = since_last_update
                 .saturating_mul(self.rate_per_second)
                 .saturating_div(1_000);
-
-            // let new_units = self.available.fetch_min(new_units, std::sync::atomic::Ordering::Relaxed);
+            now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
             let new_units = min(now_available, new_units);
 
-            let last_available = self
+            // this can't overflow, since all other operations can only `fetch_add` to `available`
+            now_available = self
                 .available
-                .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed);
-
-            // if last_available < new_units {
-            //     self.available
-            //         .store(0, std::sync::atomic::Ordering::Relaxed);
-            // }
-            now_available = last_available.saturating_sub(new_units);
+                .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed)
+                - new_units;
 
             if now_available <= self.rate_per_second {
-                println!("new_units={}; since_last_update={}", new_units, since_last_update);
+                println!(
+                    "new_units={}; since_last_update={}",
+                    new_units, since_last_update
+                );
                 return None;
             }
         }
@@ -164,9 +182,12 @@ where
         let wait_milliseconds = (now_available - self.rate_per_second)
             .saturating_mul(1_000)
             .saturating_div(self.rate_per_second);
-        // let now = Duration::from_millis(now);
-        let now =
-            Duration::from_millis(self.last_update.load(std::sync::atomic::Ordering::Relaxed));
+        let now = match now {
+            Some(now) => Duration::from_millis(now),
+            None => {
+                Duration::from_millis(self.last_update.load(std::sync::atomic::Ordering::Relaxed))
+            }
+        };
         let wait_duration = Duration::from_millis(wait_milliseconds);
         println!(
             "gonna wait until: {:?}",
@@ -174,10 +195,6 @@ where
         );
         Some(self.base_instant + now + wait_duration)
     }
-
-    // fn token_limit(&self) -> usize {
-    //     self.rate_per_second
-    // }
 }
 
 // #[cfg(test)]
