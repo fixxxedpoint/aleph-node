@@ -141,4 +141,4 @@ if [[ -n "${MAX_SUBSCRIPTIONS_PER_CONNECTION:-}" ]]; then
   ARGS+=(--rpc-max-subscriptions-per-connection ${MAX_SUBSCRIPTIONS_PER_CONNECTION})
 fi
 
-echo "${CUSTOM_ARGS}" | xargs aleph-node --substrate-network-bit-rate=209715 "${ARGS[@]}"
+echo "${CUSTOM_ARGS}" | xargs aleph-node --substrate-network-bit-rate=3145728 "${ARGS[@]}"
