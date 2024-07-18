@@ -98,10 +98,10 @@ where
             requested,
             self
         );
-        let mut before_available = self
+        let mut now_available = self
             .available
-            .fetch_add(requested, std::sync::atomic::Ordering::Relaxed);
-        let mut now_available = before_available.saturating_add(requested);
+            .fetch_add(requested, std::sync::atomic::Ordering::Relaxed).saturating_add(requested);
+        // let mut now_available = before_available.saturating_add(requested);
 
         // let mut now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
 
@@ -109,11 +109,11 @@ where
             return None;
         }
 
-        println!("need to update the TokenBucket");
+        // println!("need to update the TokenBucket");
 
         let mut now = None;
         if let Some(_guard) = self.last_update_lock.try_lock() {
-            println!("updating TokenBucket");
+            // println!("updating TokenBucket");
             now = self
                 .time_provider
                 .now()
@@ -146,10 +146,10 @@ where
                 - new_units;
 
             if now_available <= self.rate_per_second {
-                println!(
-                    "new_units={}; since_last_update={}",
-                    new_units, since_last_update
-                );
+                // println!(
+                //     "new_units={}; since_last_update={}",
+                //     new_units, since_last_update
+                // );
                 return None;
             }
         }
@@ -164,10 +164,10 @@ where
             }
         };
         let wait_duration = Duration::from_millis(wait_milliseconds);
-        println!(
-            "gonna wait until: {:?}",
-            self.base_instant + now + wait_duration
-        );
+        // println!(
+        //     "gonna wait until: {:?}",
+        //     self.base_instant + now + wait_duration
+        // );
         Some(self.base_instant + now + wait_duration)
     }
 }
