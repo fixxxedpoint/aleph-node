@@ -43,16 +43,19 @@ pub struct TokenBucket<T = DefaultTimeProvider> {
 }
 
 #[derive(Clone)]
-pub struct ChildTokenBucket<T = DefaultTimeProvider> {
-    parent: Arc<TokenBucket<T>>,
-    token_bucket: TokenBucket<T>,
+pub struct ChildTokenBucket {
+    parent: Arc<TokenBucket<DefaultTimeProvider>>,
+    token_bucket: TokenBucket<DefaultTimeProvider>,
 }
 
 impl ChildTokenBucket {
     pub fn new(rate_per_second: u64) -> Self {
         let parent = Arc::new(TokenBucket::new(rate_per_second));
         let token_bucket = TokenBucket::new(rate_per_second);
-        Self { parent, token_bucket }
+        Self {
+            parent,
+            token_bucket,
+        }
     }
 }
 
@@ -77,44 +80,38 @@ impl ChildTokenBucket {
 //     }
 // }
 
-pub trait RateLimiter {
-    fn rate_limit(&mut self, requested: u64) -> Option<Instant>;
-}
-
-impl<T> ChildTokenBucket<T>
-where
-    T: TimeProvider,
-{
+impl ChildTokenBucket {
     pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
-        let children = Arc::strong_count(&self.parent).try_into().unwrap_or(u64::MAX);
-        let childs_rate_per_second = self.parent.rate_per_second / children;
-        self.token_bucket.rate_per_second(childs_rate_per_second);
+        let children = Arc::strong_count(&self.parent)
+            .try_into()
+            .unwrap_or(u64::MAX);
+        let rate_per_second_for_children = self.parent.rate_per_second / children;
+        self.token_bucket
+            .rate_per_second(rate_per_second_for_children);
 
         let mut result = self.token_bucket.rate_limit_with_dropping(requested);
-        match result.dropped {
-            None => result.delay,
-            Some(dropped) => {
-                let parent_result = self.parent.rate_limit_with_dropping(dropped);
-                if let Some(parent_dropped) = parent_result.dropped {
-                    result.delay = result
-                        .delay
-                        .into_iter()
-                        .chain(self.token_bucket.rate_limit(parent_dropped))
-                        .max();
-                }
-                result
-                    .delay
-                    .into_iter()
-                    .chain(parent_result.delay.into_iter())
-                    .max()
-            }
-        }
-    }
-}
 
-impl<T> RateLimiter for ChildTokenBucket<T> where T: TimeProvider {
-    fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
-        self.rate_limit(requested)
+        let dropped = result.dropped.unwrap_or(0);
+        let requested_for_parent = requested - dropped;
+        self.parent.rate_limit_with_dropping(requested_for_parent);
+
+        if result.dropped.is_none() {
+            return result.delay;
+        }
+
+        let parent_result = self.parent.rate_limit_with_dropping(dropped);
+        if let Some(parent_dropped) = parent_result.dropped {
+            result.delay = result
+                .delay
+                .into_iter()
+                .chain(self.token_bucket.rate_limit(parent_dropped))
+                .max();
+        }
+        result
+            .delay
+            .into_iter()
+            .chain(parent_result.delay.into_iter())
+            .max()
     }
 }
 

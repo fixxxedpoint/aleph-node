@@ -1,14 +1,10 @@
-use std::{sync::Arc, task::ready};
+use std::task::ready;
 
 use futures::{future::BoxFuture, FutureExt};
 use log::trace;
-use parking_lot::Mutex;
-use tokio::{
-    io::AsyncRead,
-    time::{sleep, sleep_until},
-};
+use tokio::{io::AsyncRead, time::sleep_until};
 
-use crate::{token_bucket::{ChildTokenBucket, RateLimiter as TokenBucketRateLimiter, TokenBucket}, LOG_TARGET};
+use crate::{token_bucket::ChildTokenBucket, LOG_TARGET};
 
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
