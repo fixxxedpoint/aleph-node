@@ -38,68 +38,51 @@ pub struct TokenBucket<T = DefaultTimeProvider> {
     available: Arc<AtomicU64>,
     last_update: Arc<AtomicU64>,
     last_update_lock: Arc<Mutex<()>>,
-    base_instant: Instant,
+    initial_time: Instant,
     time_provider: T,
 }
 
 #[derive(Clone)]
-pub struct ChildTokenBucket {
+pub struct HierarchicalTokenBucket {
+    last_children_count: u64,
     parent: Arc<TokenBucket<DefaultTimeProvider>>,
     token_bucket: TokenBucket<DefaultTimeProvider>,
 }
 
-impl ChildTokenBucket {
+impl HierarchicalTokenBucket {
     pub fn new(rate_per_second: u64) -> Self {
         let parent = Arc::new(TokenBucket::new(rate_per_second));
         let token_bucket = TokenBucket::new(rate_per_second);
         Self {
+            last_children_count: Arc::strong_count(&parent).try_into().unwrap_or(u64::MAX),
             parent,
             token_bucket,
         }
     }
 }
 
-// // It can only borrow tokens to its children.
-// pub struct ParentTokenBucket<T> {
-//     // children: Arc<AtomicU64>,
-//     token_bucket: TokenBucket<T>,
-// }
-
-// impl<T> ParentTokenBucket<T> {
-//     pub fn rate(&self) -> u64 {
-//         self.token_bucket.rate_per_second
-//     }
-// }
-
-// impl<T: Clone> Clone for ChildTokenBucket<T> {
-//     fn clone(&self) -> Self {
-//         Self {
-//             parent: self.parent.clone(),
-//             token_bucket: self.token_bucket.clone(),
-//         }
-//     }
-// }
-
-impl ChildTokenBucket {
-    pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
-        let children = Arc::strong_count(&self.parent)
+impl HierarchicalTokenBucket {
+    fn set_rate(&mut self) {
+        let children_count = Arc::strong_count(&self.parent)
             .try_into()
             .unwrap_or(u64::MAX);
-        let rate_per_second_for_children = self.parent.rate_per_second / children;
-        self.token_bucket
-            .rate_per_second(rate_per_second_for_children);
+        if self.last_children_count != children_count {
+            let rate_per_second_for_children = self.parent.rate_per_second / children_count;
+            self.token_bucket
+                .rate_per_second(rate_per_second_for_children);
+        }
+    }
 
-        let mut result = self.token_bucket.rate_limit_with_dropping(requested);
+    pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
+        self.set_rate();
 
-        let dropped = result.dropped.unwrap_or(0);
-        let requested_for_parent = requested - dropped;
-        self.parent.rate_limit_with_dropping(requested_for_parent);
+        let mut result = self.token_bucket.try_rate_limit_without_delay(requested);
+        let parent_result = self.parent.try_rate_limit_without_delay(requested);
 
         if result.dropped.is_none() {
             return result.delay;
         }
 
-        let parent_result = self.parent.rate_limit_with_dropping(dropped);
         if let Some(parent_dropped) = parent_result.dropped {
             result.delay = result
                 .delay
@@ -126,8 +109,8 @@ impl<T> std::fmt::Debug for TokenBucket<T> {
 }
 
 pub struct RateLimitResult {
-    delay: Option<Instant>,
-    dropped: Option<u64>,
+    pub delay: Option<Instant>,
+    pub dropped: Option<u64>,
 }
 
 impl TokenBucket {
@@ -141,7 +124,7 @@ impl<T> TokenBucket<T>
 where
     T: TimeProvider,
 {
-    fn new_with_time_provider(rate_per_second: u64, mut time_provider: T) -> Self {
+    fn new_with_time_provider(rate_per_second: u64, time_provider: T) -> Self {
         let base_instant = time_provider.now();
         let last_update: u64 = base_instant
             .duration_since(base_instant)
@@ -153,7 +136,7 @@ where
             available: Arc::new(AtomicU64::new(0)),
             last_update: Arc::new(AtomicU64::new(last_update)),
             last_update_lock: Arc::new(Mutex::new(())),
-            base_instant,
+            initial_time: base_instant,
             time_provider,
         }
     }
@@ -174,10 +157,6 @@ where
             .available
             .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
             .saturating_add(requested);
-        // let mut now_available = before_available.saturating_add(requested);
-
-        // let mut now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
-
         if now_available <= self.rate_per_second {
             return None;
         }
@@ -190,7 +169,7 @@ where
             now = self
                 .time_provider
                 .now()
-                .duration_since(self.base_instant)
+                .duration_since(self.initial_time)
                 .as_millis()
                 .try_into()
                 .ok();
@@ -212,7 +191,7 @@ where
                 .load(std::sync::atomic::Ordering::Relaxed)
                 .saturating_sub(requested);
             let new_units = min(now_available, new_units);
-            // this can't overflow, since all other operations can only `fetch_add` to `available`
+            // this can't underflow, since all other operations can only `fetch_add` to `available`
             now_available = self
                 .available
                 .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed)
@@ -242,7 +221,13 @@ where
         //     "gonna wait until: {:?}",
         //     self.base_instant + now + wait_duration
         // );
-        Some((self.base_instant + now + wait_duration, scheduled_for_later))
+        Some((self.initial_time + now + wait_duration, scheduled_for_later))
+    }
+
+    pub fn rate_per_second(&mut self, rate_per_second: u64) -> u64 {
+        let result = self.rate_per_second;
+        self.rate_per_second = rate_per_second;
+        result
     }
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
@@ -251,7 +236,7 @@ where
         self.rate_limit_internal(requested).map(|(delay, _)| delay)
     }
 
-    pub fn rate_limit_with_dropping(&self, requested: u64) -> RateLimitResult {
+    pub fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
         let now_available = self.available();
         let to_request = min(now_available, requested);
         let result = self.rate_limit_internal(requested);
@@ -267,12 +252,6 @@ where
                 dropped,
             },
         }
-    }
-
-    pub fn rate_per_second(&mut self, rate_per_second: u64) -> u64 {
-        let result = self.rate_per_second;
-        self.rate_per_second = rate_per_second;
-        result
     }
 }
 
