@@ -3,6 +3,7 @@ use log::{trace, warn};
 use parking_lot::Mutex;
 use std::{
     cmp::min,
+    iter::empty,
     sync::{atomic::AtomicU64, Arc},
     time::{Duration, Instant},
 };
@@ -108,21 +109,23 @@ where
     pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
         self.set_rate();
 
-        let mut result = self.rate_limiter.try_rate_limit_without_delay(requested);
+        let result = self.rate_limiter.try_rate_limit_without_delay(requested);
         let parent_result = self.parent.try_rate_limit_without_delay(requested);
 
-        if result.dropped.is_none() {
-            return result.delay;
+        if result.dropped.is_none() || parent_result.dropped.is_none() {
+            return result.delay.into_iter().chain(parent_result.delay).min();
         }
 
-        if let Some(parent_dropped) = parent_result.dropped {
-            result.delay = result
-                .delay
-                .into_iter()
-                .chain(self.rate_limiter.rate_limit(parent_dropped))
-                .max();
-        }
-        result.delay.into_iter().chain(parent_result.delay).max()
+        empty()
+            .chain(result.delay)
+            .chain(parent_result.delay)
+            .chain(
+                parent_result
+                    .dropped
+                    .map(|parent_dropped| self.rate_limiter.rate_limit(parent_dropped))
+                    .flatten(),
+            )
+            .max()
     }
 }
 
