@@ -42,11 +42,39 @@ pub struct TokenBucket<T = DefaultTimeProvider> {
     time_provider: T,
 }
 
+pub trait RateLimiter {
+    fn rate_per_second(&self) -> u64;
+    fn set_rate_per_second(&mut self, rate_per_second: u64);
+    fn rate_limit(&mut self, requested: u64) -> Option<Instant>;
+    fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
+}
+
+impl RateLimiter for TokenBucket {
+    fn rate_per_second(&self) -> u64 {
+        self.rate_per_second
+    }
+
+    fn set_rate_per_second(&mut self, rate_per_second: u64) {
+        self.rate_per_second = rate_per_second;
+    }
+
+    fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
+        self.rate_limit(requested)
+    }
+
+    fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
+        self.try_rate_limit_without_delay(requested)
+    }
+}
+
 #[derive(Clone)]
-pub struct HierarchicalTokenBucket {
+pub struct HierarchicalTokenBucket<
+    ParentRL = TokenBucket<DefaultTimeProvider>,
+    ThisRL = TokenBucket<DefaultTimeProvider>,
+> {
     last_children_count: u64,
-    parent: Arc<TokenBucket<DefaultTimeProvider>>,
-    token_bucket: TokenBucket<DefaultTimeProvider>,
+    parent: Arc<ParentRL>,
+    rate_limiter: ThisRL,
 }
 
 impl HierarchicalTokenBucket {
@@ -56,27 +84,31 @@ impl HierarchicalTokenBucket {
         Self {
             last_children_count: Arc::strong_count(&parent).try_into().unwrap_or(u64::MAX),
             parent,
-            token_bucket,
+            rate_limiter: token_bucket,
         }
     }
 }
 
-impl HierarchicalTokenBucket {
+impl<ParentRL, ThisRL> HierarchicalTokenBucket<ParentRL, ThisRL>
+where
+    ParentRL: RateLimiter,
+    ThisRL: RateLimiter,
+{
     fn set_rate(&mut self) {
         let children_count = Arc::strong_count(&self.parent)
             .try_into()
             .unwrap_or(u64::MAX);
         if self.last_children_count != children_count {
-            let rate_per_second_for_children = self.parent.rate_per_second / children_count;
-            self.token_bucket
-                .rate_per_second(rate_per_second_for_children);
+            let rate_per_second_for_children = self.parent.rate_per_second() / children_count;
+            self.rate_limiter
+                .set_rate_per_second(rate_per_second_for_children);
         }
     }
 
     pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
         self.set_rate();
 
-        let mut result = self.token_bucket.try_rate_limit_without_delay(requested);
+        let mut result = self.rate_limiter.try_rate_limit_without_delay(requested);
         let parent_result = self.parent.try_rate_limit_without_delay(requested);
 
         if result.dropped.is_none() {
@@ -87,14 +119,10 @@ impl HierarchicalTokenBucket {
             result.delay = result
                 .delay
                 .into_iter()
-                .chain(self.token_bucket.rate_limit(parent_dropped))
+                .chain(self.rate_limiter.rate_limit(parent_dropped))
                 .max();
         }
-        result
-            .delay
-            .into_iter()
-            .chain(parent_result.delay.into_iter())
-            .max()
+        result.delay.into_iter().chain(parent_result.delay).max()
     }
 }
 

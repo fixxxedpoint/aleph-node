@@ -37,7 +37,9 @@ impl SleepingRateLimiter {
         //     ))),
         // }
         Self {
-            rate_limiter: HierarchicalTokenBucket::new(rate_per_second.try_into().unwrap_or(u64::MAX)),
+            rate_limiter: HierarchicalTokenBucket::new(
+                rate_per_second.try_into().unwrap_or(u64::MAX),
+            ),
         }
     }
 
