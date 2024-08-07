@@ -33,14 +33,26 @@ impl TimeProvider for DefaultTimeProvider {
 }
 
 /// Implementation of the `Token Bucket` algorithm for the purpose of rate-limiting access to some abstract resource.
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct TokenBucket<T = DefaultTimeProvider> {
     rate_per_second: u64,
-    available: Arc<AtomicU64>,
-    last_update: Arc<AtomicU64>,
-    last_update_lock: Arc<Mutex<()>>,
+    available: AtomicU64,
+    last_update: AtomicU64,
+    last_update_lock: Mutex<()>,
     initial_time: Instant,
     time_provider: T,
+}
+
+impl TokenBucket {
+    pub fn deep_clone(&self) -> Self {
+        Self::new(self.rate_per_second)
+    }
+}
+
+impl Clone for TokenBucket {
+    fn clone(&self) -> Self {
+        Self::new(self.rate_per_second)
+    }
 }
 
 pub trait RateLimiter {
@@ -77,6 +89,16 @@ pub struct HierarchicalTokenBucket<
     parent: Arc<ParentRL>,
     rate_limiter: ThisRL,
 }
+
+// impl Clone for HierarchicalTokenBucket {
+//     fn clone(&self) -> Self {
+//         Self {
+//             last_children_count: self.last_children_count.clone(),
+//             parent: Arc::clone(&self.parent),
+//             rate_limiter: self.rate_limiter.deep_clone(),
+//         }
+//     }
+// }
 
 impl HierarchicalTokenBucket {
     pub fn new(rate_per_second: u64) -> Self {
@@ -188,9 +210,9 @@ where
         //     .expect("something's wrong with the flux capacitor");
         Self {
             rate_per_second,
-            available: Arc::new(AtomicU64::new(0)),
-            last_update: Arc::new(AtomicU64::new(0)),
-            last_update_lock: Arc::new(Mutex::new(())),
+            available: AtomicU64::new(0),
+            last_update: AtomicU64::new(0),
+            last_update_lock: Mutex::new(()),
             initial_time: base_instant,
             time_provider,
         }
@@ -221,7 +243,8 @@ where
 
         // println!("need to update the TokenBucket");
 
-        let mut now = None;
+        // let mut now = None;
+        let mut now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
         if let Some(_guard) = self.last_update_lock.try_lock() {
             // println!("updating TokenBucket");
 
@@ -231,21 +254,22 @@ where
                 self,
             );
 
-            now = self
+            let new_now = self
                 .time_provider
                 .now()
                 .duration_since(self.initial_time)
                 .as_millis()
                 .try_into()
                 .ok();
-            let Some(now) = now else {
+            let Some(new_now) = new_now else {
                 warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'initial_time' - rate limiting will be turned off.");
                 return None;
             };
+            now = new_now;
             let since_last_update = now
                 - self
-                .last_update
-                .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
+                    .last_update
+                    .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
 
             let new_units =
                 since_last_update.saturating_mul(self.rate_per_second) / SECOND_IN_MILLIS;
@@ -288,6 +312,12 @@ where
                 // );
                 return None;
             }
+        } else {
+            trace!(
+                target: LOG_TARGET,
+                "TokenBucket tried to update, but failed {:?}",
+                self,
+            );
         }
 
         let scheduled_for_later = now_available - self.rate_per_second;
@@ -295,7 +325,7 @@ where
             scheduled_for_later.saturating_mul(SECOND_IN_MILLIS) / self.rate_per_second;
 
         trace!(
-            target: LOG_TARGET,
+                target: LOG_TARGET,
             "TokenBucket about to wait for {} milliseconds after requesting {} - scheduled_for_later {}; now_available {}; rate_per_second {}; {:?}.",
             wait_milliseconds,
             requested,
@@ -305,12 +335,7 @@ where
             self,
         );
 
-        let now = match now {
-            Some(now) => Duration::from_millis(now),
-            None => {
-                Duration::from_millis(self.last_update.load(std::sync::atomic::Ordering::Relaxed))
-            }
-        };
+        let now = Duration::from_millis(now);
         let wait_duration = Duration::from_millis(wait_milliseconds);
         // println!(
         //     "gonna wait until: {:?}",
