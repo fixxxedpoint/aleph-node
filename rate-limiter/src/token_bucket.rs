@@ -107,25 +107,49 @@ where
     }
 
     pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
+        // return None;
         self.set_rate();
 
         let result = self.rate_limiter.try_rate_limit_without_delay(requested);
         let parent_result = self.parent.try_rate_limit_without_delay(requested);
 
-        if result.dropped.is_none() || parent_result.dropped.is_none() {
-            return result.delay.into_iter().chain(parent_result.delay).min();
-        }
+        let left_tokens = empty()
+            .chain(result.dropped)
+            .chain(parent_result.dropped)
+            .min();
 
+        let required_delay = empty().chain(result.delay).chain(parent_result.delay).min();
+
+        let Some(left_tokens) = left_tokens else {
+            return required_delay;
+        };
+        // if left_tokens.is_none() {
+        //     // return result.delay.into_iter().chain(parent_result.delay).min();
+        //     // return result.delay.into_iter().chain(parent_result.delay).max();
+        //     return required_delay;
+        // }
         empty()
-            .chain(result.delay)
-            .chain(parent_result.delay)
-            .chain(
-                parent_result
-                    .dropped
-                    .map(|parent_dropped| self.rate_limiter.rate_limit(parent_dropped))
-                    .flatten(),
-            )
+            .chain(required_delay)
+            .chain(self.rate_limiter.rate_limit(left_tokens))
             .max()
+
+        // self.set_rate();
+
+        // let mut result = self.rate_limiter.try_rate_limit_without_delay(requested);
+        // let parent_result = self.parent.try_rate_limit_without_delay(requested);
+
+        // if result.dropped.is_none() {
+        //     return result.delay;
+        // }
+
+        // if let Some(parent_dropped) = parent_result.dropped {
+        //     result.delay = result
+        //         .delay
+        //         .into_iter()
+        //         .chain(self.rate_limiter.rate_limit(parent_dropped))
+        //         .max();
+        // }
+        // result.delay.into_iter().chain(parent_result.delay).max()
     }
 }
 
@@ -157,15 +181,15 @@ where
 {
     fn new_with_time_provider(rate_per_second: u64, time_provider: T) -> Self {
         let base_instant = time_provider.now();
-        let last_update: u64 = base_instant
-            .duration_since(base_instant)
-            .as_millis()
-            .try_into()
-            .expect("something's wrong with the flux capacitor");
+        // let last_update: u64 = base_instant
+        //     .duration_since(base_instant)
+        //     .as_millis()
+        //     .try_into()
+        //     .expect("something's wrong with the flux capacitor");
         Self {
             rate_per_second,
             available: Arc::new(AtomicU64::new(0)),
-            last_update: Arc::new(AtomicU64::new(last_update)),
+            last_update: Arc::new(AtomicU64::new(0)),
             last_update_lock: Arc::new(Mutex::new(())),
             initial_time: base_instant,
             time_provider,
@@ -184,10 +208,13 @@ where
             requested,
             self
         );
+        if requested == 0 {
+            return None;
+        }
         let mut now_available = self
             .available
             .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
-            .saturating_add(requested);
+            + requested;
         if now_available <= self.rate_per_second {
             return None;
         }
@@ -197,6 +224,13 @@ where
         let mut now = None;
         if let Some(_guard) = self.last_update_lock.try_lock() {
             // println!("updating TokenBucket");
+
+            trace!(
+                target: LOG_TARGET,
+                "TokenBucket about to update it tokens {:?}.",
+                self,
+            );
+
             now = self
                 .time_provider
                 .now()
@@ -205,23 +239,42 @@ where
                 .try_into()
                 .ok();
             let Some(now) = now else {
-                warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'base_instant' - rate limiting will be turned off.");
+                warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'initial_time' - rate limiting will be turned off.");
                 return None;
             };
             let since_last_update = now
                 - self
-                    .last_update
-                    .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
+                .last_update
+                .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
 
-            let new_units = since_last_update
-                .saturating_mul(self.rate_per_second)
-                .saturating_div(SECOND_IN_MILLIS);
+            let new_units =
+                since_last_update.saturating_mul(self.rate_per_second) / SECOND_IN_MILLIS;
 
-            now_available = self
-                .available
-                .load(std::sync::atomic::Ordering::Relaxed)
-                .saturating_sub(requested);
+            trace!(
+                target: LOG_TARGET,
+                "TokenBucket new_units: {}; since_last_update {}; {:?}.",
+                new_units,
+                since_last_update,
+                self,
+            );
+
+            // TODO investigate
+            // todo!();
+            // now_available = self
+            //     .available
+            //     .load(std::sync::atomic::Ordering::Relaxed)
+            //     .saturating_sub(requested);
+
+            now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
             let new_units = min(now_available, new_units);
+
+            trace!(
+                target: LOG_TARGET,
+                "TokenBucket new_units after processing: {}; {:?}.",
+                new_units,
+                self,
+            );
+
             // this can't underflow, since all other operations can only `fetch_add` to `available`
             now_available = self
                 .available
@@ -238,9 +291,20 @@ where
         }
 
         let scheduled_for_later = now_available - self.rate_per_second;
-        let wait_milliseconds = scheduled_for_later
-            .saturating_mul(SECOND_IN_MILLIS)
-            .saturating_div(self.rate_per_second);
+        let wait_milliseconds =
+            scheduled_for_later.saturating_mul(SECOND_IN_MILLIS) / self.rate_per_second;
+
+        trace!(
+            target: LOG_TARGET,
+            "TokenBucket about to wait for {} milliseconds after requesting {} - scheduled_for_later {}; now_available {}; rate_per_second {}; {:?}.",
+            wait_milliseconds,
+            requested,
+            scheduled_for_later,
+            now_available,
+            self.rate_per_second,
+            self,
+        );
+
         let now = match now {
             Some(now) => Duration::from_millis(now),
             None => {
@@ -268,11 +332,18 @@ where
     }
 
     pub fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
+        // if requested == 0 {
+        //     return RateLimitResult { delay: None, dropped: None };
+        // }
         let now_available = self.available();
         let to_request = min(now_available, requested);
-        let result = self.rate_limit_internal(requested);
+        // let result = self.rate_limit_internal(requested);
+        let result = self.rate_limit_internal(to_request);
         let dropped = requested - to_request;
-        let dropped = if dropped > 0 { Some(dropped) } else { None };
+        let dropped = match dropped {
+            0 => None,
+            some => Some(some),
+        };
         match result {
             Some((delay, _)) => RateLimitResult {
                 delay: Some(delay),
