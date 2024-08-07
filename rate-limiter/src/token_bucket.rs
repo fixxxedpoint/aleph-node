@@ -58,7 +58,7 @@ impl Clone for TokenBucket {
 pub trait RateLimiter {
     fn rate_per_second(&self) -> u64;
     fn set_rate_per_second(&mut self, rate_per_second: u64);
-    fn rate_limit(&mut self, requested: u64) -> Option<Instant>;
+    fn rate_limit(&self, requested: u64) -> Option<Instant>;
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
 }
 
@@ -71,8 +71,8 @@ impl RateLimiter for TokenBucket {
         self.rate_per_second = rate_per_second;
     }
 
-    fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
-        self.rate_limit(requested)
+    fn rate_limit(&self, requested: u64) -> Option<Instant> {
+        self.rate_limit_internal(requested).map(|(delay, _)| delay)
     }
 
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
@@ -129,49 +129,27 @@ where
     }
 
     pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
-        // return None;
         self.set_rate();
 
         let result = self.rate_limiter.try_rate_limit_without_delay(requested);
-        let parent_result = self.parent.try_rate_limit_without_delay(requested);
+        let left_tokens = result.dropped.unwrap_or(0);
+        let for_parent = requested - left_tokens;
+        // account all tokens that we used
+        self.parent.rate_limit(for_parent);
 
-        let left_tokens = empty()
-            .chain(result.dropped)
-            .chain(parent_result.dropped)
-            .min();
+        // try to borrow from parent
+        let parent_result = self.parent.try_rate_limit_without_delay(left_tokens);
+        let left_tokens = parent_result.dropped;
 
-        let required_delay = empty().chain(result.delay).chain(parent_result.delay).min();
+        let required_delay = empty().chain(result.delay).chain(parent_result.delay).max();
 
         let Some(left_tokens) = left_tokens else {
             return required_delay;
         };
-        // if left_tokens.is_none() {
-        //     // return result.delay.into_iter().chain(parent_result.delay).min();
-        //     // return result.delay.into_iter().chain(parent_result.delay).max();
-        //     return required_delay;
-        // }
         empty()
             .chain(required_delay)
             .chain(self.rate_limiter.rate_limit(left_tokens))
             .max()
-
-        // self.set_rate();
-
-        // let mut result = self.rate_limiter.try_rate_limit_without_delay(requested);
-        // let parent_result = self.parent.try_rate_limit_without_delay(requested);
-
-        // if result.dropped.is_none() {
-        //     return result.delay;
-        // }
-
-        // if let Some(parent_dropped) = parent_result.dropped {
-        //     result.delay = result
-        //         .delay
-        //         .into_iter()
-        //         .chain(self.rate_limiter.rate_limit(parent_dropped))
-        //         .max();
-        // }
-        // result.delay.into_iter().chain(parent_result.delay).max()
     }
 }
 
