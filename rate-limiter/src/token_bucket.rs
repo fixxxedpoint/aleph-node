@@ -132,7 +132,10 @@ where
         }
     }
 
-    pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
+    pub fn rate_limit(&mut self, requested: u64) -> Option<Option<Instant>> {
+        if self.parent.rate_per_second() == 0 {
+            return Some(None);
+        }
         self.set_rate();
 
         let result = self.rate_limiter.try_rate_limit_without_delay(requested);
@@ -141,19 +144,24 @@ where
         // account all tokens that we used
         self.parent.rate_limit(for_parent);
 
-        // try to borrow from parent
-        let parent_result = self.parent.try_rate_limit_without_delay(left_tokens);
+        let parent_result = match left_tokens {
+            0 => return Some(result.delay),
+            left_tokens => {
+                // try to borrow from parent
+                self.parent.try_rate_limit_without_delay(left_tokens)
+            }
+        };
         let left_tokens = parent_result.dropped.unwrap_or(0);
-
         let required_delay = empty().chain(result.delay).chain(parent_result.delay).max();
 
-        if left_tokens == 0 {
-            return required_delay;
-        }
-        empty()
-            .chain(required_delay)
-            .chain(self.rate_limiter.rate_limit(left_tokens))
-            .max()
+        let result = match left_tokens {
+            0 => required_delay,
+            left_tokens => empty()
+                .chain(required_delay)
+                .chain(self.rate_limiter.rate_limit(left_tokens))
+                .max(),
+        };
+        Some(result)
     }
 }
 

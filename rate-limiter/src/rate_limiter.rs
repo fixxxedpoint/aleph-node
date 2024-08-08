@@ -1,6 +1,9 @@
 use std::task::ready;
 
-use futures::{future::BoxFuture, FutureExt};
+use futures::{
+    future::{pending, BoxFuture},
+    FutureExt,
+};
 use log::trace;
 use tokio::{io::AsyncRead, time::sleep_until};
 
@@ -73,14 +76,18 @@ impl SleepingRateLimiter {
             .rate_limiter
             .rate_limit(read_size.try_into().unwrap_or(u64::MAX));
 
-        if let Some(delay) = delay {
-            trace!(
-                target: LOG_TARGET,
-                "Rate-Limiter will sleep {:?} after reading {} byte(s).",
-                delay,
-                read_size
-            );
-            sleep_until(delay.into()).await;
+        match delay {
+            None => {}
+            Some(None) => pending().await,
+            Some(Some(delay)) => {
+                trace!(
+                    target: LOG_TARGET,
+                    "Rate-Limiter will sleep {:?} after reading {} byte(s).",
+                    delay,
+                    read_size
+                );
+                sleep_until(delay.into()).await;
+            }
         }
 
         self
