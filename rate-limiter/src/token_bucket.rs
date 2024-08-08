@@ -133,7 +133,9 @@ where
     }
 
     pub fn rate_limit(&mut self, requested: u64) -> Option<Option<Instant>> {
+        // return None;
         if self.parent.rate_per_second() == 0 {
+            // panic!("eeee");
             return Some(None);
         }
         self.set_rate();
@@ -144,24 +146,24 @@ where
         // account all tokens that we used
         self.parent.rate_limit(for_parent);
 
-        let parent_result = match left_tokens {
-            0 => return Some(result.delay),
-            left_tokens => {
-                // try to borrow from parent
-                self.parent.try_rate_limit_without_delay(left_tokens)
-            }
-        };
-        let left_tokens_delay = parent_result
-            .dropped
-            .filter(|tokens| *tokens > 0)
-            .and_then(|left_tokens| self.rate_limiter.rate_limit(left_tokens));
-        let required_delay = empty()
-            .chain(result.delay)
-            .chain(parent_result.delay)
-            .max()
-            .into_iter();
+        // try to borrow from parent
+        let parent_result = self.parent.try_rate_limit_without_delay(left_tokens);
+        let left_tokens = parent_result.dropped.unwrap_or(0);
 
-        Some(required_delay.chain(left_tokens_delay).max())
+        let required_delay = empty().chain(result.delay).chain(parent_result.delay).max();
+
+        let result = if left_tokens == 0 {
+            required_delay
+        } else {
+            empty()
+                .chain(required_delay)
+                .chain(self.rate_limiter.rate_limit(left_tokens))
+                .max()
+        };
+        match result {
+            None => None,
+            delay => Some(delay),
+        }
     }
 }
 
@@ -347,9 +349,12 @@ where
     }
 
     pub fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
-        // if requested == 0 {
-        //     return RateLimitResult { delay: None, dropped: None };
-        // }
+        if requested == 0 {
+            return RateLimitResult {
+                delay: None,
+                dropped: None,
+            };
+        }
         let now_available = self.available();
         let to_request = min(now_available, requested);
         // let result = self.rate_limit_internal(requested);
