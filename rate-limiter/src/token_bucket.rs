@@ -151,17 +151,17 @@ where
                 self.parent.try_rate_limit_without_delay(left_tokens)
             }
         };
-        let left_tokens = parent_result.dropped.unwrap_or(0);
-        let required_delay = empty().chain(result.delay).chain(parent_result.delay).max();
+        let left_tokens_delay = parent_result
+            .dropped
+            .filter(|tokens| *tokens > 0)
+            .and_then(|left_tokens| self.rate_limiter.rate_limit(left_tokens));
+        let required_delay = empty()
+            .chain(result.delay)
+            .chain(parent_result.delay)
+            .max()
+            .into_iter();
 
-        let result = match left_tokens {
-            0 => required_delay,
-            left_tokens => empty()
-                .chain(required_delay)
-                .chain(self.rate_limiter.rate_limit(left_tokens))
-                .max(),
-        };
-        Some(result)
+        Some(required_delay.chain(left_tokens_delay).max())
     }
 }
 

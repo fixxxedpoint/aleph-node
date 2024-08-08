@@ -17,32 +17,11 @@ pub struct SleepingRateLimiter<RL = HierarchicalTokenBucket> {
     rate_limiter: RL,
 }
 
-// impl Clone for SleepingRateLimiter {
-//     fn clone(&self) -> Self {
-//         Self {
-//             rate_limiter: self.rate_limiter.clone(),
-//         }
-//     }
-// }
-
-// impl From<Arc<Mutex<TokenBucket>>> for SleepingRateLimiter {
-//     fn from(rate_limiter: Arc<Mutex<TokenBucket>>) -> Self {
-//         Self { rate_limiter }
-//     }
-// }
-
 impl SleepingRateLimiter {
     /// Constructs a instance of [SleepingRateLimiter] with given target rate-per-second.
-    pub fn new(rate_per_second: usize) -> Self {
-        // Self {
-        //     rate_limiter: Arc::new(Mutex::new(TokenBucket::new(
-        //         rate_per_second.try_into().unwrap_or(u64::MAX),
-        //     ))),
-        // }
+    pub fn new(rate_per_second: u64) -> Self {
         Self {
-            rate_limiter: HierarchicalTokenBucket::new(
-                rate_per_second.try_into().unwrap_or(u64::MAX),
-            ),
+            rate_limiter: HierarchicalTokenBucket::new(rate_per_second),
         }
     }
 
@@ -54,23 +33,6 @@ impl SleepingRateLimiter {
             "Rate-Limiter attempting to read {}.",
             read_size
         );
-
-        // let delay = self.rate_limiter.lock().rate_limit(read_size);
-
-        // if let Some(delay) = delay {
-        //     trace!(
-        //         target: LOG_TARGET,
-        //         "Rate-Limiter will sleep {:?} after reading {} byte(s).",
-        //         delay,
-        //         read_size
-        //     );
-        //     sleep(delay).await;
-        // }
-
-        // let delay = self
-        //     .rate_limiter
-        //     .lock()
-        //     .rate_limit(read_size.try_into().unwrap_or(u64::MAX));
 
         let delay = self
             .rate_limiter

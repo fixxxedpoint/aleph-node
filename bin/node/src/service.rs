@@ -234,14 +234,8 @@ fn get_proposer_factory(
 
 fn get_rate_limit_config(aleph_config: &AlephCli) -> RateLimiterConfig {
     RateLimiterConfig {
-        alephbft_network_bit_rate: aleph_config
-            .alephbft_network_bit_rate()
-            .try_into()
-            .unwrap_or(usize::MAX),
-        substrate_network_bit_rate: aleph_config
-            .substrate_network_bit_rate()
-            .try_into()
-            .unwrap_or(usize::MAX),
+        alephbft_network_bit_rate: aleph_config.alephbft_network_bit_rate(),
+        substrate_network_bit_rate: aleph_config.substrate_network_bit_rate(),
     }
 }
 

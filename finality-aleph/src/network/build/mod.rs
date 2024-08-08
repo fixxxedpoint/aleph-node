@@ -51,7 +51,7 @@ pub struct NetworkOutput<TP: TransactionPool + 'static> {
 
 pub struct SubstrateNetworkConfig {
     /// Maximum bit-rate in bytes per second of the substrate network (shared by sync, gossip, etc.).
-    pub substrate_network_bit_rate: usize,
+    pub substrate_network_bit_rate: u64,
     /// Configuration of the network service.
     pub network_config: NetworkConfiguration,
 }
