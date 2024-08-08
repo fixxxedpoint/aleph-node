@@ -122,7 +122,11 @@ where
             .try_into()
             .unwrap_or(u64::MAX);
         if self.last_children_count != children_count {
-            let rate_per_second_for_children = self.parent.rate_per_second() / children_count;
+            let rate_per_second_for_children = match self.parent.rate_per_second() / children_count
+            {
+                0 => 1,
+                rate => rate,
+            };
             self.rate_limiter
                 .set_rate_per_second(rate_per_second_for_children);
         }
@@ -139,17 +143,16 @@ where
 
         // try to borrow from parent
         let parent_result = self.parent.try_rate_limit_without_delay(left_tokens);
-        let left_tokens = parent_result.dropped;
+        let left_tokens = parent_result.dropped.unwrap_or(0);
 
         let required_delay = empty().chain(result.delay).chain(parent_result.delay).max();
 
-        let Some(left_tokens) = left_tokens else {
+        if left_tokens == 0 {
             return required_delay;
-        };
+        }
         empty()
             .chain(required_delay)
             .chain(self.rate_limiter.rate_limit(left_tokens))
-            // .chain(self.parent.rate_limit(left_tokens))
             .max()
     }
 }
