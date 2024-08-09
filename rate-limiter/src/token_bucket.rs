@@ -4,7 +4,10 @@ use parking_lot::Mutex;
 use std::{
     cmp::min,
     iter::empty,
-    sync::{atomic::AtomicU64, Arc},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
 
@@ -35,7 +38,7 @@ impl TimeProvider for DefaultTimeProvider {
 /// Implementation of the `Token Bucket` algorithm for the purpose of rate-limiting access to some abstract resource.
 // #[derive(Clone)]
 pub struct TokenBucket<T = DefaultTimeProvider> {
-    rate_per_second: u64,
+    rate_per_second: AtomicU64,
     available: AtomicU64,
     last_update: AtomicU64,
     last_update_lock: Mutex<()>,
@@ -45,34 +48,41 @@ pub struct TokenBucket<T = DefaultTimeProvider> {
 
 impl TokenBucket {
     pub fn deep_clone(&self) -> Self {
-        Self::new(self.rate_per_second)
+        Self::new(self.rate_per_second.load(Ordering::Relaxed))
     }
 }
 
 impl Clone for TokenBucket {
     fn clone(&self) -> Self {
-        Self::new(self.rate_per_second)
+        Self::new(self.rate_per_second.load(Ordering::Relaxed))
     }
 }
 
 pub trait RateLimiter {
     fn rate_per_second(&self) -> u64;
-    fn set_rate_per_second(&mut self, rate_per_second: u64);
-    fn rate_limit(&self, requested: u64) -> Option<Instant>;
+    fn set_rate_per_second(&self, rate_per_second: u64);
+    fn rate_limit(&self, requested: u64) -> Option<Option<Instant>>;
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
 }
 
 impl RateLimiter for TokenBucket {
     fn rate_per_second(&self) -> u64 {
+        self.rate_per_second.load(Ordering::Relaxed)
+    }
+
+    fn set_rate_per_second(&self, rate_per_second: u64) {
         self.rate_per_second
+            .store(rate_per_second, Ordering::Relaxed)
     }
 
-    fn set_rate_per_second(&mut self, rate_per_second: u64) {
-        self.rate_per_second = rate_per_second;
-    }
-
-    fn rate_limit(&self, requested: u64) -> Option<Instant> {
-        self.rate_limit_internal(requested).map(|(delay, _)| delay)
+    fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+        if self.rate_per_second.load(Ordering::Relaxed) == 0 {
+            return Some(None);
+        }
+        Some(Some(
+            self.rate_limit_internal(requested)
+                .map(|(delay, _)| delay)?,
+        ))
     }
 
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
@@ -80,32 +90,53 @@ impl RateLimiter for TokenBucket {
     }
 }
 
-#[derive(Clone)]
+impl RateLimiter for HierarchicalTokenBucket {
+    fn rate_per_second(&self) -> u64 {
+        self.rate_limiter.rate_per_second()
+    }
+
+    fn set_rate_per_second(&self, rate_per_second: u64) {
+        self.rate_limiter.set_rate_per_second(rate_per_second)
+    }
+
+    fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+        HierarchicalTokenBucket::rate_limit(&self, requested)
+    }
+
+    fn try_rate_limit_without_delay(&self, _requested: u64) -> RateLimitResult {
+        todo!()
+    }
+}
+
+// #[derive(Clone)]
 pub struct HierarchicalTokenBucket<
     ParentRL = TokenBucket<DefaultTimeProvider>,
     ThisRL = TokenBucket<DefaultTimeProvider>,
 > {
-    last_children_count: u64,
+    last_children_count: AtomicU64,
     parent: Arc<ParentRL>,
     rate_limiter: ThisRL,
 }
 
-// impl Clone for HierarchicalTokenBucket {
-//     fn clone(&self) -> Self {
-//         Self {
-//             last_children_count: self.last_children_count.clone(),
-//             parent: Arc::clone(&self.parent),
-//             rate_limiter: self.rate_limiter.deep_clone(),
-//         }
-//     }
-// }
+impl Clone for HierarchicalTokenBucket {
+    fn clone(&self) -> Self {
+        Self {
+            last_children_count: AtomicU64::new(self.last_children_count.load(Ordering::Relaxed)),
+            parent: Arc::clone(&self.parent),
+            rate_limiter: self.rate_limiter.deep_clone(),
+        }
+    }
+}
 
 impl HierarchicalTokenBucket {
     pub fn new(rate_per_second: u64) -> Self {
         let parent = Arc::new(TokenBucket::new(rate_per_second));
         let token_bucket = TokenBucket::new(rate_per_second);
         Self {
-            last_children_count: Arc::strong_count(&parent).try_into().unwrap_or(u64::MAX),
+            last_children_count: Arc::strong_count(&parent)
+                .try_into()
+                .unwrap_or(u64::MAX)
+                .into(),
             parent,
             rate_limiter: token_bucket,
         }
@@ -117,11 +148,13 @@ where
     ParentRL: RateLimiter,
     ThisRL: RateLimiter,
 {
-    fn set_rate(&mut self) {
+    fn set_rate(&self) {
         let children_count = Arc::strong_count(&self.parent)
             .try_into()
             .unwrap_or(u64::MAX);
-        if self.last_children_count != children_count {
+        if self.last_children_count.load(Ordering::Relaxed) != children_count {
+            self.last_children_count
+                .store(children_count, Ordering::Relaxed);
             let rate_per_second_for_children = match self.parent.rate_per_second() / children_count
             {
                 0 => 1,
@@ -132,7 +165,7 @@ where
         }
     }
 
-    pub fn rate_limit(&mut self, requested: u64) -> Option<Option<Instant>> {
+    pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
         // return None;
         if self.parent.rate_per_second() == 0 {
             // panic!("eeee");
@@ -157,13 +190,10 @@ where
         } else {
             empty()
                 .chain(required_delay)
-                .chain(self.rate_limiter.rate_limit(left_tokens))
+                .chain(self.rate_limiter.rate_limit(left_tokens).flatten())
                 .max()
         };
-        match result {
-            None => None,
-            delay => Some(delay),
-        }
+        Some(Some(result?))
     }
 }
 
@@ -201,7 +231,7 @@ where
         //     .try_into()
         //     .expect("something's wrong with the flux capacitor");
         Self {
-            rate_per_second,
+            rate_per_second: rate_per_second.into(),
             available: AtomicU64::new(0),
             last_update: AtomicU64::new(0),
             last_update_lock: Mutex::new(()),
@@ -212,6 +242,7 @@ where
 
     fn available(&self) -> u64 {
         self.rate_per_second
+            .load(Ordering::Relaxed)
             .saturating_sub(self.available.load(std::sync::atomic::Ordering::Relaxed))
     }
 
@@ -229,7 +260,7 @@ where
             .available
             .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
             + requested;
-        if now_available <= self.rate_per_second {
+        if now_available <= self.rate_per_second.load(Ordering::Relaxed) {
             return None;
         }
 
@@ -263,8 +294,9 @@ where
                     .last_update
                     .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
 
-            let new_units =
-                since_last_update.saturating_mul(self.rate_per_second) / SECOND_IN_MILLIS;
+            let new_units = since_last_update
+                .saturating_mul(self.rate_per_second.load(Ordering::Relaxed))
+                / SECOND_IN_MILLIS;
 
             trace!(
                 target: LOG_TARGET,
@@ -297,7 +329,7 @@ where
                 .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed)
                 - new_units;
 
-            if now_available <= self.rate_per_second {
+            if now_available <= self.rate_per_second.load(Ordering::Relaxed) {
                 // println!(
                 //     "new_units={}; since_last_update={}",
                 //     new_units, since_last_update
@@ -312,9 +344,9 @@ where
             );
         }
 
-        let scheduled_for_later = now_available - self.rate_per_second;
-        let wait_milliseconds =
-            scheduled_for_later.saturating_mul(SECOND_IN_MILLIS) / self.rate_per_second;
+        let scheduled_for_later = now_available - self.rate_per_second.load(Ordering::Relaxed);
+        let wait_milliseconds = scheduled_for_later.saturating_mul(SECOND_IN_MILLIS)
+            / self.rate_per_second.load(Ordering::Relaxed);
 
         trace!(
                 target: LOG_TARGET,
@@ -323,7 +355,7 @@ where
             requested,
             scheduled_for_later,
             now_available,
-            self.rate_per_second,
+            self.rate_per_second.load(Ordering::Relaxed),
             self,
         );
 
@@ -337,9 +369,8 @@ where
     }
 
     pub fn rate_per_second(&mut self, rate_per_second: u64) -> u64 {
-        let result = self.rate_per_second;
-        self.rate_per_second = rate_per_second;
-        result
+        self.rate_per_second
+            .swap(rate_per_second, Ordering::Relaxed)
     }
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy

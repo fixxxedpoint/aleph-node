@@ -27,7 +27,7 @@ impl SleepingRateLimiter {
 
     /// Given `read_size`, that is an amount of units of some governed resource, delays return of `Self` to satisfy configure
     /// rate.
-    pub async fn rate_limit(mut self, read_size: usize) -> Self {
+    pub async fn rate_limit(self, read_size: usize) -> Self {
         trace!(
             target: LOG_TARGET,
             "Rate-Limiter attempting to read {}.",
