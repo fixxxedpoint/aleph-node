@@ -65,6 +65,32 @@ pub trait RateLimiter {
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
 }
 
+pub struct NoTrafficRateLimiter;
+
+impl RateLimiter for NoTrafficRateLimiter {
+    fn rate_per_second(&self) -> u64 {
+        0
+    }
+
+    fn set_rate_per_second(&self, _rate_per_second: u64) {}
+
+    fn rate_limit(&self, _requested: u64) -> Option<Option<Instant>> {
+        Some(None)
+    }
+
+    fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
+        RateLimitResult {
+            delay: None,
+            dropped: Some(requested),
+        }
+    }
+}
+
+pub enum WrappingRateLimiter {
+    NoTraffic(NoTrafficRateLimiter),
+    TokenBucket(TokenBucket),
+}
+
 impl RateLimiter for TokenBucket {
     fn rate_per_second(&self) -> u64 {
         self.rate_per_second.load(Ordering::Relaxed)
@@ -188,9 +214,19 @@ where
         let result = if left_tokens == 0 {
             required_delay
         } else {
+            self.parent.rate_limit(left_tokens);
             empty()
                 .chain(required_delay)
+                // .chain(
+                //     self.rate_limiter
+                //         .rate_limit(left_tokens)
+                //         .flatten()
+                //         .into_iter()
+                //         .chain(self.parent.rate_limit(left_tokens).flatten())
+                //         .min(),
+                // )
                 .chain(self.rate_limiter.rate_limit(left_tokens).flatten())
+                // .chain(self.parent.rate_limit(left_tokens).flatten())
                 .max()
         };
         Some(Some(result?))
