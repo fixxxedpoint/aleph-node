@@ -7,21 +7,24 @@ use futures::{
 use log::trace;
 use tokio::{io::AsyncRead, time::sleep_until};
 
-use crate::{token_bucket::HierarchicalTokenBucket, LOG_TARGET};
+use crate::{
+    token_bucket::{HierarchicalTokenBucket, WrappingRateLimiter},
+    LOG_TARGET,
+};
 
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
 #[derive(Clone)]
 pub struct SleepingRateLimiter<RL = HierarchicalTokenBucket> {
     // rate_limiter: Arc<Mutex<TokenBucket>>,
-    rate_limiter: RL,
+    rate_limiter: WrappingRateLimiter<RL>,
 }
 
 impl SleepingRateLimiter {
     /// Constructs a instance of [SleepingRateLimiter] with given target rate-per-second.
     pub fn new(rate_per_second: u64) -> Self {
         Self {
-            rate_limiter: HierarchicalTokenBucket::new(rate_per_second),
+            rate_limiter: WrappingRateLimiter::new(rate_per_second),
         }
     }
 

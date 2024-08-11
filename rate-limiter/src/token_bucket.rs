@@ -2,7 +2,7 @@ use crate::LOG_TARGET;
 use log::{trace, warn};
 use parking_lot::Mutex;
 use std::{
-    cmp::min,
+    cmp::{max, min},
     iter::empty,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -65,6 +65,7 @@ pub trait RateLimiter {
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
 }
 
+#[derive(Clone)]
 pub struct NoTrafficRateLimiter;
 
 impl RateLimiter for NoTrafficRateLimiter {
@@ -86,9 +87,32 @@ impl RateLimiter for NoTrafficRateLimiter {
     }
 }
 
-pub enum WrappingRateLimiter {
+#[derive(Clone)]
+pub enum WrappingRateLimiter<RL> {
     NoTraffic(NoTrafficRateLimiter),
-    TokenBucket(TokenBucket),
+    RateLimiter(RL),
+}
+
+impl<RL> WrappingRateLimiter<RL>
+where
+    RL: RateLimiter,
+{
+    pub fn new(rate_per_second: u64) -> Self
+    where
+        RL: From<u64>,
+    {
+        match rate_per_second {
+            0 => Self::NoTraffic(NoTrafficRateLimiter),
+            rate_per_second => Self::RateLimiter(rate_per_second.into()),
+        }
+    }
+
+    pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+        match self {
+            WrappingRateLimiter::NoTraffic(limiter) => limiter.rate_limit(requested),
+            WrappingRateLimiter::RateLimiter(limiter) => limiter.rate_limit(requested),
+        }
+    }
 }
 
 impl RateLimiter for TokenBucket {
@@ -102,9 +126,6 @@ impl RateLimiter for TokenBucket {
     }
 
     fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
-        if self.rate_per_second.load(Ordering::Relaxed) == 0 {
-            return Some(None);
-        }
         Some(Some(
             self.rate_limit_internal(requested)
                 .map(|(delay, _)| delay)?,
@@ -144,6 +165,12 @@ pub struct HierarchicalTokenBucket<
     rate_limiter: ThisRL,
 }
 
+impl From<u64> for HierarchicalTokenBucket {
+    fn from(rate_per_second: u64) -> Self {
+        HierarchicalTokenBucket::new(rate_per_second)
+    }
+}
+
 impl Clone for HierarchicalTokenBucket {
     fn clone(&self) -> Self {
         Self {
@@ -178,25 +205,17 @@ where
         let children_count = Arc::strong_count(&self.parent)
             .try_into()
             .unwrap_or(u64::MAX);
-        if self.last_children_count.load(Ordering::Relaxed) != children_count {
-            self.last_children_count
-                .store(children_count, Ordering::Relaxed);
-            let rate_per_second_for_children = match self.parent.rate_per_second() / children_count
-            {
-                0 => 1,
-                rate => rate,
-            };
-            self.rate_limiter
-                .set_rate_per_second(rate_per_second_for_children);
+        if self.last_children_count.load(Ordering::Relaxed) == children_count {
+            return;
         }
+        self.last_children_count
+            .store(children_count, Ordering::Relaxed);
+        let rate_per_second_for_children = max(self.parent.rate_per_second() / children_count, 1);
+        self.rate_limiter
+            .set_rate_per_second(rate_per_second_for_children);
     }
 
     pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
-        // return None;
-        if self.parent.rate_per_second() == 0 {
-            // panic!("eeee");
-            return Some(None);
-        }
         self.set_rate();
 
         let result = self.rate_limiter.try_rate_limit_without_delay(requested);
@@ -211,24 +230,13 @@ where
 
         let required_delay = empty().chain(result.delay).chain(parent_result.delay).max();
 
-        let result = if left_tokens == 0 {
-            required_delay
-        } else {
-            self.parent.rate_limit(left_tokens);
-            empty()
-                .chain(required_delay)
-                // .chain(
-                //     self.rate_limiter
-                //         .rate_limit(left_tokens)
-                //         .flatten()
-                //         .into_iter()
-                //         .chain(self.parent.rate_limit(left_tokens).flatten())
-                //         .min(),
-                // )
-                .chain(self.rate_limiter.rate_limit(left_tokens).flatten())
-                // .chain(self.parent.rate_limit(left_tokens).flatten())
-                .max()
-        };
+        let result = empty()
+            .chain(required_delay)
+            .chain(self.rate_limiter.rate_limit(left_tokens).flatten())
+            .max();
+        // account all tokens that we used
+        self.parent.rate_limit(left_tokens);
+
         Some(Some(result?))
     }
 }
@@ -261,11 +269,6 @@ where
 {
     fn new_with_time_provider(rate_per_second: u64, time_provider: T) -> Self {
         let base_instant = time_provider.now();
-        // let last_update: u64 = base_instant
-        //     .duration_since(base_instant)
-        //     .as_millis()
-        //     .try_into()
-        //     .expect("something's wrong with the flux capacitor");
         Self {
             rate_per_second: rate_per_second.into(),
             available: AtomicU64::new(0),
@@ -300,77 +303,10 @@ where
             return None;
         }
 
-        // println!("need to update the TokenBucket");
-
-        // let mut now = None;
         let mut now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
         if let Some(_guard) = self.last_update_lock.try_lock() {
-            // println!("updating TokenBucket");
-
-            trace!(
-                target: LOG_TARGET,
-                "TokenBucket about to update it tokens {:?}.",
-                self,
-            );
-
-            let new_now = self
-                .time_provider
-                .now()
-                .duration_since(self.initial_time)
-                .as_millis()
-                .try_into()
-                .ok();
-            let Some(new_now) = new_now else {
-                warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'initial_time' - rate limiting will be turned off.");
-                return None;
-            };
-            now = new_now;
-            let since_last_update = now
-                - self
-                    .last_update
-                    .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
-
-            let new_units = since_last_update
-                .saturating_mul(self.rate_per_second.load(Ordering::Relaxed))
-                / SECOND_IN_MILLIS;
-
-            trace!(
-                target: LOG_TARGET,
-                "TokenBucket new_units: {}; since_last_update {}; {:?}.",
-                new_units,
-                since_last_update,
-                self,
-            );
-
-            // TODO investigate
-            // todo!();
-            // now_available = self
-            //     .available
-            //     .load(std::sync::atomic::Ordering::Relaxed)
-            //     .saturating_sub(requested);
-
-            now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
-            let new_units = min(now_available, new_units);
-
-            trace!(
-                target: LOG_TARGET,
-                "TokenBucket new_units after processing: {}; {:?}.",
-                new_units,
-                self,
-            );
-
-            // this can't underflow, since all other operations can only `fetch_add` to `available`
-            now_available = self
-                .available
-                .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed)
-                - new_units;
-
-            if now_available <= self.rate_per_second.load(Ordering::Relaxed) {
-                // println!(
-                //     "new_units={}; since_last_update={}",
-                //     new_units, since_last_update
-                // );
-                return None;
+            if let Some(value) = self.update_tokens(&mut now, &mut now_available) {
+                return value;
             }
         } else {
             trace!(
@@ -397,11 +333,64 @@ where
 
         let now = Duration::from_millis(now);
         let wait_duration = Duration::from_millis(wait_milliseconds);
-        // println!(
-        //     "gonna wait until: {:?}",
-        //     self.base_instant + now + wait_duration
-        // );
         Some((self.initial_time + now + wait_duration, scheduled_for_later))
+    }
+
+    fn update_tokens(
+        &self,
+        now: &mut u64,
+        now_available: &mut u64,
+    ) -> Option<Option<(Instant, u64)>> {
+        trace!(
+            target: LOG_TARGET,
+            "TokenBucket about to update it tokens {:?}.",
+            self,
+        );
+        let updated_now = self
+            .time_provider
+            .now()
+            .duration_since(self.initial_time)
+            .as_millis()
+            .try_into()
+            .ok();
+        let Some(updated_now) = updated_now else {
+            warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'initial_time' - rate limiting will be turned off.");
+            return Some(None);
+        };
+        *now = updated_now;
+        let since_last_update = *now
+            - self
+                .last_update
+                .fetch_max(*now, std::sync::atomic::Ordering::Relaxed);
+        let new_units = since_last_update
+            .saturating_mul(self.rate_per_second.load(Ordering::Relaxed))
+            / SECOND_IN_MILLIS;
+        trace!(
+            target: LOG_TARGET,
+            "TokenBucket new_units: {}; since_last_update {}; {:?}.",
+            new_units,
+            since_last_update,
+            self,
+        );
+        *now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
+        let new_units = min(*now_available, new_units);
+        trace!(
+            target: LOG_TARGET,
+            "TokenBucket new_units after processing: {}; {:?}.",
+            new_units,
+            self,
+        );
+
+        // this can't underflow, since all other operations can only `fetch_add` to `available`
+        *now_available = self
+            .available
+            .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed)
+            - new_units;
+
+        if *now_available <= self.rate_per_second.load(Ordering::Relaxed) {
+            return Some(None);
+        }
+        None
     }
 
     pub fn rate_per_second(&mut self, rate_per_second: u64) -> u64 {
