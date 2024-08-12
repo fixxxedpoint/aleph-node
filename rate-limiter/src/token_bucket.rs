@@ -119,6 +119,7 @@ where
     }
 
     fn rate_limit_internal(&self, requested: u64) -> Option<(Instant, u64)> {
+        println!("requested={}; self={:?}", requested, self);
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {} of requested bytes. Internal state: {:?}.",
@@ -128,18 +129,25 @@ where
         if requested == 0 {
             return None;
         }
-        let mut now_available = self
-            .available
-            .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
-            + requested;
-        if now_available <= self.rate_per_second.load(Ordering::Relaxed) {
+        // let mut now_available = self
+        //     .available
+        //     .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
+        //     + requested;
+        let mut now_available = self.available();
+        println!("now_available={}; self={:?}", now_available, self);
+        if now_available >= requested {
+            self.available
+                .fetch_add(requested, std::sync::atomic::Ordering::Relaxed);
             return None;
         }
+        // if now_available <= self.rate_per_second.load(Ordering::Relaxed) {
+        //     return None;
+        // }
 
         let mut now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
         if let Some(_guard) = self.last_update_lock.try_lock() {
-            if let Some(value) = self.update_tokens(&mut now, &mut now_available) {
-                return value;
+            if self.update_tokens(&mut now, &mut now_available, requested).is_none() {
+                return None;
             }
         } else {
             trace!(
@@ -173,12 +181,14 @@ where
         &self,
         now: &mut u64,
         now_available: &mut u64,
-    ) -> Option<Option<(Instant, u64)>> {
+        requested: u64,
+    ) -> Option<()> {
         trace!(
             target: LOG_TARGET,
             "TokenBucket about to update it tokens {:?}.",
             self,
         );
+        let rate_per_second = self.rate_per_second.load(Ordering::Relaxed);
         let updated_now = self
             .time_provider
             .now()
@@ -188,7 +198,7 @@ where
             .ok();
         let Some(updated_now) = updated_now else {
             warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'initial_time' - rate limiting will be turned off.");
-            return Some(None);
+            return None;
         };
         *now = updated_now;
         let since_last_update = *now
@@ -196,7 +206,7 @@ where
                 .last_update
                 .fetch_max(*now, std::sync::atomic::Ordering::Relaxed);
         let new_units = since_last_update
-            .saturating_mul(self.rate_per_second.load(Ordering::Relaxed))
+            .saturating_mul(rate_per_second)
             / SECOND_IN_MILLIS;
         trace!(
             target: LOG_TARGET,
@@ -220,10 +230,12 @@ where
             .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed)
             - new_units;
 
-        if *now_available <= self.rate_per_second.load(Ordering::Relaxed) {
-            return Some(None);
+        *now_available = self.available.fetch_add(requested, Ordering::Relaxed) + requested;
+        if *now_available <= rate_per_second {
+            None
+        } else {
+            Some(())
         }
-        None
     }
 
     pub fn rate_per_second(&mut self, rate_per_second: u64) -> u64 {
