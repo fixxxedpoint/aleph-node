@@ -8,7 +8,7 @@ use log::trace;
 use tokio::{io::AsyncRead, time::sleep_until};
 
 use crate::{
-    token_bucket::{HierarchicalTokenBucket, WrappingRateLimiter},
+    token_bucket::{HierarchicalTokenBucket, RateLimiterFacade, RatePerSecond},
     LOG_TARGET,
 };
 
@@ -17,14 +17,14 @@ use crate::{
 #[derive(Clone)]
 pub struct SleepingRateLimiter<RL = HierarchicalTokenBucket> {
     // rate_limiter: Arc<Mutex<TokenBucket>>,
-    rate_limiter: WrappingRateLimiter<RL>,
+    rate_limiter: RateLimiterFacade<RL>,
 }
 
 impl SleepingRateLimiter {
     /// Constructs a instance of [SleepingRateLimiter] with given target rate-per-second.
-    pub fn new(rate_per_second: u64) -> Self {
+    pub fn new(rate_per_second: RatePerSecond) -> Self {
         Self {
-            rate_limiter: WrappingRateLimiter::new(rate_per_second),
+            rate_limiter: RateLimiterFacade::new(rate_per_second),
         }
     }
 

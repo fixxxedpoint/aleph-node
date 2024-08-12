@@ -109,7 +109,7 @@ where
     .expect("we should have working networking");
 
     let alephbft_rate_limiter =
-        SleepingRateLimiter::new(rate_limiter_config.alephbft_network_bit_rate);
+        SleepingRateLimiter::new(rate_limiter_config.alephbft_network_bit_rate.into());
     let dialer = RateLimitingDialer::new(dialer, alephbft_rate_limiter.clone());
     let listener = RateLimitingListener::new(listener, alephbft_rate_limiter);
 
