@@ -82,7 +82,7 @@ impl RateLimiter for NoTrafficRateLimiter {
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
         RateLimitResult {
             delay: None,
-            dropped: Some(requested),
+            dropped: requested,
         }
     }
 }
@@ -150,12 +150,11 @@ impl RateLimiter for HierarchicalTokenBucket {
         HierarchicalTokenBucket::rate_limit(&self, requested)
     }
 
-    fn try_rate_limit_without_delay(&self, _requested: u64) -> RateLimitResult {
-        todo!()
+    fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
+        HierarchicalTokenBucket::try_rate_limit_without_delay(&self, requested)
     }
 }
 
-// #[derive(Clone)]
 pub struct HierarchicalTokenBucket<
     ParentRL = TokenBucket<DefaultTimeProvider>,
     ThisRL = TokenBucket<DefaultTimeProvider>,
@@ -215,27 +214,36 @@ where
             .set_rate_per_second(rate_per_second_for_children);
     }
 
-    pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+    pub fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
         self.set_rate();
 
         let result = self.rate_limiter.try_rate_limit_without_delay(requested);
-        let left_tokens = result.dropped.unwrap_or(0);
+        let left_tokens = result.dropped;
         let for_parent = requested - left_tokens;
         // account all tokens that we used
         self.parent.rate_limit(for_parent);
 
         // try to borrow from parent
         let parent_result = self.parent.try_rate_limit_without_delay(left_tokens);
-        let left_tokens = parent_result.dropped.unwrap_or(0);
+        let left_tokens = parent_result.dropped;
 
         let required_delay = empty().chain(result.delay).chain(parent_result.delay).max();
+        RateLimitResult {
+            delay: required_delay,
+            dropped: left_tokens,
+        }
+    }
+
+    pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+        let RateLimitResult {
+            dropped: left_tokens,
+            delay: required_delay,
+        } = self.try_rate_limit_without_delay(requested);
 
         let result = empty()
             .chain(required_delay)
             .chain(self.rate_limiter.rate_limit(left_tokens).flatten())
             .max();
-        // account all tokens that we used
-        self.parent.rate_limit(left_tokens);
 
         Some(Some(result?))
     }
@@ -247,13 +255,15 @@ impl<T> std::fmt::Debug for TokenBucket<T> {
             .field("rate_per_second", &self.rate_per_second)
             .field("available", &self.available)
             .field("last_update", &self.last_update)
+            .field("last_update_lock", &self.last_update_lock)
+            .field("initial_time", &self.initial_time)
             .finish()
     }
 }
 
 pub struct RateLimitResult {
     pub delay: Option<Instant>,
-    pub dropped: Option<u64>,
+    pub dropped: u64,
 }
 
 impl TokenBucket {
@@ -408,7 +418,7 @@ where
         if requested == 0 {
             return RateLimitResult {
                 delay: None,
-                dropped: None,
+                dropped: 0,
             };
         }
         let now_available = self.available();
@@ -416,10 +426,6 @@ where
         // let result = self.rate_limit_internal(requested);
         let result = self.rate_limit_internal(to_request);
         let dropped = requested - to_request;
-        let dropped = match dropped {
-            0 => None,
-            some => Some(some),
-        };
         match result {
             Some((delay, _)) => RateLimitResult {
                 delay: Some(delay),
