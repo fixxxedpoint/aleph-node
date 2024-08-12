@@ -119,7 +119,6 @@ where
     }
 
     fn rate_limit_internal(&self, requested: u64) -> Option<(Instant, u64)> {
-        println!("requested={}; self={:?}", requested, self);
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {} of requested bytes. Internal state: {:?}.",
@@ -129,20 +128,12 @@ where
         if requested == 0 {
             return None;
         }
-        // let mut now_available = self
-        //     .available
-        //     .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
-        //     + requested;
         let mut now_available = self.available();
-        println!("now_available={}; self={:?}", now_available, self);
         if now_available >= requested {
             self.available
                 .fetch_add(requested, std::sync::atomic::Ordering::Relaxed);
             return None;
         }
-        // if now_available <= self.rate_per_second.load(Ordering::Relaxed) {
-        //     return None;
-        // }
 
         let mut now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
         if let Some(_guard) = self.last_update_lock.try_lock() {
