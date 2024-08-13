@@ -146,6 +146,8 @@ where
                 "TokenBucket tried to update, but failed {:?}",
                 self,
             );
+            now_available = self.available
+                .fetch_add(requested, std::sync::atomic::Ordering::Relaxed) + requested;
         }
 
         let scheduled_for_later = now_available - self.rate_per_second.load(Ordering::Relaxed);
@@ -375,12 +377,12 @@ where
             delay: required_delay,
         } = self.try_rate_limit_without_delay(requested);
 
+        // account all tokens that we used
+        self.parent.rate_limit(left_tokens);
         let result = empty()
             .chain(required_delay)
             .chain(self.rate_limiter.rate_limit(left_tokens).flatten())
             .max();
-        // account all tokens that we used
-        self.parent.rate_limit(left_tokens);
 
         Some(Some(result?))
     }
