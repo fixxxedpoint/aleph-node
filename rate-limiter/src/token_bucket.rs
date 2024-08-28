@@ -567,10 +567,8 @@ mod tests {
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
-        let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.borrow());
-        let time_provider = Rc::new(time_provider);
-        let rate_limiter = RL::from((limit_per_second, time_provider));
+        let time_provider: Box<dyn TimeProvider> = Box::new(move || *time_provider.borrow());
+        let rate_limiter = RL::from((limit_per_second, time_provider.into()));
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(1);
         assert_eq!(rate_limiter.rate_limit(9), None);
@@ -585,7 +583,9 @@ mod tests {
     #[test]
     fn no_slowdown_while_within_rate_limit() {
         no_slowdown_while_within_rate_limit_template::<TokenBucket<_>>();
-        no_slowdown_while_within_rate_limit_template::<HierarchicalTokenBucket<_, _>>()
+        no_slowdown_while_within_rate_limit_template::<
+            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
+        >()
     }
 
     fn no_slowdown_while_within_rate_limit_template<RL>()
@@ -596,10 +596,8 @@ mod tests {
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
-        let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.borrow());
-        let time_provider = Rc::new(time_provider);
-        let rate_limiter = RL::from((limit_per_second, time_provider));
+        let time_provider: Box<dyn TimeProvider> = Box::new(move || *time_provider.borrow());
+        let rate_limiter = RL::from((limit_per_second, time_provider.into()));
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(1);
         assert_eq!(rate_limiter.rate_limit(9), None);
@@ -617,7 +615,9 @@ mod tests {
     #[test]
     fn slowdown_when_limit_reached_token_bucket() {
         slowdown_when_limit_reached_template::<TokenBucket<_>>();
-        slowdown_when_limit_reached_template::<HierarchicalTokenBucket<_, _>>()
+        slowdown_when_limit_reached_template::<
+            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
+        >()
     }
 
     fn slowdown_when_limit_reached_template<RL>()
@@ -628,10 +628,8 @@ mod tests {
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
-        let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.borrow());
-        let time_provider = Rc::new(time_provider);
-        let rate_limiter = RL::from((limit_per_second, time_provider));
+        let time_provider: Box<dyn TimeProvider> = Box::new(move || *time_provider.borrow());
+        let rate_limiter = RL::from((limit_per_second, time_provider.into()));
 
         *time_to_return.borrow_mut() = now;
         assert_eq!(rate_limiter.rate_limit(10), None);
@@ -651,7 +649,9 @@ mod tests {
     #[test]
     fn buildup_tokens_but_no_more_than_limit_token_bucket() {
         buildup_tokens_but_no_more_than_limit_template::<TokenBucket<_>>();
-        buildup_tokens_but_no_more_than_limit_template::<HierarchicalTokenBucket<_, _>>()
+        buildup_tokens_but_no_more_than_limit_template::<
+            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
+        >()
     }
 
     fn buildup_tokens_but_no_more_than_limit_template<RL>()
@@ -662,10 +662,8 @@ mod tests {
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
-        let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.borrow());
-        let time_provider = Rc::new(time_provider);
-        let rate_limiter = RL::from((limit_per_second, time_provider));
+        let time_provider: Box<dyn TimeProvider> = Box::new(move || *time_provider.borrow());
+        let rate_limiter = RL::from((limit_per_second, time_provider.into()));
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(2);
         assert_eq!(rate_limiter.rate_limit(10), None);
@@ -686,7 +684,9 @@ mod tests {
     #[test]
     fn multiple_calls_buildup_wait_time_token_bucket() {
         multiple_calls_buildup_wait_time_template::<TokenBucket<_>>();
-        multiple_calls_buildup_wait_time_template::<HierarchicalTokenBucket<_, _>>()
+        multiple_calls_buildup_wait_time_template::<
+            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
+        >()
     }
 
     fn multiple_calls_buildup_wait_time_template<RL>()
@@ -697,10 +697,8 @@ mod tests {
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
-        let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.borrow());
-        let time_provider = Rc::new(time_provider);
-        let rate_limiter = RL::from((limit_per_second, time_provider));
+        let time_provider: Box<dyn TimeProvider> = Box::new(move || *time_provider.borrow());
+        let rate_limiter = RL::from((limit_per_second, time_provider.into()));
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(3);
         assert_eq!(rate_limiter.rate_limit(10), None);
