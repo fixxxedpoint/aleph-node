@@ -125,7 +125,6 @@ impl<T> std::fmt::Debug for TokenBucket<T> {
             .field("rate_per_second", &self.rate_per_second)
             .field("available", &self.available)
             .field("last_update", &self.last_update)
-            .field("last_update_lock", &self.last_update_lock)
             .field("initial_time", &self.initial_time)
             .finish()
     }
@@ -190,12 +189,7 @@ where
 
         let mut now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
         if let Some(_guard) = self.last_update_lock.try_lock() {
-            if self
-                .update_tokens(&mut now, &mut now_available, requested)
-                .is_none()
-            {
-                return None;
-            }
+            self.update_tokens(&mut now, &mut now_available, requested)?;
         } else {
             trace!(
                 target: LOG_TARGET,
@@ -213,7 +207,7 @@ where
             / self.rate_per_second.load(Ordering::Relaxed);
 
         trace!(
-                target: LOG_TARGET,
+            target: LOG_TARGET,
             "TokenBucket about to wait for {} milliseconds after requesting {} - scheduled_for_later {}; now_available {}; rate_per_second {}; {:?}.",
             wait_milliseconds,
             requested,
@@ -384,7 +378,7 @@ impl Clone for HierarchicalTokenBucket {
 
 impl HierarchicalTokenBucket {
     pub fn new(rate_per_second: NonZeroRatePerSecond) -> Self {
-        Self::new_with_time_provider(rate_per_second, DefaultTimeProvider::default())
+        Self::new_with_time_provider(rate_per_second, DefaultTimeProvider)
     }
 }
 
