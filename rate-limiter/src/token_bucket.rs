@@ -36,11 +36,37 @@ impl TimeProvider for DefaultTimeProvider {
     }
 }
 
-pub struct RatePerSecond(u64);
+#[derive(Clone)]
+pub struct NonZeroRatePerSecond(NonZeroU64);
+
+impl From<NonZeroRatePerSecond> for u64 {
+    fn from(value: NonZeroRatePerSecond) -> Self {
+        value.0.into()
+    }
+}
+
+pub enum RatePerSecond {
+    Block,
+    Rate(NonZeroRatePerSecond),
+}
 
 impl From<u64> for RatePerSecond {
     fn from(value: u64) -> Self {
-        Self(value)
+        match value {
+            0 => Self::Block,
+            _ => Self::Rate(NonZeroRatePerSecond(
+                NonZeroU64::new(value).unwrap_or(NonZeroU64::MAX),
+            )),
+        }
+    }
+}
+
+impl From<RatePerSecond> for u64 {
+    fn from(value: RatePerSecond) -> Self {
+        match value {
+            RatePerSecond::Block => 0,
+            RatePerSecond::Rate(NonZeroRatePerSecond(value)) => value.into(),
+        }
     }
 }
 
@@ -86,6 +112,17 @@ impl<T> std::fmt::Debug for TokenBucket<T> {
             .field("last_update_lock", &self.last_update_lock)
             .field("initial_time", &self.initial_time)
             .finish()
+    }
+}
+
+impl<TP> From<(NonZeroRatePerSecond, TP)> for TokenBucket<TP>
+where
+    TP: TimeProvider,
+{
+    fn from(
+        (NonZeroRatePerSecond(rate_per_second), time_provider): (NonZeroRatePerSecond, TP),
+    ) -> Self {
+        Self::new_with_time_provider(rate_per_second, time_provider)
     }
 }
 
@@ -137,7 +174,10 @@ where
 
         let mut now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
         if let Some(_guard) = self.last_update_lock.try_lock() {
-            if self.update_tokens(&mut now, &mut now_available, requested).is_none() {
+            if self
+                .update_tokens(&mut now, &mut now_available, requested)
+                .is_none()
+            {
                 return None;
             }
         } else {
@@ -146,8 +186,10 @@ where
                 "TokenBucket tried to update, but failed {:?}",
                 self,
             );
-            now_available = self.available
-                .fetch_add(requested, std::sync::atomic::Ordering::Relaxed) + requested;
+            now_available = self
+                .available
+                .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
+                + requested;
         }
 
         let scheduled_for_later = now_available - self.rate_per_second.load(Ordering::Relaxed);
@@ -170,12 +212,7 @@ where
         Some((self.initial_time + now + wait_duration, scheduled_for_later))
     }
 
-    fn update_tokens(
-        &self,
-        now: &mut u64,
-        now_available: &mut u64,
-        requested: u64,
-    ) -> Option<()> {
+    fn update_tokens(&self, now: &mut u64, now_available: &mut u64, requested: u64) -> Option<()> {
         trace!(
             target: LOG_TARGET,
             "TokenBucket about to update it tokens {:?}.",
@@ -198,9 +235,7 @@ where
             - self
                 .last_update
                 .fetch_max(*now, std::sync::atomic::Ordering::Relaxed);
-        let new_units = since_last_update
-            .saturating_mul(rate_per_second)
-            / SECOND_IN_MILLIS;
+        let new_units = since_last_update.saturating_mul(rate_per_second) / SECOND_IN_MILLIS;
         trace!(
             target: LOG_TARGET,
             "TokenBucket new_units: {}; since_last_update {}; {:?}.",
@@ -267,12 +302,19 @@ where
     }
 }
 
-impl RateLimiter for TokenBucket {
+impl<TP> RateLimiter for TokenBucket<TP>
+where
+    TP: TimeProvider,
+{
     fn rate(&self) -> RatePerSecond {
         self.rate_per_second.load(Ordering::Relaxed).into()
     }
 
-    fn set_rate(&self, RatePerSecond(rate_per_second): RatePerSecond) {
+    fn set_rate(&self, rate_per_second: RatePerSecond) {
+        let rate_per_second = match rate_per_second {
+            RatePerSecond::Block => return,
+            RatePerSecond::Rate(value) => value.into(),
+        };
         self.rate_per_second
             .store(rate_per_second, Ordering::Relaxed)
     }
@@ -298,8 +340,8 @@ pub struct HierarchicalTokenBucket<
     rate_limiter: ThisRL,
 }
 
-impl From<RatePerSecond> for HierarchicalTokenBucket {
-    fn from(rate_per_second: RatePerSecond) -> Self {
+impl From<NonZeroRatePerSecond> for HierarchicalTokenBucket {
+    fn from(rate_per_second: NonZeroRatePerSecond) -> Self {
         HierarchicalTokenBucket::new(rate_per_second)
     }
 }
@@ -315,11 +357,20 @@ impl Clone for HierarchicalTokenBucket {
 }
 
 impl HierarchicalTokenBucket {
-    pub fn new(RatePerSecond(rate_per_second): RatePerSecond) -> Self {
-        let parent = Arc::new(TokenBucket::new(
-            rate_per_second.try_into().unwrap_or(NonZeroU64::MIN),
-        ));
-        let token_bucket = TokenBucket::new(rate_per_second.try_into().unwrap_or(NonZeroU64::MIN));
+    pub fn new(rate_per_second: NonZeroRatePerSecond) -> Self {
+        Self::new_with_time_provider(rate_per_second, DefaultTimeProvider::default())
+    }
+}
+
+impl<ParentRL, ThisRL> HierarchicalTokenBucket<ParentRL, ThisRL> {
+    fn new_with_time_provider<TP>(rate_per_second: NonZeroRatePerSecond, time_provider: TP) -> Self
+    where
+        TP: TimeProvider + Clone,
+        ParentRL: From<(NonZeroRatePerSecond, TP)>,
+        ThisRL: From<(NonZeroRatePerSecond, TP)>,
+    {
+        let parent = Arc::new(ParentRL::from((rate_per_second.clone(), time_provider.clone())));
+        let token_bucket = ThisRL::from((rate_per_second, time_provider));
         Self {
             last_children_count: Arc::strong_count(&parent)
                 .try_into()
@@ -345,7 +396,7 @@ where
         }
         self.last_children_count
             .store(children_count, Ordering::Relaxed);
-        let RatePerSecond(parent_rate) = self.parent.rate();
+        let parent_rate: u64 = self.parent.rate().into();
         let rate_per_second_for_children = max(parent_rate / children_count, 1);
         self.rate_limiter
             .set_rate(rate_per_second_for_children.into());
@@ -377,7 +428,7 @@ where
             delay: required_delay,
         } = self.try_rate_limit_without_delay(requested);
 
-        // account all tokens that we used
+        // account all tokens that we are about to use
         self.parent.rate_limit(left_tokens);
         let result = empty()
             .chain(required_delay)
@@ -438,13 +489,13 @@ impl<RL> RateLimiterFacade<RL>
 where
     RL: RateLimiter,
 {
-    pub fn new(rate @ RatePerSecond(rate_per_second): RatePerSecond) -> Self
+    pub fn new(rate: RatePerSecond) -> Self
     where
-        RL: From<RatePerSecond>,
+        RL: From<NonZeroRatePerSecond>,
     {
-        match rate_per_second {
-            0 => Self::NoTraffic(BlockingRateLimiter),
-            _ => Self::RateLimiter(rate.into()),
+        match rate {
+            RatePerSecond::Block => Self::NoTraffic(BlockingRateLimiter),
+            RatePerSecond::Rate(rate) => Self::RateLimiter(rate.into()),
         }
     }
 
@@ -463,15 +514,22 @@ mod tests {
         time::{Duration, Instant},
     };
 
+    use crate::token_bucket::{HierarchicalTokenBucket, NonZeroRatePerSecond};
+
     use super::TokenBucket;
 
     #[test]
     fn token_bucket_sanity_check() {
-        let limit_per_second = 10.try_into().unwrap_or(NonZeroU64::MIN);
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().unwrap_or(NonZeroU64::MIN));
         let now = Instant::now();
         let time_to_return = RefCell::new(now);
         let time_provider = || *time_to_return.borrow();
-        let mut rate_limiter = TokenBucket::new_with_time_provider(limit_per_second, time_provider);
+        // let mut rate_limiter = TokenBucket::new_with_time_provider(limit_per_second, time_provider);
+        let rate_limiter =
+            HierarchicalTokenBucket::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(1);
         assert_eq!(rate_limiter.rate_limit(9), None);
@@ -485,11 +543,16 @@ mod tests {
 
     #[test]
     fn no_slowdown_while_within_rate_limit() {
-        let limit_per_second = 10.try_into().unwrap_or(NonZeroU64::MIN);
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().unwrap_or(NonZeroU64::MIN));
         let now = Instant::now();
         let time_to_return = RefCell::new(now);
         let time_provider = || *time_to_return.borrow();
-        let mut rate_limiter = TokenBucket::new_with_time_provider(limit_per_second, time_provider);
+        // let mut rate_limiter = TokenBucket::new_with_time_provider(limit_per_second, time_provider);
+        let rate_limiter =
+            HierarchicalTokenBucket::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(1);
         assert_eq!(rate_limiter.rate_limit(9), None);
