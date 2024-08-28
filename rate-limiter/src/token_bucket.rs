@@ -15,29 +15,9 @@ use std::{
 
 const SECOND_IN_MILLIS: u64 = 1_000;
 
-// pub trait TimeProviderBoxClone {
-//     fn box_clone(&self) -> Box<dyn TimeProvider>;
-// }
-
-// pub trait TimeProvider: TimeProviderBoxClone {
-//     fn now(&self) -> Instant;
-// }
-
 pub trait TimeProvider {
     fn now(&self) -> Instant;
 }
-
-// impl<F> TimeProviderBoxClone for F where F: Fn() -> Instant + Clone {
-//     fn clone(&self) -> Box<dyn TimeProvider> {
-//         Box::new(Clone::clone(self))
-//     }
-// }
-
-// impl<TP> TimeProviderBoxClone for TP where TP: TimeProvider {
-//     fn box_clone(&self) -> Box<dyn TimeProvider> {
-//         TimeProviderBoxClone::box_clone(self)
-//     }
-// }
 
 impl<F> TimeProvider for F
 where
@@ -56,12 +36,6 @@ where
         self.as_ref().now()
     }
 }
-
-// impl Clone for Box<dyn TimeProvider> {
-//     fn clone(&self) -> Self {
-//         Box::clone(self)
-//     }
-// }
 
 impl TimeProvider for Box<dyn TimeProvider> {
     fn now(&self) -> Instant {
@@ -579,16 +553,13 @@ mod tests {
     use super::{RateLimiter, TimeProvider, TokenBucket};
 
     #[test]
-    fn token_bucket_sanity_check_token_bucket() {
-        token_bucket_sanity_check::<TokenBucket<_>>()
+    fn token_bucket_sanity_check() {
+        token_bucket_sanity_check_template::<TokenBucket<_>>();
+        token_bucket_sanity_check_template::<HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>>(
+        )
     }
 
-    #[test]
-    fn token_bucket_sanity_check_hierarchical() {
-        token_bucket_sanity_check::<HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>>()
-    }
-
-    fn token_bucket_sanity_check<RL>()
+    fn token_bucket_sanity_check_template<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -597,7 +568,7 @@ mod tests {
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.as_ref().borrow());
+            Box::new(move || *time_provider.borrow());
         let time_provider = Rc::new(time_provider);
         let rate_limiter = RL::from((limit_per_second, time_provider));
 
@@ -612,16 +583,12 @@ mod tests {
     }
 
     #[test]
-    fn no_slowdown_while_within_rate_limit_token_bucket() {
-        no_slowdown_while_within_rate_limit::<TokenBucket<_>>()
+    fn no_slowdown_while_within_rate_limit() {
+        no_slowdown_while_within_rate_limit_template::<TokenBucket<_>>();
+        no_slowdown_while_within_rate_limit_template::<HierarchicalTokenBucket<_, _>>()
     }
 
-    #[test]
-    fn no_slowdown_while_within_rate_limit_hierarchical() {
-        no_slowdown_while_within_rate_limit::<HierarchicalTokenBucket<_, _>>()
-    }
-
-    fn no_slowdown_while_within_rate_limit<RL>()
+    fn no_slowdown_while_within_rate_limit_template<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -630,7 +597,7 @@ mod tests {
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.as_ref().borrow());
+            Box::new(move || *time_provider.borrow());
         let time_provider = Rc::new(time_provider);
         let rate_limiter = RL::from((limit_per_second, time_provider));
 
@@ -649,15 +616,11 @@ mod tests {
 
     #[test]
     fn slowdown_when_limit_reached_token_bucket() {
-        slowdown_when_limit_reached::<TokenBucket<_>>()
+        slowdown_when_limit_reached_template::<TokenBucket<_>>();
+        slowdown_when_limit_reached_template::<HierarchicalTokenBucket<_, _>>()
     }
 
-    #[test]
-    fn slowdown_when_limit_reached_hierarchical() {
-        slowdown_when_limit_reached::<HierarchicalTokenBucket<_, _>>()
-    }
-
-    fn slowdown_when_limit_reached<RL>()
+    fn slowdown_when_limit_reached_template<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -666,7 +629,7 @@ mod tests {
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.as_ref().borrow());
+            Box::new(move || *time_provider.borrow());
         let time_provider = Rc::new(time_provider);
         let rate_limiter = RL::from((limit_per_second, time_provider));
 
@@ -687,15 +650,11 @@ mod tests {
 
     #[test]
     fn buildup_tokens_but_no_more_than_limit_token_bucket() {
-        buildup_tokens_but_no_more_than_limit::<TokenBucket<_>>()
+        buildup_tokens_but_no_more_than_limit_template::<TokenBucket<_>>();
+        buildup_tokens_but_no_more_than_limit_template::<HierarchicalTokenBucket<_, _>>()
     }
 
-    #[test]
-    fn buildup_tokens_but_no_more_than_limit_hierarchical() {
-        buildup_tokens_but_no_more_than_limit::<HierarchicalTokenBucket<_, _>>()
-    }
-
-    fn buildup_tokens_but_no_more_than_limit<RL>()
+    fn buildup_tokens_but_no_more_than_limit_template<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -704,7 +663,7 @@ mod tests {
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.as_ref().borrow());
+            Box::new(move || *time_provider.borrow());
         let time_provider = Rc::new(time_provider);
         let rate_limiter = RL::from((limit_per_second, time_provider));
 
@@ -726,15 +685,11 @@ mod tests {
 
     #[test]
     fn multiple_calls_buildup_wait_time_token_bucket() {
-        multiple_calls_buildup_wait_time::<TokenBucket<_>>()
+        multiple_calls_buildup_wait_time_template::<TokenBucket<_>>();
+        multiple_calls_buildup_wait_time_template::<HierarchicalTokenBucket<_, _>>()
     }
 
-    #[test]
-    fn multiple_calls_buildup_wait_time_hierarchical() {
-        multiple_calls_buildup_wait_time::<HierarchicalTokenBucket<_, _>>()
-    }
-
-    fn multiple_calls_buildup_wait_time<RL>()
+    fn multiple_calls_buildup_wait_time_template<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -743,7 +698,7 @@ mod tests {
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider> =
-            Box::new(move || *time_provider.as_ref().borrow());
+            Box::new(move || *time_provider.borrow());
         let time_provider = Rc::new(time_provider);
         let rate_limiter = RL::from((limit_per_second, time_provider));
 
