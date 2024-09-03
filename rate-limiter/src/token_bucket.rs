@@ -91,11 +91,18 @@ pub struct RateLimitResult {
     pub dropped: u64,
 }
 
-pub trait RateLimiter {
+pub trait RateLimiterController {
     fn rate(&self) -> RatePerSecond;
     fn set_rate(&self, rate_per_second: RatePerSecond);
+}
+
+pub trait RateLimiter {
     fn rate_limit(&self, requested: u64) -> Option<Option<Instant>>;
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
+}
+
+pub trait AsyncRateLimiter {
+    async fn rate_limit(&self, requested: u64);
 }
 
 /// Implementation of the `Token Bucket` algorithm for the purpose of rate-limiting access to some abstract resource.
@@ -312,10 +319,7 @@ where
     }
 }
 
-impl<TP> RateLimiter for TokenBucket<TP>
-where
-    TP: TimeProvider,
-{
+impl<TP> RateLimiterController for TokenBucket<TP> {
     fn rate(&self) -> RatePerSecond {
         self.rate_per_second.load(Ordering::Relaxed).into()
     }
@@ -328,7 +332,12 @@ where
         self.rate_per_second
             .store(rate_per_second, Ordering::Relaxed)
     }
+}
 
+impl<TP> RateLimiter for TokenBucket<TP>
+where
+    TP: TimeProvider,
+{
     fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
         Some(Some(
             self.rate_limit_internal(requested)
@@ -407,8 +416,8 @@ impl<ParentRL, ThisRL> HierarchicalTokenBucket<ParentRL, ThisRL> {
 
 impl<ParentRL, ThisRL> HierarchicalTokenBucket<ParentRL, ThisRL>
 where
-    ParentRL: RateLimiter,
-    ThisRL: RateLimiter,
+    ParentRL: RateLimiter + RateLimiterController,
+    ThisRL: RateLimiter + RateLimiterController,
 {
     fn set_rate(&self) {
         let children_count = Arc::strong_count(&self.parent)
@@ -462,10 +471,10 @@ where
     }
 }
 
-impl<ParentRL, ThisRL> RateLimiter for HierarchicalTokenBucket<ParentRL, ThisRL>
+impl<ParentRL, ThisRL> RateLimiterController for HierarchicalTokenBucket<ParentRL, ThisRL>
 where
-    ParentRL: RateLimiter,
-    ThisRL: RateLimiter,
+    ParentRL: RateLimiterController,
+    ThisRL: RateLimiterController,
 {
     fn rate(&self) -> RatePerSecond {
         self.parent.rate()
@@ -474,7 +483,13 @@ where
     fn set_rate(&self, rate_per_second: RatePerSecond) {
         self.parent.set_rate(rate_per_second)
     }
+}
 
+impl<ParentRL, ThisRL> RateLimiter for HierarchicalTokenBucket<ParentRL, ThisRL>
+where
+    ParentRL: RateLimiter + RateLimiterController,
+    ThisRL: RateLimiter + RateLimiterController,
+{
     fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
         HierarchicalTokenBucket::rate_limit(self, requested)
     }
@@ -487,13 +502,15 @@ where
 #[derive(Clone)]
 pub struct BlockingRateLimiter;
 
-impl RateLimiter for BlockingRateLimiter {
+impl RateLimiterController for BlockingRateLimiter {
     fn rate(&self) -> RatePerSecond {
         0.into()
     }
 
     fn set_rate(&self, _rate_per_second: RatePerSecond) {}
+}
 
+impl RateLimiter for BlockingRateLimiter {
     fn rate_limit(&self, _requested: u64) -> Option<Option<Instant>> {
         Some(None)
     }
