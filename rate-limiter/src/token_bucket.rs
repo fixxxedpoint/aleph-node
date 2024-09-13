@@ -1,4 +1,4 @@
-use crate::LOG_TARGET;
+use crate::{NonZeroRatePerSecond, RatePerSecond, LOG_TARGET};
 use log::{trace, warn};
 use parking_lot::Mutex;
 use std::{
@@ -49,40 +49,6 @@ pub struct DefaultTimeProvider;
 impl TimeProvider for DefaultTimeProvider {
     fn now(&self) -> Instant {
         Instant::now()
-    }
-}
-
-#[derive(Clone)]
-pub struct NonZeroRatePerSecond(NonZeroU64);
-
-impl From<NonZeroRatePerSecond> for u64 {
-    fn from(value: NonZeroRatePerSecond) -> Self {
-        value.0.into()
-    }
-}
-
-pub enum RatePerSecond {
-    Block,
-    Rate(NonZeroRatePerSecond),
-}
-
-impl From<u64> for RatePerSecond {
-    fn from(value: u64) -> Self {
-        match value {
-            0 => Self::Block,
-            _ => Self::Rate(NonZeroRatePerSecond(
-                NonZeroU64::new(value).unwrap_or(NonZeroU64::MAX),
-            )),
-        }
-    }
-}
-
-impl From<RatePerSecond> for u64 {
-    fn from(value: RatePerSecond) -> Self {
-        match value {
-            RatePerSecond::Block => 0,
-            RatePerSecond::Rate(NonZeroRatePerSecond(value)) => value.into(),
-        }
     }
 }
 
@@ -509,32 +475,8 @@ where
 }
 
 #[derive(Clone)]
-pub struct BlockingRateLimiter;
-
-impl RateLimiterController for BlockingRateLimiter {
-    fn rate(&self) -> RatePerSecond {
-        0.into()
-    }
-
-    fn set_rate(&self, _rate_per_second: RatePerSecond) {}
-}
-
-impl RateLimiter for BlockingRateLimiter {
-    fn rate_limit(&self, _requested: u64) -> Option<Option<Instant>> {
-        Some(None)
-    }
-
-    fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
-        RateLimitResult {
-            delay: None,
-            dropped: requested,
-        }
-    }
-}
-
-#[derive(Clone)]
 pub enum RateLimiterFacade<RL> {
-    NoTraffic(BlockingRateLimiter),
+    NoTraffic,
     RateLimiter(RL),
 }
 
@@ -547,14 +489,14 @@ where
         RL: From<NonZeroRatePerSecond>,
     {
         match rate {
-            RatePerSecond::Block => Self::NoTraffic(BlockingRateLimiter),
+            RatePerSecond::Block => Self::NoTraffic,
             RatePerSecond::Rate(rate) => Self::RateLimiter(rate.into()),
         }
     }
 
     pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
         match self {
-            RateLimiterFacade::NoTraffic(limiter) => limiter.rate_limit(requested),
+            RateLimiterFacade::NoTraffic => Some(None),
             RateLimiterFacade::RateLimiter(limiter) => limiter.rate_limit(requested),
         }
     }

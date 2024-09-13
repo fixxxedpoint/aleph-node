@@ -1,15 +1,51 @@
 mod rate_limiter;
 mod token_bucket;
 
+use std::num::NonZeroU64;
+
 use tokio::io::AsyncRead;
 
 pub use crate::rate_limiter::{
     FuturesRateLimiter, MultipleConnectionsRateLimiter, RateLimiter, SingleConnectionRateLimiter,
     SleepingRateLimiter,
 };
-pub use crate::token_bucket::{NonZeroRatePerSecond, RateLimiter as RateLimiterT, TokenBucket};
+pub use crate::token_bucket::{RateLimiter as RateLimiterT, TokenBucket};
 
 const LOG_TARGET: &str = "rate-limiter";
+
+#[derive(Clone)]
+pub struct NonZeroRatePerSecond(NonZeroU64);
+
+impl From<NonZeroRatePerSecond> for u64 {
+    fn from(value: NonZeroRatePerSecond) -> Self {
+        value.0.into()
+    }
+}
+
+pub enum RatePerSecond {
+    Block,
+    Rate(NonZeroRatePerSecond),
+}
+
+impl From<u64> for RatePerSecond {
+    fn from(value: u64) -> Self {
+        match value {
+            0 => Self::Block,
+            _ => Self::Rate(NonZeroRatePerSecond(
+                NonZeroU64::new(value).unwrap_or(NonZeroU64::MAX),
+            )),
+        }
+    }
+}
+
+impl From<RatePerSecond> for u64 {
+    fn from(value: RatePerSecond) -> Self {
+        match value {
+            RatePerSecond::Block => 0,
+            RatePerSecond::Rate(NonZeroRatePerSecond(value)) => value.into(),
+        }
+    }
+}
 
 pub struct RateLimitedAsyncRead<Read, RL> {
     rate_limiter: RateLimiter<RL>,
