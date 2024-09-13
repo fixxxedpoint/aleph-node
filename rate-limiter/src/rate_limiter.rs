@@ -7,10 +7,17 @@ use futures::{
 use log::trace;
 use tokio::{io::AsyncRead, time::sleep_until};
 
+pub use crate::token_bucket::RateLimiter as RateLimiterT;
 use crate::{
-    token_bucket::{HierarchicalTokenBucket, RateLimiterFacade, RatePerSecond},
-    LOG_TARGET,
+    token_bucket::{
+        HierarchicalTokenBucket, NonZeroRatePerSecond, RateLimiterFacade, RatePerSecond,
+    },
+    TokenBucket, LOG_TARGET,
 };
+
+pub type SingleConnectionRateLimiter = SleepingRateLimiter<TokenBucket>;
+
+pub type MultipleConnectionsRateLimiter = SleepingRateLimiter<HierarchicalTokenBucket>;
 
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
@@ -20,11 +27,14 @@ pub struct SleepingRateLimiter<RL = HierarchicalTokenBucket> {
     rate_limiter: RateLimiterFacade<RL>,
 }
 
-impl SleepingRateLimiter {
+impl<RL> SleepingRateLimiter<RL>
+where
+    RL: RateLimiterT + From<NonZeroRatePerSecond>,
+{
     /// Constructs a instance of [SleepingRateLimiter] with given target rate-per-second.
     pub fn new(rate_per_second: RatePerSecond) -> Self {
         Self {
-            rate_limiter: RateLimiterFacade::new(rate_per_second),
+            rate_limiter: RateLimiterFacade::<RL>::new(rate_per_second),
         }
     }
 
@@ -60,14 +70,17 @@ impl SleepingRateLimiter {
 }
 
 /// Wrapper around [SleepingRateLimiter] to simplify implementation of the [AsyncRead](tokio::io::AsyncRead) trait.
-pub struct RateLimiter {
-    rate_limiter: BoxFuture<'static, SleepingRateLimiter>,
+pub struct RateLimiter<RL> {
+    rate_limiter: BoxFuture<'static, SleepingRateLimiter<RL>>,
 }
 
-impl RateLimiter {
+impl<RL> RateLimiter<RL>
+where
+    RL: RateLimiterT + From<NonZeroRatePerSecond> + Send + 'static,
+{
     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
     /// ([SleepingRateLimiter]).
-    pub fn new(rate_limiter: SleepingRateLimiter) -> Self {
+    pub fn new(rate_limiter: SleepingRateLimiter<RL>) -> Self {
         Self {
             rate_limiter: Box::pin(rate_limiter.rate_limit(0)),
         }

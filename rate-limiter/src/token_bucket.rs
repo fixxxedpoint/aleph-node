@@ -148,6 +148,15 @@ where
     }
 }
 
+impl<TP> From<NonZeroRatePerSecond> for TokenBucket<TP>
+where
+    TP: TimeProvider + Default,
+{
+    fn from(NonZeroRatePerSecond(rate_per_second): NonZeroRatePerSecond) -> Self {
+        Self::new_with_time_provider(rate_per_second, TP::default())
+    }
+}
+
 impl TokenBucket {
     /// Constructs a instance of [`TokenBucket`] with given target rate-per-second.
     pub fn new(rate_per_second: NonZeroU64) -> Self {

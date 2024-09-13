@@ -1,8 +1,10 @@
-use rate_limiter::{RateLimitedAsyncRead, RateLimiter, SleepingRateLimiter};
+use rate_limiter::{
+    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiter, RateLimiterT, SleepingRateLimiter,
+};
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, PeerAddressInfo, Splittable, Splitted};
 
-impl<Read: ConnectionInfo> ConnectionInfo for RateLimitedAsyncRead<Read> {
+impl<Read: ConnectionInfo, RL> ConnectionInfo for RateLimitedAsyncRead<Read, RL> {
     fn peer_address_info(&self) -> PeerAddressInfo {
         self.inner().peer_address_info()
     }
@@ -10,13 +12,13 @@ impl<Read: ConnectionInfo> ConnectionInfo for RateLimitedAsyncRead<Read> {
 
 /// Implementation of the [Dialer] trait governing all returned [Dialer::Connection] instances by a rate-limiting wrapper.
 #[derive(Clone)]
-pub struct RateLimitingDialer<D> {
+pub struct RateLimitingDialer<D, RL> {
     dialer: D,
-    rate_limiter: SleepingRateLimiter,
+    rate_limiter: SleepingRateLimiter<RL>,
 }
 
-impl<D> RateLimitingDialer<D> {
-    pub fn new(dialer: D, rate_limiter: SleepingRateLimiter) -> Self {
+impl<D, RL> RateLimitingDialer<D, RL> {
+    pub fn new(dialer: D, rate_limiter: SleepingRateLimiter<RL>) -> Self {
         Self {
             dialer,
             rate_limiter,
@@ -25,15 +27,20 @@ impl<D> RateLimitingDialer<D> {
 }
 
 #[async_trait::async_trait]
-impl<A, D> Dialer<A> for RateLimitingDialer<D>
+impl<A, D, RL> Dialer<A> for RateLimitingDialer<D, RL>
 where
     A: Data,
     D: Dialer<A>,
     <D::Connection as Splittable>::Sender: Unpin,
     <D::Connection as Splittable>::Receiver: Unpin,
+    RL: rate_limiter::RateLimiterT
+        + From<rate_limiter::NonZeroRatePerSecond>
+        + Send
+        + Clone
+        + 'static,
 {
     type Connection = Splitted<
-        RateLimitedAsyncRead<<D::Connection as Splittable>::Receiver>,
+        RateLimitedAsyncRead<<D::Connection as Splittable>::Receiver, RL>,
         <D::Connection as Splittable>::Sender,
     >;
     type Error = D::Error;
@@ -49,13 +56,13 @@ where
 }
 
 /// Implementation of the [Listener] trait governing all returned [Listener::Connection] instances by a rate-limiting wrapper.
-pub struct RateLimitingListener<L> {
+pub struct RateLimitingListener<L, RL> {
     listener: L,
-    rate_limiter: SleepingRateLimiter,
+    rate_limiter: SleepingRateLimiter<RL>,
 }
 
-impl<L> RateLimitingListener<L> {
-    pub fn new(listener: L, rate_limiter: SleepingRateLimiter) -> Self {
+impl<L, RL> RateLimitingListener<L, RL> {
+    pub fn new(listener: L, rate_limiter: SleepingRateLimiter<RL>) -> Self {
         Self {
             listener,
             rate_limiter,
@@ -64,9 +71,13 @@ impl<L> RateLimitingListener<L> {
 }
 
 #[async_trait::async_trait]
-impl<L: Listener + Send> Listener for RateLimitingListener<L> {
+impl<L, RL> Listener for RateLimitingListener<L, RL>
+where
+    L: Listener + Send,
+    RL: RateLimiterT + From<NonZeroRatePerSecond> + Send + Clone + 'static,
+{
     type Connection = Splitted<
-        RateLimitedAsyncRead<<L::Connection as Splittable>::Receiver>,
+        RateLimitedAsyncRead<<L::Connection as Splittable>::Receiver, RL>,
         <L::Connection as Splittable>::Sender,
     >;
     type Error = L::Error;

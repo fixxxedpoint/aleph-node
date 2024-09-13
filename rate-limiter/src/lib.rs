@@ -3,17 +3,21 @@ mod token_bucket;
 
 use tokio::io::AsyncRead;
 
-pub use crate::rate_limiter::{FuturesRateLimiter, RateLimiter, SleepingRateLimiter};
+pub use crate::rate_limiter::{
+    FuturesRateLimiter, MultipleConnectionsRateLimiter, RateLimiter, SingleConnectionRateLimiter,
+    SleepingRateLimiter,
+};
+pub use crate::token_bucket::{NonZeroRatePerSecond, RateLimiter as RateLimiterT, TokenBucket};
 
 const LOG_TARGET: &str = "rate-limiter";
 
-pub struct RateLimitedAsyncRead<Read> {
-    rate_limiter: RateLimiter,
+pub struct RateLimitedAsyncRead<Read, RL> {
+    rate_limiter: RateLimiter<RL>,
     inner: Read,
 }
 
-impl<Read> RateLimitedAsyncRead<Read> {
-    pub fn new(read: Read, rate_limiter: RateLimiter) -> Self {
+impl<Read, RL> RateLimitedAsyncRead<Read, RL> {
+    pub fn new(read: Read, rate_limiter: RateLimiter<RL>) -> Self {
         Self {
             rate_limiter,
             inner: read,
@@ -25,7 +29,11 @@ impl<Read> RateLimitedAsyncRead<Read> {
     }
 }
 
-impl<Read: AsyncRead + Unpin> AsyncRead for RateLimitedAsyncRead<Read> {
+impl<Read, RL> AsyncRead for RateLimitedAsyncRead<Read, RL>
+where
+    Read: AsyncRead + Unpin,
+    RL: token_bucket::RateLimiter + From<NonZeroRatePerSecond> + Send + 'static,
+{
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
