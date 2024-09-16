@@ -6,7 +6,7 @@ use std::num::NonZeroU64;
 use tokio::io::AsyncRead;
 
 pub use crate::rate_limiter::{
-    FuturesRateLimiter, MultipleConnectionsRateLimiter, RateLimiter, SingleConnectionRateLimiter,
+    FuturesRateLimiter, SharedHierarchicalRateLimiter, RateLimiter, PerConnectionRateLimiter,
     SleepingRateLimiter,
 };
 pub use crate::token_bucket::{RateLimiter as RateLimiterT, TokenBucket};
