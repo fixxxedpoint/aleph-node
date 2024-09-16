@@ -9,7 +9,7 @@ use tokio::{io::AsyncRead, time::sleep_until};
 
 pub use crate::token_bucket::RateLimiter as RateLimiterT;
 use crate::{
-    token_bucket::{HierarchicalTokenBucket, RateLimiterFacade},
+    token_bucket::{Deadline, HierarchicalTokenBucket, RateLimiterFacade},
     NonZeroRatePerSecond, RatePerSecond, TokenBucket, LOG_TARGET,
 };
 
@@ -50,8 +50,8 @@ where
 
         match delay {
             None => {}
-            Some(None) => pending().await,
-            Some(Some(delay)) => {
+            Some(Deadline::Never) => pending().await,
+            Some(Deadline::Instant(delay)) => {
                 trace!(
                     target: LOG_TARGET,
                     "Rate-Limiter will sleep {:?} after reading {} byte(s).",

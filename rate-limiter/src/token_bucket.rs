@@ -19,6 +19,21 @@ pub trait TimeProvider {
     fn now(&self) -> Instant;
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Deadline {
+    Never,
+    Instant(Instant),
+}
+
+impl From<Deadline> for Option<Instant> {
+    fn from(value: Deadline) -> Self {
+        match value {
+            Deadline::Never => None,
+            Deadline::Instant(value) => Some(value),
+        }
+    }
+}
+
 impl<F> TimeProvider for F
 where
     F: Fn() -> Instant,
@@ -63,7 +78,7 @@ pub trait RateLimiterController {
 }
 
 pub trait RateLimiter {
-    fn rate_limit(&self, requested: u64) -> Option<Option<Instant>>;
+    fn rate_limit(&self, requested: u64) -> Option<Deadline>;
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
 }
 
@@ -313,8 +328,8 @@ impl<TP> RateLimiter for TokenBucket<TP>
 where
     TP: TimeProvider,
 {
-    fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
-        Some(Some(
+    fn rate_limit(&self, requested: u64) -> Option<Deadline> {
+        Some(Deadline::Instant(
             self.rate_limit_internal(requested)
                 .map(|(delay, _)| delay)?,
         ))
@@ -429,7 +444,7 @@ where
         }
     }
 
-    pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+    pub fn rate_limit(&self, requested: u64) -> Option<Deadline> {
         let RateLimitResult {
             dropped: left_tokens,
             delay: required_delay,
@@ -439,10 +454,10 @@ where
         self.parent.rate_limit(left_tokens);
         let result = empty()
             .chain(required_delay)
-            .chain(self.rate_limiter.rate_limit(left_tokens).flatten())
+            .chain(self.rate_limiter.rate_limit(left_tokens).map(|value| value.into()).flatten())
             .max();
 
-        Some(Some(result?))
+        Some(Deadline::Instant(result?))
     }
 }
 
@@ -465,7 +480,7 @@ where
     ParentRL: RateLimiter + RateLimiterController,
     ThisRL: RateLimiter + RateLimiterController,
 {
-    fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+    fn rate_limit(&self, requested: u64) -> Option<Deadline> {
         HierarchicalTokenBucket::rate_limit(self, requested)
     }
 
@@ -494,9 +509,9 @@ where
         }
     }
 
-    pub fn rate_limit(&self, requested: u64) -> Option<Option<Instant>> {
+    pub fn rate_limit(&self, requested: u64) -> Option<Deadline> {
         match self {
-            RateLimiterFacade::NoTraffic => Some(None),
+            RateLimiterFacade::NoTraffic => Some(Deadline::Never),
             RateLimiterFacade::RateLimiter(limiter) => limiter.rate_limit(requested),
         }
     }
@@ -510,7 +525,7 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use crate::token_bucket::{HierarchicalTokenBucket, NonZeroRatePerSecond};
+    use crate::token_bucket::{Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond};
 
     use super::{RateLimiter, TimeProvider, TokenBucket};
 
@@ -603,7 +618,7 @@ mod tests {
         *time_to_return.borrow_mut() = now;
         assert_eq!(
             rate_limiter.rate_limit(19),
-            Some(Some(now + Duration::from_secs(2))),
+            Some(Deadline::Instant(now + Duration::from_secs(2))),
             "we should wait exactly 2 seconds"
         );
     }
@@ -633,13 +648,13 @@ mod tests {
         *time_to_return.borrow_mut() = now + Duration::from_secs(10);
         assert_eq!(
             rate_limiter.rate_limit(40),
-            Some(Some(now + Duration::from_secs(10) + Duration::from_secs(3))),
+            Some(Deadline::Instant(now + Duration::from_secs(10) + Duration::from_secs(3))),
         );
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(11);
         assert_eq!(
             rate_limiter.rate_limit(40),
-            Some(Some(now + Duration::from_secs(11) + Duration::from_secs(6)))
+            Some(Deadline::Instant(now + Duration::from_secs(11) + Duration::from_secs(6)))
         );
     }
 
@@ -671,13 +686,13 @@ mod tests {
         *time_to_return.borrow_mut() = now + Duration::from_secs(3);
         assert_eq!(
             rate_limiter.rate_limit(10),
-            Some(Some(now + Duration::from_secs(3) + Duration::from_secs(1)))
+            Some(Deadline::Instant(now + Duration::from_secs(3) + Duration::from_secs(1)))
         );
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(3);
         assert_eq!(
             rate_limiter.rate_limit(50),
-            Some(Some(now + Duration::from_secs(3) + Duration::from_secs(6)))
+            Some(Deadline::Instant(now + Duration::from_secs(3) + Duration::from_secs(6)))
         );
     }
 }
