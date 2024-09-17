@@ -96,13 +96,17 @@ pub struct TokenBucket<T = DefaultTimeProvider> {
     time_provider: T,
 }
 
-impl Clone for TokenBucket {
+impl<T> Clone for TokenBucket<T>
+where
+    T: TimeProvider + Clone,
+{
     fn clone(&self) -> Self {
-        Self::new(
+        Self::new_with_time_provider(
             self.rate_per_second
                 .load(Ordering::Relaxed)
                 .try_into()
                 .unwrap_or(NonZeroU64::MIN),
+            self.time_provider.clone(),
         )
     }
 }
@@ -365,7 +369,10 @@ where
     }
 }
 
-impl Clone for HierarchicalTokenBucket {
+impl<ParentRL, ThisRL> Clone for HierarchicalTokenBucket<ParentRL, ThisRL>
+where
+    ThisRL: Clone,
+{
     fn clone(&self) -> Self {
         Self {
             last_children_count: AtomicU64::new(self.last_children_count.load(Ordering::Relaxed)),
@@ -454,7 +461,12 @@ where
         self.parent.rate_limit(left_tokens);
         let result = empty()
             .chain(required_delay)
-            .chain(self.rate_limiter.rate_limit(left_tokens).map(|value| value.into()).flatten())
+            .chain(
+                self.rate_limiter
+                    .rate_limit(left_tokens)
+                    .map(|value| value.into())
+                    .flatten(),
+            )
             .max();
 
         Some(Deadline::Instant(result?))
@@ -520,7 +532,6 @@ where
 mod tests {
     use std::{
         cell::RefCell,
-        num::NonZeroU64,
         rc::Rc,
         time::{Duration, Instant},
     };
@@ -530,7 +541,7 @@ mod tests {
     use super::{RateLimiter, TimeProvider, TokenBucket};
 
     #[test]
-    fn token_bucket_sanity_check() {
+    fn rate_limiter_sanity_check() {
         token_bucket_sanity_check_template::<TokenBucket<_>>();
         token_bucket_sanity_check_template::<HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>>(
         )
@@ -540,7 +551,7 @@ mod tests {
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
-        let limit_per_second = NonZeroRatePerSecond(10.try_into().unwrap_or(NonZeroU64::MIN));
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
@@ -569,7 +580,7 @@ mod tests {
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
-        let limit_per_second = NonZeroRatePerSecond(10.try_into().unwrap_or(NonZeroU64::MIN));
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
@@ -601,7 +612,7 @@ mod tests {
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
-        let limit_per_second = NonZeroRatePerSecond(10.try_into().unwrap_or(NonZeroU64::MIN));
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
@@ -635,7 +646,7 @@ mod tests {
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
-        let limit_per_second = NonZeroRatePerSecond(10.try_into().unwrap_or(NonZeroU64::MIN));
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
@@ -648,13 +659,17 @@ mod tests {
         *time_to_return.borrow_mut() = now + Duration::from_secs(10);
         assert_eq!(
             rate_limiter.rate_limit(40),
-            Some(Deadline::Instant(now + Duration::from_secs(10) + Duration::from_secs(3))),
+            Some(Deadline::Instant(
+                now + Duration::from_secs(10) + Duration::from_secs(3)
+            )),
         );
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(11);
         assert_eq!(
             rate_limiter.rate_limit(40),
-            Some(Deadline::Instant(now + Duration::from_secs(11) + Duration::from_secs(6)))
+            Some(Deadline::Instant(
+                now + Duration::from_secs(11) + Duration::from_secs(6)
+            ))
         );
     }
 
@@ -670,7 +685,7 @@ mod tests {
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
-        let limit_per_second = NonZeroRatePerSecond(10.try_into().unwrap_or(NonZeroU64::MIN));
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
         let time_provider = time_to_return.clone();
@@ -686,13 +701,35 @@ mod tests {
         *time_to_return.borrow_mut() = now + Duration::from_secs(3);
         assert_eq!(
             rate_limiter.rate_limit(10),
-            Some(Deadline::Instant(now + Duration::from_secs(3) + Duration::from_secs(1)))
+            Some(Deadline::Instant(
+                now + Duration::from_secs(3) + Duration::from_secs(1)
+            ))
         );
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(3);
         assert_eq!(
             rate_limiter.rate_limit(50),
-            Some(Deadline::Instant(now + Duration::from_secs(3) + Duration::from_secs(6)))
+            Some(Deadline::Instant(
+                now + Duration::from_secs(3) + Duration::from_secs(6)
+            ))
         );
+    }
+
+    #[test]
+    fn two_peers_can_share_rate_limiter() {
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
+        let now = Instant::now();
+        let time_to_return = Rc::new(RefCell::new(now));
+        let time_provider = time_to_return.clone();
+        let time_provider: Rc<Box<dyn TimeProvider>> =
+            Rc::new(Box::new(move || *time_provider.borrow()));
+
+        let rate_limiter =
+            HierarchicalTokenBucket::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
+
+        let rate_limiter_cloned = rate_limiter.clone();
     }
 }
