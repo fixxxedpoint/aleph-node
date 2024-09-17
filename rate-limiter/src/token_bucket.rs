@@ -154,6 +154,16 @@ where
     T: TimeProvider,
 {
     fn new_with_time_provider(rate_per_second: NonZeroU64, time_provider: T) -> Self {
+        // let base_instant = time_provider.now();
+        // let rate_per_second = rate_per_second.get();
+        // Self {
+        //     rate_per_second: rate_per_second.into(),
+        //     available: rate_per_second.into(),
+        //     last_update: AtomicU64::new(0),
+        //     last_update_lock: Mutex::new(()),
+        //     initial_time: base_instant,
+        //     time_provider,
+        // }
         let base_instant = time_provider.now();
         Self {
             rate_per_second: rate_per_second.get().into(),
@@ -178,9 +188,9 @@ where
             requested,
             self
         );
-        if requested == 0 {
-            return None;
-        }
+        // if requested == 0 {
+        //     return None;
+        // }
         let mut now_available = self.available();
         if now_available >= requested {
             self.available
@@ -188,24 +198,20 @@ where
             return None;
         }
 
-        let mut now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
-        if let Some(_guard) = self.last_update_lock.try_lock() {
-            self.update_tokens(&mut now, &mut now_available, requested)?;
-        } else {
-            trace!(
-                target: LOG_TARGET,
-                "TokenBucket tried to update, but failed {:?}",
-                self,
-            );
-            now_available = self
-                .available
-                .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
-                + requested;
-        }
+        let now = self.update_tokens();
+        now_available = self
+            .available
+            .fetch_add(requested, std::sync::atomic::Ordering::Relaxed)
+            + requested;
 
-        let scheduled_for_later = now_available - self.rate_per_second.load(Ordering::Relaxed);
+        let rate_per_second = self.rate_per_second.load(Ordering::Relaxed);
+        let scheduled_for_later = if now_available < rate_per_second {
+            0
+        } else {
+            now_available - rate_per_second
+        };
         let wait_milliseconds = scheduled_for_later.saturating_mul(SECOND_IN_MILLIS)
-            / self.rate_per_second.load(Ordering::Relaxed);
+            / rate_per_second;
 
         trace!(
             target: LOG_TARGET,
@@ -214,7 +220,7 @@ where
             requested,
             scheduled_for_later,
             now_available,
-            self.rate_per_second.load(Ordering::Relaxed),
+            rate_per_second,
             self,
         );
 
@@ -223,7 +229,16 @@ where
         Some((self.initial_time + now + wait_duration, scheduled_for_later))
     }
 
-    fn update_tokens(&self, now: &mut u64, now_available: &mut u64, requested: u64) -> Option<()> {
+    fn update_tokens(&self) -> u64 {
+        let Some(_guard) = self.last_update_lock.try_lock() else {
+            trace!(
+                target: LOG_TARGET,
+                "TokenBucket tried to update, but failed {:?}",
+                self,
+            );
+            let now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
+            return now;
+        };
         trace!(
             target: LOG_TARGET,
             "TokenBucket about to update it tokens {:?}.",
@@ -239,13 +254,14 @@ where
             .ok();
         let Some(updated_now) = updated_now else {
             warn!(target: LOG_TARGET, "'u64' should be enough to store milliseconds since 'initial_time' - rate limiting will be turned off.");
-            return None;
+            let now = self.last_update.load(std::sync::atomic::Ordering::Relaxed);
+            return now;
         };
-        *now = updated_now;
-        let since_last_update = *now
+        let now = updated_now;
+        let since_last_update = now
             - self
                 .last_update
-                .fetch_max(*now, std::sync::atomic::Ordering::Relaxed);
+                .fetch_max(now, std::sync::atomic::Ordering::Relaxed);
         let new_units = since_last_update.saturating_mul(rate_per_second) / SECOND_IN_MILLIS;
         trace!(
             target: LOG_TARGET,
@@ -254,8 +270,8 @@ where
             since_last_update,
             self,
         );
-        *now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
-        let new_units = min(*now_available, new_units);
+        let now_available = self.available.load(std::sync::atomic::Ordering::Relaxed);
+        let new_units = min(now_available, new_units);
         trace!(
             target: LOG_TARGET,
             "TokenBucket new_units after processing: {}; {:?}.",
@@ -264,17 +280,19 @@ where
         );
 
         // this can't underflow, since all other operations can only `fetch_add` to `available`
-        *now_available = self
-            .available
-            .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed)
-            - new_units;
+        self.available
+            .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed);
 
-        *now_available = self.available.fetch_add(requested, Ordering::Relaxed) + requested;
-        if *now_available <= rate_per_second {
-            None
-        } else {
-            Some(())
-        }
+        // *now_available = self.available.fetch_add(requested, Ordering::Relaxed) + requested;
+        // self.available.fetch_add(requested, Ordering::Relaxed);
+        // *now_available = self.available();
+
+        // if *now_available <= rate_per_second {
+        //     None
+        // } else {
+        //     Some(())
+        // }
+        now
     }
 
     pub fn rate_per_second(&mut self, rate_per_second: u64) -> u64 {
@@ -295,8 +313,13 @@ where
                 dropped: 0,
             };
         }
-        let now_available = self.available();
-        let to_request = min(now_available, requested);
+        let mut now_available = self.available();
+        let mut to_request = min(now_available, requested);
+        if to_request < requested {
+            self.update_tokens();
+            now_available = self.available();
+            to_request = min(now_available, requested);
+        }
         // let result = self.rate_limit_internal(requested);
         let result = self.rate_limit_internal(to_request);
         let dropped = requested - to_request;
@@ -731,5 +754,42 @@ mod tests {
             );
 
         let rate_limiter_cloned = rate_limiter.clone();
+
+        assert_eq!(rate_limiter.rate_limit(5), None);
+        assert_eq!(rate_limiter_cloned.rate_limit(5), None);
+
+        assert_eq!(
+            rate_limiter.rate_limit(10),
+            Some(Deadline::Instant(now + Duration::from_secs(2)))
+        );
+        assert_eq!(
+            rate_limiter_cloned.rate_limit(10),
+            Some(Deadline::Instant(now + Duration::from_secs(2)))
+        );
+    }
+
+    #[test]
+    fn one_peer_can_use_whole_bandwidth() {
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
+        let now = Instant::now();
+        let time_to_return = Rc::new(RefCell::new(now));
+        let time_provider = time_to_return.clone();
+        let time_provider: Rc<Box<dyn TimeProvider>> =
+            Rc::new(Box::new(move || *time_provider.borrow()));
+
+        let rate_limiter =
+            HierarchicalTokenBucket::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
+
+        let rate_limiter_cloned = rate_limiter.clone();
+
+        assert_eq!(rate_limiter.rate_limit(5), None);
+        assert_eq!(rate_limiter_cloned.rate_limit(5), None);
+
+        *time_to_return.borrow_mut() = now + Duration::from_secs(1);
+
+        assert_eq!(rate_limiter.rate_limit(10), None);
     }
 }
