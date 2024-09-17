@@ -205,13 +205,12 @@ where
             + requested;
 
         let rate_per_second = self.rate_per_second.load(Ordering::Relaxed);
-        let scheduled_for_later = if now_available < rate_per_second {
-            0
-        } else {
-            now_available - rate_per_second
-        };
-        let wait_milliseconds = scheduled_for_later.saturating_mul(SECOND_IN_MILLIS)
-            / rate_per_second;
+        let scheduled_for_later = now_available.saturating_sub(rate_per_second);
+        if scheduled_for_later == 0 {
+            return None;
+        }
+        let wait_milliseconds =
+            scheduled_for_later.saturating_mul(SECOND_IN_MILLIS) / rate_per_second;
 
         trace!(
             target: LOG_TARGET,
@@ -367,7 +366,7 @@ where
     }
 }
 
-pub struct HierarchicalTokenBucket<
+pub struct HierarchicalRateLimiter<
     ParentRL = TokenBucket<DefaultTimeProvider>,
     ThisRL = TokenBucket<DefaultTimeProvider>,
 > {
@@ -376,23 +375,23 @@ pub struct HierarchicalTokenBucket<
     rate_limiter: ThisRL,
 }
 
-impl From<NonZeroRatePerSecond> for HierarchicalTokenBucket {
+impl From<NonZeroRatePerSecond> for HierarchicalRateLimiter {
     fn from(rate_per_second: NonZeroRatePerSecond) -> Self {
-        HierarchicalTokenBucket::new(rate_per_second)
+        HierarchicalRateLimiter::new(rate_per_second)
     }
 }
 
 impl<TP> From<(NonZeroRatePerSecond, TP)>
-    for HierarchicalTokenBucket<TokenBucket<TP>, TokenBucket<TP>>
+    for HierarchicalRateLimiter<TokenBucket<TP>, TokenBucket<TP>>
 where
     TP: TimeProvider + Clone,
 {
     fn from((rate_per_second, time_provider): (NonZeroRatePerSecond, TP)) -> Self {
-        HierarchicalTokenBucket::new_with_time_provider(rate_per_second, time_provider)
+        HierarchicalRateLimiter::new_with_time_provider(rate_per_second, time_provider)
     }
 }
 
-impl<ParentRL, ThisRL> Clone for HierarchicalTokenBucket<ParentRL, ThisRL>
+impl<ParentRL, ThisRL> Clone for HierarchicalRateLimiter<ParentRL, ThisRL>
 where
     ThisRL: Clone,
 {
@@ -405,13 +404,13 @@ where
     }
 }
 
-impl HierarchicalTokenBucket {
+impl HierarchicalRateLimiter {
     pub fn new(rate_per_second: NonZeroRatePerSecond) -> Self {
         Self::new_with_time_provider(rate_per_second, DefaultTimeProvider)
     }
 }
 
-impl<ParentRL, ThisRL> HierarchicalTokenBucket<ParentRL, ThisRL> {
+impl<ParentRL, ThisRL> HierarchicalRateLimiter<ParentRL, ThisRL> {
     fn new_with_time_provider<TP>(rate_per_second: NonZeroRatePerSecond, time_provider: TP) -> Self
     where
         TP: TimeProvider + Clone,
@@ -434,7 +433,7 @@ impl<ParentRL, ThisRL> HierarchicalTokenBucket<ParentRL, ThisRL> {
     }
 }
 
-impl<ParentRL, ThisRL> HierarchicalTokenBucket<ParentRL, ThisRL>
+impl<ParentRL, ThisRL> HierarchicalRateLimiter<ParentRL, ThisRL>
 where
     ParentRL: RateLimiter + RateLimiterController,
     ThisRL: RateLimiter + RateLimiterController,
@@ -496,7 +495,7 @@ where
     }
 }
 
-impl<ParentRL, ThisRL> RateLimiterController for HierarchicalTokenBucket<ParentRL, ThisRL>
+impl<ParentRL, ThisRL> RateLimiterController for HierarchicalRateLimiter<ParentRL, ThisRL>
 where
     ParentRL: RateLimiterController,
     ThisRL: RateLimiterController,
@@ -510,17 +509,17 @@ where
     }
 }
 
-impl<ParentRL, ThisRL> RateLimiter for HierarchicalTokenBucket<ParentRL, ThisRL>
+impl<ParentRL, ThisRL> RateLimiter for HierarchicalRateLimiter<ParentRL, ThisRL>
 where
     ParentRL: RateLimiter + RateLimiterController,
     ThisRL: RateLimiter + RateLimiterController,
 {
     fn rate_limit(&self, requested: u64) -> Option<Deadline> {
-        HierarchicalTokenBucket::rate_limit(self, requested)
+        HierarchicalRateLimiter::rate_limit(self, requested)
     }
 
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
-        HierarchicalTokenBucket::try_rate_limit_without_delay(self, requested)
+        HierarchicalRateLimiter::try_rate_limit_without_delay(self, requested)
     }
 }
 
@@ -559,18 +558,17 @@ mod tests {
         time::{Duration, Instant},
     };
 
-    use crate::token_bucket::{Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond};
+    use crate::token_bucket::{Deadline, HierarchicalRateLimiter, NonZeroRatePerSecond};
 
     use super::{RateLimiter, TimeProvider, TokenBucket};
 
     #[test]
     fn rate_limiter_sanity_check() {
-        token_bucket_sanity_check_template::<TokenBucket<_>>();
-        token_bucket_sanity_check_template::<HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>>(
-        )
+        token_bucket_sanity_check_test::<TokenBucket<_>>();
+        token_bucket_sanity_check_test::<HierarchicalRateLimiter<TokenBucket<_>, TokenBucket<_>>>()
     }
 
-    fn token_bucket_sanity_check_template<RL>()
+    fn token_bucket_sanity_check_test<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -593,13 +591,13 @@ mod tests {
 
     #[test]
     fn no_slowdown_while_within_rate_limit() {
-        no_slowdown_while_within_rate_limit_template::<TokenBucket<_>>();
-        no_slowdown_while_within_rate_limit_template::<
-            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
+        no_slowdown_while_within_rate_limit_test::<TokenBucket<_>>();
+        no_slowdown_while_within_rate_limit_test::<
+            HierarchicalRateLimiter<TokenBucket<_>, TokenBucket<_>>,
         >()
     }
 
-    fn no_slowdown_while_within_rate_limit_template<RL>()
+    fn no_slowdown_while_within_rate_limit_test<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -625,13 +623,12 @@ mod tests {
 
     #[test]
     fn slowdown_when_limit_reached_token_bucket() {
-        slowdown_when_limit_reached_template::<TokenBucket<_>>();
-        slowdown_when_limit_reached_template::<
-            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
-        >()
+        slowdown_when_limit_reached_test::<TokenBucket<_>>();
+        slowdown_when_limit_reached_test::<HierarchicalRateLimiter<TokenBucket<_>, TokenBucket<_>>>(
+        )
     }
 
-    fn slowdown_when_limit_reached_template<RL>()
+    fn slowdown_when_limit_reached_test<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -659,13 +656,13 @@ mod tests {
 
     #[test]
     fn buildup_tokens_but_no_more_than_limit_token_bucket() {
-        buildup_tokens_but_no_more_than_limit_template::<TokenBucket<_>>();
-        buildup_tokens_but_no_more_than_limit_template::<
-            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
+        buildup_tokens_but_no_more_than_limit_test::<TokenBucket<_>>();
+        buildup_tokens_but_no_more_than_limit_test::<
+            HierarchicalRateLimiter<TokenBucket<_>, TokenBucket<_>>,
         >()
     }
 
-    fn buildup_tokens_but_no_more_than_limit_template<RL>()
+    fn buildup_tokens_but_no_more_than_limit_test<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -697,14 +694,14 @@ mod tests {
     }
 
     #[test]
-    fn multiple_calls_buildup_wait_time_token_bucket() {
-        multiple_calls_buildup_wait_time_template::<TokenBucket<_>>();
-        multiple_calls_buildup_wait_time_template::<
-            HierarchicalTokenBucket<TokenBucket<_>, TokenBucket<_>>,
+    fn multiple_calls_buildup_wait_time() {
+        multiple_calls_buildup_wait_time_test::<TokenBucket<_>>();
+        multiple_calls_buildup_wait_time_test::<
+            HierarchicalRateLimiter<TokenBucket<_>, TokenBucket<_>>,
         >()
     }
 
-    fn multiple_calls_buildup_wait_time_template<RL>()
+    fn multiple_calls_buildup_wait_time_test<RL>()
     where
         RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
@@ -748,7 +745,7 @@ mod tests {
             Rc::new(Box::new(move || *time_provider.borrow()));
 
         let rate_limiter =
-            HierarchicalTokenBucket::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+            HierarchicalRateLimiter::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
                 limit_per_second,
                 time_provider,
             );
@@ -778,7 +775,7 @@ mod tests {
             Rc::new(Box::new(move || *time_provider.borrow()));
 
         let rate_limiter =
-            HierarchicalTokenBucket::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+            HierarchicalRateLimiter::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
                 limit_per_second,
                 time_provider,
             );

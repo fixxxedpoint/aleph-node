@@ -9,18 +9,18 @@ use tokio::{io::AsyncRead, time::sleep_until};
 
 pub use crate::token_bucket::RateLimiter as RateLimiterT;
 use crate::{
-    token_bucket::{Deadline, HierarchicalTokenBucket, RateLimiterFacade},
+    token_bucket::{Deadline, HierarchicalRateLimiter, RateLimiterFacade},
     NonZeroRatePerSecond, RatePerSecond, TokenBucket, LOG_TARGET,
 };
 
 pub type PerConnectionRateLimiter = SleepingRateLimiter<TokenBucket>;
 
-pub type SharedHierarchicalRateLimiter = SleepingRateLimiter<HierarchicalTokenBucket>;
+pub type SharedHierarchicalRateLimiter = SleepingRateLimiter<HierarchicalRateLimiter>;
 
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
 #[derive(Clone)]
-pub struct SleepingRateLimiter<RL = HierarchicalTokenBucket> {
+pub struct SleepingRateLimiter<RL = HierarchicalRateLimiter> {
     rate_limiter: RateLimiterFacade<RL>,
 }
 
