@@ -522,6 +522,8 @@ where
 mod tests {
     use std::{
         cell::RefCell,
+        cmp::max,
+        iter::repeat,
         rc::Rc,
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
@@ -877,7 +879,9 @@ mod tests {
             SeedableRng,
         };
 
-        let rate_limit = 1024 * 1024;
+        let mut test_state = vec![];
+
+        let rate_limit = 4 * 1024 * 1024;
         let limit_per_second =
             NonZeroRatePerSecond(rate_limit.try_into().expect("(1024 * 1024) > 0 qed"));
         let rate_limit = rate_limit.into();
@@ -894,16 +898,27 @@ mod tests {
                 time_provider,
             );
 
-        let rate_limiter_cloned = rate_limiter.clone();
-
-        let rate_limiters = vec![rate_limiter, rate_limiter_cloned];
-
         let mut rand_gen = rand::rngs::StdRng::seed_from_u64(
             SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .expect("back to the future")
                 .as_secs(),
         );
+
+        let limiters_count = Uniform::from(1..=64).sample(&mut rand_gen);
+        let rate_limiters = repeat(())
+            .scan((0u64, rate_limiter), |(id, rate_limiter), _| {
+                let new_rate_limiter = rate_limiter.clone();
+                let new_state = rate_limiter.clone();
+                let limiter_id = *id;
+                *rate_limiter = new_state;
+                *id += 1;
+                Some((limiter_id, new_rate_limiter))
+            })
+            .take(limiters_count)
+            .collect::<Vec<_>>();
+        // let rate_limiters = vec![rate_limiter, rate_limiter_cloned];
+
         let mut total_data_scheduled = 0u128;
         let mut last_deadline = initial_time;
 
@@ -913,23 +928,28 @@ mod tests {
         let mut calculated_rate_limit = rate_limit;
 
         for iteration in 0..100000 {
-            let selected_rate_limiter = rate_limiters
+            let (selected_limiter_id, selected_rate_limiter) = rate_limiters
                 .choose(&mut rand_gen)
                 .expect("we should be able to randomly choose a rate-limiter from our collection");
             let data_read = data_gen.sample(&mut rand_gen);
             let next_deadline = selected_rate_limiter.rate_limit(data_read);
-            last_deadline = Option::<Instant>::from(next_deadline.unwrap_or(Deadline::Never))
-                .unwrap_or(last_deadline);
+            last_deadline = max(
+                last_deadline,
+                Option::<Instant>::from(next_deadline.unwrap_or(Deadline::Never))
+                    .unwrap_or(last_deadline),
+            );
             total_data_scheduled += u128::from(data_read);
+
+            test_state.push((*selected_limiter_id, data_read));
 
             // let time_passed = rand_gen.gen_range(0..=10);
             let time_passed = time_gen.sample(&mut rand_gen);
             current_time += Duration::from_millis(time_passed);
             *time_to_return.borrow_mut() = current_time;
 
-            if iteration % 100 != 0 {
-                continue;
-            }
+            // if iteration % 100 != 0 {
+            //     continue;
+            // }
 
             // check if used bandwidth was within some reasonable bounds
             let time_passed = last_deadline - initial_time;
@@ -938,8 +958,10 @@ mod tests {
             if calculated_rate_limit > rate_limit {
                 let diff = calculated_rate_limit - rate_limit;
                 assert!(
-                    diff <= rate_limit.into(),
-                    "used bandwidth should be smaller that twice the rate-limit - diff={diff}"
+                    diff <= rate_limit,
+                    "used bandwidth should be smaller that twice the rate-limit - rate_limit = {rate_limit}; diff = {diff}; rate_limiters.len() = {}; state: {:?}",
+                    rate_limiters.len(),
+                    test_state,
                 );
             }
         }
