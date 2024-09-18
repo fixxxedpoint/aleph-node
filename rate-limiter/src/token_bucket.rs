@@ -5,7 +5,6 @@ use std::{
     cmp::{max, min},
     iter::empty,
     num::NonZeroU64,
-    rc::Rc,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
@@ -19,42 +18,12 @@ pub trait TimeProvider {
     fn now(&self) -> Instant;
 }
 
-#[derive(Debug, PartialEq)]
-pub enum Deadline {
-    Never,
-    Instant(Instant),
-}
-
-impl From<Deadline> for Option<Instant> {
-    fn from(value: Deadline) -> Self {
-        match value {
-            Deadline::Never => None,
-            Deadline::Instant(value) => Some(value),
-        }
-    }
-}
-
 impl<F> TimeProvider for F
 where
     F: Fn() -> Instant,
 {
     fn now(&self) -> Instant {
         self()
-    }
-}
-
-impl<TP> TimeProvider for Rc<TP>
-where
-    TP: TimeProvider,
-{
-    fn now(&self) -> Instant {
-        self.as_ref().now()
-    }
-}
-
-impl TimeProvider for Box<dyn TimeProvider> {
-    fn now(&self) -> Instant {
-        self.as_ref().now()
     }
 }
 
@@ -75,6 +44,21 @@ pub struct RateLimitResult {
 pub trait RateLimiterController {
     fn rate(&self) -> RatePerSecond;
     fn set_rate(&self, rate_per_second: RatePerSecond);
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Deadline {
+    Never,
+    Instant(Instant),
+}
+
+impl From<Deadline> for Option<Instant> {
+    fn from(value: Deadline) -> Self {
+        match value {
+            Deadline::Never => None,
+            Deadline::Instant(value) => Some(value),
+        }
+    }
 }
 
 pub trait RateLimiter {
@@ -154,19 +138,10 @@ where
     T: TimeProvider,
 {
     fn new_with_time_provider(rate_per_second: NonZeroU64, time_provider: T) -> Self {
-        // let base_instant = time_provider.now();
-        // let rate_per_second = rate_per_second.get();
-        // Self {
-        //     rate_per_second: rate_per_second.into(),
-        //     available: rate_per_second.into(),
-        //     last_update: AtomicU64::new(0),
-        //     last_update_lock: Mutex::new(()),
-        //     initial_time: base_instant,
-        //     time_provider,
-        // }
         let base_instant = time_provider.now();
         Self {
             rate_per_second: rate_per_second.get().into(),
+            // we have `rate_per_second` tokens at start
             available: AtomicU64::new(0),
             last_update: AtomicU64::new(0),
             last_update_lock: Mutex::new(()),
@@ -188,9 +163,6 @@ where
             requested,
             self
         );
-        // if requested == 0 {
-        //     return None;
-        // }
         let mut now_available = self.available();
         if now_available >= requested {
             self.available
@@ -282,15 +254,6 @@ where
         self.available
             .fetch_sub(new_units, std::sync::atomic::Ordering::Relaxed);
 
-        // *now_available = self.available.fetch_add(requested, Ordering::Relaxed) + requested;
-        // self.available.fetch_add(requested, Ordering::Relaxed);
-        // *now_available = self.available();
-
-        // if *now_available <= rate_per_second {
-        //     None
-        // } else {
-        //     Some(())
-        // }
         now
     }
 
@@ -319,7 +282,6 @@ where
             now_available = self.available();
             to_request = min(now_available, requested);
         }
-        // let result = self.rate_limit_internal(requested);
         let result = self.rate_limit_internal(to_request);
         let dropped = requested - to_request;
         match result {
@@ -480,7 +442,12 @@ where
         } = self.try_rate_limit_without_delay(requested);
 
         // account all tokens that we are about to use
+        // let parent_result = self
+        //     .parent
+        //     .rate_limit(left_tokens)
+        //     .map(|value| value.into());
         self.parent.rate_limit(left_tokens);
+
         let result = empty()
             .chain(required_delay)
             .chain(
@@ -489,6 +456,7 @@ where
                     .map(|value| value.into())
                     .flatten(),
             )
+            // .chain(parent_result.flatten())
             .max();
 
         Some(Deadline::Instant(result?))
@@ -555,12 +523,27 @@ mod tests {
     use std::{
         cell::RefCell,
         rc::Rc,
-        time::{Duration, Instant},
+        time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
     use crate::token_bucket::{Deadline, HierarchicalRateLimiter, NonZeroRatePerSecond};
 
     use super::{RateLimiter, TimeProvider, TokenBucket};
+
+    impl<TP> TimeProvider for std::rc::Rc<TP>
+    where
+        TP: TimeProvider,
+    {
+        fn now(&self) -> Instant {
+            self.as_ref().now()
+        }
+    }
+
+    impl TimeProvider for Box<dyn TimeProvider> {
+        fn now(&self) -> Instant {
+            self.as_ref().now()
+        }
+    }
 
     #[test]
     fn rate_limiter_sanity_check() {
@@ -766,7 +749,7 @@ mod tests {
     }
 
     #[test]
-    fn one_peer_can_use_whole_bandwidth() {
+    fn single_peer_can_use_whole_bandwidth_when_needed() {
         let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
         let time_to_return = Rc::new(RefCell::new(now));
@@ -788,5 +771,180 @@ mod tests {
         *time_to_return.borrow_mut() = now + Duration::from_secs(1);
 
         assert_eq!(rate_limiter.rate_limit(10), None);
+        assert_eq!(
+            rate_limiter_cloned.rate_limit(10),
+            Some(Deadline::Instant(now + Duration::from_secs(2)))
+        );
+    }
+
+    #[test]
+    fn peers_receive_at_least_one_token_per_second() {
+        let limit_per_second = NonZeroRatePerSecond(1.try_into().expect("10 > 0 qed"));
+        let now = Instant::now();
+        let time_to_return = Rc::new(RefCell::new(now));
+        let time_provider = time_to_return.clone();
+        let time_provider: Rc<Box<dyn TimeProvider>> =
+            Rc::new(Box::new(move || *time_provider.borrow()));
+
+        let rate_limiter =
+            HierarchicalRateLimiter::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
+
+        let rate_limiter_cloned = rate_limiter.clone();
+
+        assert_eq!(rate_limiter.rate_limit(1), None);
+        // TODO
+        assert_eq!(rate_limiter_cloned.rate_limit(1), None);
+
+        // // TODO
+        // assert_eq!(
+        //     rate_limiter_cloned.rate_limit(1),
+        //     Some(Deadline::Instant(now + Duration::from_secs(1)))
+        // );
+        // assert_eq!(
+        //     rate_limiter_cloned.rate_limit(1),
+        //     Some(Deadline::Instant(now + Duration::from_secs(2)))
+        // );
+
+        *time_to_return.borrow_mut() = now + Duration::from_secs(1);
+
+        assert_eq!(rate_limiter.rate_limit(1), None);
+        assert_eq!(
+            rate_limiter_cloned.rate_limit(2),
+            Some(Deadline::Instant(now + Duration::from_secs(2)))
+        );
+    }
+
+    #[test]
+    fn peers_share_bandwidth_on_fifo_basis() {
+        let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
+        let now = Instant::now();
+        let time_to_return = Rc::new(RefCell::new(now));
+        let time_provider = time_to_return.clone();
+        let time_provider: Rc<Box<dyn TimeProvider>> =
+            Rc::new(Box::new(move || *time_provider.borrow()));
+
+        let rate_limiter =
+            HierarchicalRateLimiter::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
+
+        let rate_limiter_cloned = rate_limiter.clone();
+
+        assert!(
+            rate_limiter.rate_limit(5).is_none(),
+            "we should be able to use our initial tokens"
+        );
+        assert!(
+            rate_limiter_cloned.rate_limit(5).is_none(),
+            "cloned rate-limiter should be able to use its initial tokens"
+        );
+
+        *time_to_return.borrow_mut() = now + Duration::from_secs(1);
+
+        assert_eq!(
+            rate_limiter.rate_limit(8),
+            None,
+            "we should be able to borrow bandwidth from the shared parent rate-limiter"
+        );
+        assert_eq!(
+            rate_limiter_cloned.rate_limit(5),
+            None,
+            "second rate-limiter is still within its dedicated bandwidth, i.e. 10/2 peers = 5"
+        );
+        assert!(
+            rate_limiter.rate_limit(7).is_some(),
+            "we definitely not within expected bandwidth"
+        );
+
+        // reset internal state of rate-limiters
+        *time_to_return.borrow_mut() = now + Duration::from_secs(10);
+        assert!(
+            rate_limiter.rate_limit(10).is_none(),
+            "we should be able to borrow bandwidth from our parent"
+        );
+        assert!(rate_limiter_cloned.rate_limit(10).is_some(), "previous call should zero parent's bandwidth and 10 is greater than our dedicated bandwidth");
+    }
+
+    #[test]
+    fn avarage_bandwidth_should_be_within_some_bounds() {
+        use rand::{
+            distributions::{Distribution, Uniform},
+            seq::SliceRandom,
+            SeedableRng,
+        };
+
+        let rate_limit = 1024 * 1024;
+        let limit_per_second =
+            NonZeroRatePerSecond(rate_limit.try_into().expect("(1024 * 1024) > 0 qed"));
+        let rate_limit = rate_limit.into();
+        let initial_time = Instant::now();
+        let mut current_time = initial_time;
+        let time_to_return = Rc::new(RefCell::new(initial_time));
+        let time_provider = time_to_return.clone();
+        let time_provider: Rc<Box<dyn TimeProvider>> =
+            Rc::new(Box::new(move || *time_provider.borrow()));
+
+        let rate_limiter =
+            HierarchicalRateLimiter::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
+
+        let rate_limiter_cloned = rate_limiter.clone();
+
+        let rate_limiters = vec![rate_limiter, rate_limiter_cloned];
+
+        let mut rand_gen = rand::rngs::StdRng::seed_from_u64(
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("back to the future")
+                .as_secs(),
+        );
+        let mut total_data_scheduled = 0u128;
+        let mut last_deadline = initial_time;
+
+        let data_gen = Uniform::from(0..100 * 1024 * 1024);
+        let time_gen = Uniform::from(0..1000 * 10);
+
+        let mut calculated_rate_limit = rate_limit;
+
+        for iteration in 0..100000 {
+            let selected_rate_limiter = rate_limiters
+                .choose(&mut rand_gen)
+                .expect("we should be able to randomly choose a rate-limiter from our collection");
+            let data_read = data_gen.sample(&mut rand_gen);
+            let next_deadline = selected_rate_limiter.rate_limit(data_read);
+            last_deadline = Option::<Instant>::from(next_deadline.unwrap_or(Deadline::Never))
+                .unwrap_or(last_deadline);
+            total_data_scheduled += u128::from(data_read);
+
+            // let time_passed = rand_gen.gen_range(0..=10);
+            let time_passed = time_gen.sample(&mut rand_gen);
+            current_time += Duration::from_millis(time_passed);
+            *time_to_return.borrow_mut() = current_time;
+
+            if iteration % 100 != 0 {
+                continue;
+            }
+
+            // check if used bandwidth was within some reasonable bounds
+            let time_passed = last_deadline - initial_time;
+            calculated_rate_limit = total_data_scheduled * 1000 / time_passed.as_millis();
+
+            if calculated_rate_limit > rate_limit {
+                let diff = calculated_rate_limit - rate_limit;
+                assert!(
+                    diff <= rate_limit.into(),
+                    "used bandwidth should be smaller that twice the rate-limit - diff={diff}"
+                );
+            }
+        }
+        println!(
+            "expected rate-limit = {rate_limit} calculated rate limit = {calculated_rate_limit}"
+        );
     }
 }
