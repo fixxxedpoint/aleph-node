@@ -518,6 +518,30 @@ where
         }
     }
 }
+
+struct SharedParent {
+    max_rate: NonZeroRatePerSecond,
+    active_children: AtomicU64,
+    rate_per_child: AtomicU64,
+}
+
+trait BandwidthDivider {
+    fn request_max_bandwidth(&mut self) -> NonZeroRatePerSecond;
+    async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond;
+}
+
+pub struct LinuxHierarchicalTokenBucket<> {
+    shared_parent: Arc<SharedParent>,
+    token_bucket: TokenBucket,
+}
+
+impl Clone for LinuxHierarchicalTokenBucket {
+    fn clone(&self) -> Self {
+        todo!()
+        // Self { shared_parent: self.shared_parent.clone() }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -883,7 +907,7 @@ mod tests {
 
         let rate_limit = 4 * 1024 * 1024;
         let limit_per_second =
-            NonZeroRatePerSecond(rate_limit.try_into().expect("(1024 * 1024) > 0 qed"));
+            NonZeroRatePerSecond(rate_limit.try_into().expect("(4 * 1024 * 1024) > 0 qed"));
         let rate_limit = rate_limit.into();
         let initial_time = Instant::now();
         let mut current_time = initial_time;
@@ -927,16 +951,17 @@ mod tests {
 
         let mut calculated_rate_limit = rate_limit;
 
-        for iteration in 0..100000 {
+        for _ in 0..100000 {
             let (selected_limiter_id, selected_rate_limiter) = rate_limiters
                 .choose(&mut rand_gen)
                 .expect("we should be able to randomly choose a rate-limiter from our collection");
             let data_read = data_gen.sample(&mut rand_gen);
             let next_deadline = selected_rate_limiter.rate_limit(data_read);
+            let next_deadline = Option::<Instant>::from(next_deadline.unwrap_or(Deadline::Never))
+                .unwrap_or(last_deadline);
             last_deadline = max(
                 last_deadline,
-                Option::<Instant>::from(next_deadline.unwrap_or(Deadline::Never))
-                    .unwrap_or(last_deadline),
+                next_deadline,
             );
             total_data_scheduled += u128::from(data_read);
 
@@ -947,11 +972,7 @@ mod tests {
             current_time += Duration::from_millis(time_passed);
             *time_to_return.borrow_mut() = current_time;
 
-            // if iteration % 100 != 0 {
-            //     continue;
-            // }
-
-            // check if used bandwidth was within some reasonable bounds
+            // check if used bandwidth was within expected bounds
             let time_passed = last_deadline - initial_time;
             calculated_rate_limit = total_data_scheduled * 1000 / time_passed.as_millis();
 
@@ -968,5 +989,62 @@ mod tests {
         println!(
             "expected rate-limit = {rate_limit} calculated rate limit = {calculated_rate_limit}"
         );
+    }
+
+    #[test]
+    fn no_more_bandwidth_than_double_rate_limit() {
+        let rate_limit = 128;
+        let limit_per_second = NonZeroRatePerSecond(rate_limit.try_into().expect("128 > 0 qed"));
+        let now = Instant::now();
+        let time_to_return = Rc::new(RefCell::new(now));
+        let time_provider = time_to_return.clone();
+        let time_provider: Rc<Box<dyn TimeProvider>> =
+            Rc::new(Box::new(move || *time_provider.borrow()));
+
+        let rate_limiter =
+            HierarchicalRateLimiter::<TokenBucket<_>, TokenBucket<_>>::new_with_time_provider(
+                limit_per_second,
+                time_provider,
+            );
+
+        let limiters_count = 8;
+
+        let rate_limiters = repeat(())
+            .scan((0u64, rate_limiter), |(id, rate_limiter), _| {
+                let new_rate_limiter = rate_limiter.clone();
+                let new_state = rate_limiter.clone();
+                let limiter_id = *id;
+                *rate_limiter = new_state;
+                *id += 1;
+                Some((limiter_id, new_rate_limiter))
+            })
+            .take(limiters_count)
+            .collect::<Vec<_>>();
+
+        let initial_tokens = 128 / limiters_count as u64;
+
+        assert!(
+            rate_limiters[0].1.rate_limit(rate_limit).is_none(),
+            "we should be able to use whole bandwidth"
+        );
+
+        for (id, rate_limiter) in rate_limiters.iter().skip(1) {
+            assert!(
+                rate_limiter.rate_limit(initial_tokens).is_none(),
+                "we should be able to use all of our minimum bandwidth at rate_limiter {id}"
+            );
+        }
+
+        assert!(
+            rate_limiters[rate_limiters.len() - 1]
+                .1
+                .rate_limit(1)
+                .is_some(),
+            "without updating rate-limiter's time, we should not be able to schedule more units"
+        );
+
+        // // reset state of the `rate_limiters`
+        // *time_to_return.borrow_mut() = now + Duration::from_secs(256);
+        // let left_shared_bandwidth
     }
 }
