@@ -13,12 +13,18 @@ pub use crate::token_bucket::{RateLimiter as RateLimiterT, TokenBucket};
 
 const LOG_TARGET: &str = "rate-limiter";
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct NonZeroRatePerSecond(NonZeroU64);
 
 impl From<NonZeroRatePerSecond> for u64 {
     fn from(value: NonZeroRatePerSecond) -> Self {
         value.0.into()
+    }
+}
+
+impl From<NonZeroRatePerSecond> for NonZeroU64 {
+    fn from(value: NonZeroRatePerSecond) -> Self {
+        value.0
     }
 }
 
@@ -44,6 +50,12 @@ impl From<RatePerSecond> for u64 {
             RatePerSecond::Block => 0,
             RatePerSecond::Rate(NonZeroRatePerSecond(value)) => value.into(),
         }
+    }
+}
+
+impl From<NonZeroRatePerSecond> for RatePerSecond {
+    fn from(value: NonZeroRatePerSecond) -> Self {
+        RatePerSecond::Rate(value)
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::{NonZeroRatePerSecond, RatePerSecond, LOG_TARGET};
+use futures::{future::pending, ready, FutureExt};
 use log::{trace, warn};
 use parking_lot::Mutex;
 use std::{
@@ -11,6 +12,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use tokio::time::sleep_until;
 
 const SECOND_IN_MILLIS: u64 = 1_000;
 
@@ -46,10 +48,30 @@ pub trait RateLimiterController {
     fn set_rate(&self, rate_per_second: RatePerSecond);
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Deadline {
     Never,
     Instant(Instant),
+}
+
+impl PartialOrd for Deadline {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Deadline {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+        match (self, other) {
+            (Deadline::Never, Deadline::Never) => Ordering::Equal,
+            (Deadline::Never, Deadline::Instant(_)) => Ordering::Greater,
+            (Deadline::Instant(_), Deadline::Never) => Ordering::Less,
+            (Deadline::Instant(self_instant), Deadline::Instant(other_instant)) => {
+                self_instant.cmp(other_instant)
+            }
+        }
+    }
 }
 
 impl From<Deadline> for Option<Instant> {
@@ -66,9 +88,9 @@ pub trait RateLimiter {
     fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult;
 }
 
-pub trait AsyncRateLimiter {
-    async fn rate_limit(&self, requested: u64);
-}
+// pub trait AsyncRateLimiter {
+//     async fn rate_limit(&self, requested: u64);
+// }
 
 /// Implementation of the `Token Bucket` algorithm for the purpose of rate-limiting access to some abstract resource.
 pub struct TokenBucket<T = DefaultTimeProvider> {
@@ -522,23 +544,125 @@ where
 struct SharedParent {
     max_rate: NonZeroRatePerSecond,
     active_children: AtomicU64,
-    rate_per_child: AtomicU64,
+    // rate_per_child: AtomicU64,
+    // cond_var: AtomicU64,
+    // bandwidth_change: async_std::Condvar,
+    bandwidth_change: tokio::sync::Notify,
 }
 
-trait BandwidthDivider {
-    fn request_max_bandwidth(&mut self) -> NonZeroRatePerSecond;
+impl BandwidthDivider for Arc<SharedParent> {
+    fn request_bandwidth(&mut self, requestd: u64) -> NonZeroRatePerSecond {
+        let active_children = self.active_children.load(Ordering::Relaxed);
+        let rate = u64::from(self.max_rate) / active_children;
+        NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
+    }
+
+    fn notify_idle(&mut self) {
+        self.active_children.fetch_sub(1, Ordering::Relaxed);
+        // todo!();
+        // self.bandwidth_change.notify_all();
+        // self.cond_var.no
+        self.bandwidth_change.notify_waiters();
+    }
+
+    async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
+        self.bandwidth_change.notified().await;
+        self.request_bandwidth(0)
+    }
+}
+
+pub trait BandwidthDivider {
+    fn request_bandwidth(&mut self, requestd: u64) -> NonZeroRatePerSecond;
+    fn notify_idle(&mut self);
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond;
 }
 
-pub struct LinuxHierarchicalTokenBucket<> {
-    shared_parent: Arc<SharedParent>,
+// pub trait RateLimiterWaiter {
+//     async fn wait(&mut self);
+//     fn set_rate(&mut self, rate: NonZeroRatePerSecond);
+// }
+
+pub struct AsyncTokenBucket {
     token_bucket: TokenBucket,
+    next_deadline: Option<Deadline>,
+    rate_limit_changed: bool,
 }
 
-impl Clone for LinuxHierarchicalTokenBucket {
-    fn clone(&self) -> Self {
-        todo!()
-        // Self { shared_parent: self.shared_parent.clone() }
+impl AsyncRateLimiter for AsyncTokenBucket {
+    fn rate_limit(&mut self, requested: u64) {
+        let deadline = self.token_bucket.rate_limit(requested);
+        self.next_deadline = *max(&deadline, &self.next_deadline);
+    }
+
+    fn try_rate_limit(&mut self, requested: u64) -> RateLimitResult {
+        self.token_bucket.try_rate_limit_without_delay(requested)
+    }
+
+    fn set_rate(&mut self, rate: NonZeroRatePerSecond) {
+        self.token_bucket.set_rate(rate.into());
+        self.rate_limit_changed = true;
+    }
+
+    async fn wait(&mut self) {
+        if self.rate_limit_changed {
+            self.next_deadline = self.token_bucket.rate_limit(0);
+            self.rate_limit_changed = false;
+        }
+        match self.next_deadline {
+            Some(Deadline::Instant(deadline)) => sleep_until(deadline.into()).await,
+            Some(Deadline::Never) => pending().await,
+            None => {}
+        }
+    }
+}
+
+pub trait AsyncRateLimiter {
+    fn rate_limit(&mut self, requested: u64);
+    fn try_rate_limit(&mut self, requested: u64) -> RateLimitResult;
+    fn set_rate(&mut self, rate: NonZeroRatePerSecond);
+    async fn wait(&mut self);
+}
+
+// zeby ojciec nie musial wysylac sygnalu do wszystkich w sytuacji
+// async condvar
+#[derive(Clone)]
+pub struct LinuxHierarchicalTokenBucket<BD, ARL> {
+    shared_parent: BD,
+    rate_limiter: ARL,
+}
+
+impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL>
+where
+    BD: BandwidthDivider,
+    ARL: AsyncRateLimiter,
+{
+    async fn rate_limit(&mut self, mut requested: u64) {
+        let rate_limiter_result = self.rate_limiter.try_rate_limit(requested);
+        if rate_limiter_result.dropped == 0 {
+            let Some(sleep) = rate_limiter_result.delay else {
+                return;
+            };
+            sleep_until(sleep.into()).await;
+            return;
+        }
+
+        requested = rate_limiter_result.dropped;
+
+        let rate = self.shared_parent.request_bandwidth(requested);
+        self.rate_limiter.set_rate(rate);
+        self.rate_limiter.rate_limit(requested);
+
+        loop {
+            futures::select! {
+                _ = self.rate_limiter.wait().fuse() => {
+                    self.shared_parent.notify_idle();
+                    return;
+                },
+                rate = self.shared_parent.await_bandwidth_change().fuse() => {
+                    self.rate_limiter.set_rate(rate);
+                },
+            }
+        }
     }
 }
 
@@ -959,10 +1083,7 @@ mod tests {
             let next_deadline = selected_rate_limiter.rate_limit(data_read);
             let next_deadline = Option::<Instant>::from(next_deadline.unwrap_or(Deadline::Never))
                 .unwrap_or(last_deadline);
-            last_deadline = max(
-                last_deadline,
-                next_deadline,
-            );
+            last_deadline = max(last_deadline, next_deadline);
             total_data_scheduled += u128::from(data_read);
 
             test_state.push((*selected_limiter_id, data_read));
