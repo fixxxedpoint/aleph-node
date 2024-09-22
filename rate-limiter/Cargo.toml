@@ -12,7 +12,7 @@ repository.workspace = true
 futures = { workspace = true }
 log = { workspace = true }
 parking_lot = { workspace = true }
-tokio = { workspace = true, features = ["time", "sync"] }
+tokio = { workspace = true, features = ["time", "sync", "macros", "rt-multi-thread"] }
 
 [dev-dependencies]
 rand = { workspace = true, features = ["std", "std_rng"] }
