@@ -1,7 +1,7 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use log::error;
-use rate_limiter::SleepingRateLimiter;
+use rate_limiter::{DefaultSharedRateLimiter, SleepingRateLimiter};
 use sc_client_api::Backend;
 use sc_network::{
     config::{NetworkConfiguration, ProtocolId},
@@ -83,7 +83,8 @@ where
         setup_base_protocol::<TP::Block>(genesis_hash);
 
     let network_rate_limit = network_config.substrate_network_bit_rate;
-    let rate_limiter = SleepingRateLimiter::new(network_rate_limit.into());
+    // let rate_limiter = SleepingRateLimiter::new(network_rate_limit.into());
+    let rate_limiter = DefaultSharedRateLimiter::new(network_rate_limit.try_into().expect("'substrate-network-bit-rate' should be greater than 0"));
     let transport_builder = |config| transport::build_transport(rate_limiter, config);
 
     let (

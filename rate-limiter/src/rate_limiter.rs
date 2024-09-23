@@ -20,6 +20,12 @@ pub type PerConnectionRateLimiter = SleepingRateLimiter<TokenBucket>;
 
 pub type SharedHierarchicalRateLimiter = SleepingRateLimiter<HierarchicalRateLimiter>;
 
+pub type DefaultSharedRateLimiter = LinuxHierarchicalTokenBucket;
+
+pub trait RateLimiterSleeper {
+    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send;
+}
+
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
 #[derive(Clone)]
@@ -66,6 +72,15 @@ where
         }
 
         self
+    }
+}
+
+impl<RL> RateLimiterSleeper for SleepingRateLimiter<RL>
+where
+    RL: RateLimiterT + From<NonZeroRatePerSecond> + Send,
+{
+    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
+        async move { self.rate_limit(read_size).await }
     }
 }
 
@@ -144,32 +159,70 @@ where
     }
 }
 
-pub struct FuturesRateLimiter2<BD, ARL> {
-    rate_limiter: BoxFuture<'static, LinuxHierarchicalTokenBucket<BD, ARL>>,
+// pub struct FuturesRateLimiter2<BD, ARL> {
+//     rate_limiter: BoxFuture<'static, LinuxHierarchicalTokenBucket<BD, ARL>>,
+// }
+
+// impl<BD, ARL> FuturesRateLimiter2<BD, ARL>
+// where
+//     BD: BandwidthDivider + Send + 'static,
+//     ARL: AsyncRateLimiter + Send + 'static,
+// {
+//     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
+//     /// ([SleepingRateLimiter]).
+//     pub fn new(rate_limiter: LinuxHierarchicalTokenBucket<BD, ARL>) -> Self {
+//         FuturesRateLimiter2 {
+//             rate_limiter: Box::pin(Self::rate_limit_internal(rate_limiter, 0)),
+//         }
+//     }
+
+//     fn rate_limit_internal(
+//         mut rate_limiter: LinuxHierarchicalTokenBucket<BD, ARL>,
+//         requested: usize,
+//     ) -> impl Future<Output = LinuxHierarchicalTokenBucket<BD, ARL>> {
+//         async move {
+//             rate_limiter
+//                 .rate_limit(requested.try_into().unwrap_or(u64::MAX))
+//                 .await;
+//             rate_limiter
+//         }
+//     }
+
+//     /// Helper method for the use of the [AsyncRead](futures::AsyncRead) implementation.
+//     pub fn rate_limit<Read: futures::AsyncRead + Unpin>(
+//         &mut self,
+//         read: std::pin::Pin<&mut Read>,
+//         cx: &mut std::task::Context<'_>,
+//         buf: &mut [u8],
+//     ) -> std::task::Poll<std::io::Result<usize>> {
+//         let sleeping_rate_limiter = ready!(self.rate_limiter.poll_unpin(cx));
+
+//         let result = read.poll_read(cx, buf);
+//         let last_read_size = match &result {
+//             std::task::Poll::Ready(Ok(read_size)) => *read_size,
+//             _ => 0,
+//         };
+
+//         self.rate_limiter =
+//             Self::rate_limit_internal(sleeping_rate_limiter, last_read_size).boxed();
+
+//         result
+//     }
+// }
+
+pub struct FuturesRateLimiter3<ARL> {
+    rate_limiter: BoxFuture<'static, ARL>,
 }
 
-impl<BD, ARL> FuturesRateLimiter2<BD, ARL>
+impl<ARL> FuturesRateLimiter3<ARL>
 where
-    BD: BandwidthDivider + Send + 'static,
-    ARL: AsyncRateLimiter + Send + 'static,
+    ARL: RateLimiterSleeper + 'static,
 {
     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
     /// ([SleepingRateLimiter]).
-    pub fn new(rate_limiter: LinuxHierarchicalTokenBucket<BD, ARL>) -> Self {
-        FuturesRateLimiter2 {
-            rate_limiter: Box::pin(Self::rate_limit_internal(rate_limiter, 0)),
-        }
-    }
-
-    fn rate_limit_internal(
-        mut rate_limiter: LinuxHierarchicalTokenBucket<BD, ARL>,
-        requested: usize,
-    ) -> impl Future<Output = LinuxHierarchicalTokenBucket<BD, ARL>> {
-        async move {
-            rate_limiter
-                .rate_limit(requested.try_into().unwrap_or(u64::MAX))
-                .await;
-            rate_limiter
+    pub fn new(rate_limiter: ARL) -> Self {
+        Self {
+            rate_limiter: Box::pin(rate_limiter.rate_limit(0)),
         }
     }
 
@@ -188,8 +241,7 @@ where
             _ => 0,
         };
 
-        self.rate_limiter =
-            Self::rate_limit_internal(sleeping_rate_limiter, last_read_size).boxed();
+        self.rate_limiter = sleeping_rate_limiter.rate_limit(last_read_size).boxed();
 
         result
     }

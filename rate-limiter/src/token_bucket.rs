@@ -1,4 +1,4 @@
-use crate::{NonZeroRatePerSecond, RatePerSecond, LOG_TARGET};
+use crate::{NonZeroRatePerSecond, RateLimiterSleeper, RatePerSecond, LOG_TARGET};
 use futures::{future::pending, Future, FutureExt};
 use log::{trace, warn};
 use parking_lot::Mutex;
@@ -576,24 +576,33 @@ impl SharedParent {
     }
 }
 
-impl BandwidthDivider for Arc<SharedParent> {
-    fn request_bandwidth(&mut self, _requestd: u64) -> NonZeroRatePerSecond {
+#[derive(Clone)]
+pub struct ArcSharedParent(Arc<SharedParent>);
+
+impl From<NonZeroRatePerSecond> for ArcSharedParent {
+    fn from(rate: NonZeroRatePerSecond) -> Self {
+        Self(Arc::new(SharedParent::new(rate)))
+    }
+}
+
+impl BandwidthDivider for ArcSharedParent {
+    fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
         // let active_children = self.active_children.load(Ordering::Relaxed);
-        let active_children = self.active_children.fetch_add(1, Ordering::Relaxed) + 1;
-        let rate = u64::from(self.max_rate) / active_children;
+        let active_children = self.0.active_children.fetch_add(1, Ordering::Relaxed) + 1;
+        let rate = u64::from(self.0.max_rate) / active_children;
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
 
     fn notify_idle(&mut self) {
-        self.active_children.fetch_sub(1, Ordering::Relaxed);
+        self.0.active_children.fetch_sub(1, Ordering::Relaxed);
         // todo!();
         // self.bandwidth_change.notify_all();
         // self.cond_var.no
-        self.bandwidth_change.notify_waiters();
+        self.0.bandwidth_change.notify_waiters();
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
-        self.bandwidth_change.notified().await;
+        self.0.bandwidth_change.notified().await;
         self.request_bandwidth(0)
     }
 }
@@ -619,6 +628,16 @@ where
     next_deadline: Option<Deadline>,
     rate_limit_changed: bool,
     sleep_until: SU,
+}
+
+impl<TP, SU> From<NonZeroRatePerSecond> for AsyncTokenBucket<TP, SU>
+where
+    TP: TimeProvider + Default,
+    SU: Default,
+{
+    fn from(value: NonZeroRatePerSecond) -> Self {
+        Self::new(TokenBucket::from(value), SU::default())
+    }
 }
 
 impl<TP, SU> AsyncTokenBucket<TP, SU>
@@ -682,6 +701,12 @@ pub trait SleepUntil {
 #[derive(Clone)]
 pub struct TokioSleepUntil;
 
+impl Default for TokioSleepUntil {
+    fn default() -> Self {
+        Self {}
+    }
+}
+
 impl SleepUntil for TokioSleepUntil {
     fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
         async move {
@@ -693,7 +718,10 @@ impl SleepUntil for TokioSleepUntil {
 // zeby ojciec nie musial wysylac sygnalu do wszystkich w sytuacji
 // async condvar
 #[derive(Clone)]
-pub struct LinuxHierarchicalTokenBucket<BD, ARL> {
+pub struct LinuxHierarchicalTokenBucket<
+    BD = ArcSharedParent,
+    ARL = AsyncTokenBucket<DefaultTimeProvider, TokioSleepUntil>,
+> {
     shared_parent: BD,
     rate_limiter: ARL,
 }
@@ -703,6 +731,17 @@ where
     BD: BandwidthDivider,
     ARL: AsyncRateLimiter,
 {
+    pub fn new(rate: NonZeroRatePerSecond) -> Self
+    where
+        BD: From<NonZeroRatePerSecond>,
+        ARL: From<NonZeroRatePerSecond>,
+    {
+        Self {
+            shared_parent: BD::from(rate),
+            rate_limiter: ARL::from(rate),
+        }
+    }
+
     pub async fn rate_limit(&mut self, requested: u64) {
         let rate = self.shared_parent.request_bandwidth(requested);
         self.rate_limiter.set_rate(rate);
@@ -732,6 +771,23 @@ where
     }
 }
 
+impl<BD, ARL> RateLimiterSleeper for LinuxHierarchicalTokenBucket<BD, ARL>
+where
+    BD: BandwidthDivider + Send,
+    ARL: AsyncRateLimiter + Send,
+{
+    fn rate_limit(mut self, read_size: usize) -> impl Future<Output = Self> + Send {
+        async move {
+            LinuxHierarchicalTokenBucket::rate_limit(
+                &mut self,
+                read_size.try_into().unwrap_or(u64::MAX),
+            )
+            .await;
+            self
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::{
@@ -748,8 +804,8 @@ mod tests {
     use rand::distributions::Uniform;
 
     use crate::token_bucket::{
-        AsyncTokenBucket, Deadline, HierarchicalRateLimiter, LinuxHierarchicalTokenBucket,
-        NonZeroRatePerSecond, SharedParent,
+        ArcSharedParent, AsyncTokenBucket, Deadline, HierarchicalRateLimiter,
+        LinuxHierarchicalTokenBucket, NonZeroRatePerSecond, SharedParent,
     };
 
     use super::{RateLimiter, SleepUntil, TimeProvider, TokenBucket};
@@ -1290,7 +1346,7 @@ mod tests {
         let time_provider: Rc<Box<dyn TimeProvider>> =
             Rc::new(Box::new(move || *time_provider.borrow()));
 
-        let shared_parent = Arc::new(SharedParent::new(NonZeroRatePerSecond(rate_limit_nonzero)));
+        let shared_parent = ArcSharedParent::from(NonZeroRatePerSecond(rate_limit_nonzero));
         let rate_limiter = TokenBucket::new_with_time_provider(rate_limit_nonzero, time_provider);
 
         let sleep_until_last_instant = Arc::new(Mutex::new(initial_time));

@@ -1,13 +1,13 @@
 use libp2p::{core::muxing::StreamMuxer, PeerId, Transport};
-use rate_limiter::{FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, SleepingRateLimiter};
+use rate_limiter::{FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter3, SleepingRateLimiter, RateLimiterSleeper};
 
-struct RateLimitedStreamMuxer<SM> {
-    rate_limiter: SleepingRateLimiter,
+struct RateLimitedStreamMuxer<SM, ARL = SleepingRateLimiter> {
+    rate_limiter: ARL,
     stream_muxer: SM,
 }
 
-impl<SM> RateLimitedStreamMuxer<SM> {
-    pub fn new(stream_muxer: SM, rate_limiter: SleepingRateLimiter) -> Self {
+impl<SM, ARL> RateLimitedStreamMuxer<SM, ARL> {
+    pub fn new(stream_muxer: SM, rate_limiter: ARL) -> Self {
         Self {
             rate_limiter,
             stream_muxer,
@@ -17,18 +17,20 @@ impl<SM> RateLimitedStreamMuxer<SM> {
     fn inner(self: std::pin::Pin<&mut Self>) -> std::pin::Pin<&mut SM>
     where
         SM: Unpin,
+        ARL: Unpin,
     {
         let this = self.get_mut();
         std::pin::Pin::new(&mut this.stream_muxer)
     }
 }
 
-impl<SM> StreamMuxer for RateLimitedStreamMuxer<SM>
+impl<SM, ARL> StreamMuxer for RateLimitedStreamMuxer<SM, ARL>
 where
     SM: StreamMuxer + Unpin,
     SM::Substream: Unpin,
+    ARL: RateLimiterSleeper + Clone + Unpin + 'static,
 {
-    type Substream = FuturesRateLimitedAsyncReadWrite<SM::Substream>;
+    type Substream = FuturesRateLimitedAsyncReadWrite<SM::Substream, ARL>;
 
     type Error = SM::Error;
 
@@ -41,7 +43,7 @@ where
             result.map(|substream| {
                 FuturesRateLimitedAsyncReadWrite::new(
                     substream,
-                    FuturesRateLimiter::new(rate_limiter),
+                    FuturesRateLimiter3::new(rate_limiter),
                 )
             })
         })
@@ -56,7 +58,7 @@ where
             result.map(|substream| {
                 FuturesRateLimitedAsyncReadWrite::new(
                     substream,
-                    FuturesRateLimiter::new(rate_limiter),
+                    FuturesRateLimiter3::new(rate_limiter),
                 )
             })
         })
@@ -78,7 +80,7 @@ where
 }
 
 pub fn build_transport(
-    rate_limiter: SleepingRateLimiter,
+    rate_limiter: impl RateLimiterSleeper + Clone + Unpin + Send + 'static,
     config: sc_network::transport::NetworkConfig,
 ) -> impl Transport<
     Output = (
