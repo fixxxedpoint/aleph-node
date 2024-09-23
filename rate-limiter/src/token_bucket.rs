@@ -42,10 +42,6 @@ pub struct RateLimitResult {
     pub dropped: u64,
 }
 
-pub struct RateLimitTryResult {
-    scheduled_for_later: u64,
-}
-
 pub trait RateLimiterController {
     fn rate(&self) -> RatePerSecond;
     fn set_rate(&self, rate_per_second: RatePerSecond);
@@ -85,6 +81,18 @@ impl From<Deadline> for Option<Instant> {
         }
     }
 }
+
+impl From<Instant> for Deadline {
+    fn from(value: Instant) -> Self {
+        Deadline::Instant(value)
+    }
+}
+
+// impl From<Option<Instant>> for Option<Deadline> {
+//     fn from(value: Option<Instant>) -> Self {
+//         value.map(Deadline::Instant)
+//     }
+// }
 
 pub trait RateLimiter {
     fn rate_limit(&self, requested: u64) -> Option<Deadline>;
@@ -292,8 +300,17 @@ where
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
     /// configured rate limit.
-    pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
-        self.rate_limit_internal(requested).map(|(delay, _)| delay)
+    pub fn rate_limit(&mut self, requested: u64) -> RateLimitResult {
+        match self.rate_limit_internal(requested) {
+            Some((deadline, dropped)) => RateLimitResult {
+                delay: Some(deadline),
+                dropped,
+            },
+            None => RateLimitResult {
+                delay: None,
+                dropped: 0,
+            },
+        }
     }
 
     pub fn try_rate_limit_without_delay(&self, requested: u64) -> RateLimitResult {
@@ -623,19 +640,10 @@ where
     TP: TimeProvider,
     SU: SleepUntil,
 {
-    fn rate_limit(&mut self, requested: u64) -> RateLimitTryResult {
-        // let rate_limiter_try_result = self.token_bucket.try_rate_limit_without_delay(requested);
-        // let deadline = self
-        //     .token_bucket
-        //     .rate_limit(rate_limiter_try_result.dropped);
-
-        let deadline = self
-            .token_bucket
-            .rate_limit(requested);
-        self.next_deadline = *max(&deadline, &self.next_deadline);
-        RateLimitTryResult {
-            scheduled_for_later: rate_limiter_try_result.dropped,
-        }
+    fn rate_limit(&mut self, requested: u64) -> RateLimitResult {
+        let result = TokenBucket::rate_limit(&mut self.token_bucket, requested);
+        self.next_deadline = result.delay.map(Deadline::Instant);
+        result
     }
 
     fn try_rate_limit(&mut self, requested: u64) -> RateLimitResult {
@@ -661,7 +669,7 @@ where
 }
 
 pub trait AsyncRateLimiter {
-    fn rate_limit(&mut self, requested: u64) -> RateLimitTryResult;
+    fn rate_limit(&mut self, requested: u64) -> RateLimitResult;
     fn try_rate_limit(&mut self, requested: u64) -> RateLimitResult;
     fn set_rate(&mut self, rate: NonZeroRatePerSecond);
     async fn wait(&mut self);
@@ -694,12 +702,16 @@ where
     ARL: AsyncRateLimiter,
 {
     pub async fn rate_limit(&mut self, requested: u64) {
+        let rate = self.shared_parent.request_bandwidth(requested);
+        self.rate_limiter.set_rate(rate);
+
         let rate_limiter_result = self.rate_limiter.rate_limit(requested);
-        if rate_limiter_result.scheduled_for_later == 0 {
+        if rate_limiter_result.dropped == 0 {
+            self.shared_parent.notify_idle();
             return;
         }
 
-        let left_from_request = rate_limiter_result.scheduled_for_later;
+        let left_from_request = rate_limiter_result.dropped;
         let rate = self.shared_parent.request_bandwidth(left_from_request);
         self.rate_limiter.set_rate(rate);
 
@@ -725,11 +737,13 @@ mod tests {
     use std::{
         cell::RefCell,
         cmp::max,
-        iter::repeat,
+        iter::{empty, repeat},
         rc::Rc,
         sync::Arc,
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
+
+    use rand::distributions::Uniform;
 
     use crate::token_bucket::{
         AsyncTokenBucket, Deadline, HierarchicalRateLimiter, LinuxHierarchicalTokenBucket,
@@ -1256,6 +1270,7 @@ mod tests {
         };
 
         let mut test_state = vec![];
+        // let test_state = vec![(53, 79450328, 6255), (41, 71683386, 5414), (12, 102766851, 5002), (35, 41795159, 2869), (6, 4608297, 9832)];
 
         let rate_limit = 4 * 1024 * 1024;
         let rate_limit_nonzero = rate_limit.try_into().expect("(4 * 1024 * 1024) > 0 qed");
@@ -1305,11 +1320,17 @@ mod tests {
 
         let mut calculated_rate_limit = rate_limit;
 
-        for _ in 0..100000 {
+        for ix in 0..100000 {
             let (selected_limiter_id, selected_rate_limiter) = rate_limiters
                 .choose_mut(&mut rand_gen)
                 .expect("we should be able to randomly choose a rate-limiter from our collection");
             let data_read = data_gen.sample(&mut rand_gen);
+            let time_passed = time_gen.sample(&mut rand_gen);
+
+            // let (selected_limiter_id, data_read, time_passed) = test_state[ix];
+            // let selected_rate_limiter: &mut LinuxHierarchicalTokenBucket<_, _> = &mut rate_limiters[selected_limiter_id].1;
+
+            test_state.push((*selected_limiter_id, data_read, time_passed));
 
             selected_rate_limiter.rate_limit(data_read).await;
             let last_deadline = *sleep_until_last_instant.borrow();
@@ -1317,12 +1338,9 @@ mod tests {
             // last_deadline = max(last_deadline, next_deadline);
 
             total_data_scheduled += u128::from(data_read);
-
-            test_state.push((*selected_limiter_id, data_read));
-
-            let time_passed = time_gen.sample(&mut rand_gen);
             current_time += Duration::from_millis(time_passed);
             *time_to_return.borrow_mut() = current_time;
+
 
             // check if used bandwidth was within expected bounds
             let time_passed_for_limiter = last_deadline - initial_time;
@@ -1330,7 +1348,8 @@ mod tests {
                 continue;
             }
 
-            calculated_rate_limit = total_data_scheduled * 1000 / (time_passed_for_limiter.as_millis() + 1000);
+            calculated_rate_limit =
+                total_data_scheduled * 1000 / (time_passed_for_limiter.as_millis() + 1000);
 
             if calculated_rate_limit > rate_limit {
                 let diff = calculated_rate_limit - rate_limit;
@@ -1342,8 +1361,74 @@ mod tests {
                 );
             }
         }
+        // TODO sometime it passes
         println!(
             "expected rate-limit = {rate_limit} calculated rate limit = {calculated_rate_limit}"
         );
     }
+    // dane na ktorych sie wywalilo:
+    // used bandwidth should be smaller that twice the rate-limit - rate_limit = 4194304; diff = 4693010; rate_limiters.len() = 62; state: [(31, 46186434), (34, 72924691), (33, 99942899), (44, 56090363), (23, 63645015), (54, 87157354), (38, 101035927), (35, 92565943), (30, 10366467)]
+    // used bandwidth should be smaller that twice the rate-limit - rate_limit = 4194304; diff = 5832772; rate_limiters.len() = 35; state: [(23, 63493327), (18, 80575244), (9, 10889868)]
+    // [(53, 79450328, 6255), (41, 71683386, 5414), (12, 102766851, 5002), (35, 41795159, 2869), (6, 4608297, 9832)]
+
+    // rate_limiters.len() = 8; state: [(2, 69368249, 3496), (5, 55111143, 4387), (3, 13730828, 842), (4, 1655360, 5985)]
+
+
+    // fn generate_test_data<D>(rate_limiters: Vec<D>) -> impl Iterator<Item = (D, usize, u64)> {
+    //     let mut rand_gen = rand::rngs::StdRng::seed_from_u64(
+    //         SystemTime::now()
+    //             .duration_since(UNIX_EPOCH)
+    //             .expect("back to the future")
+    //             .as_secs(),
+    //     );
+
+    //     let data_gen = Uniform::from(0..100 * 1024 * 1024);
+    //     let time_gen = Uniform::from(0..1000 * 10);
+
+    //     (0..100000).scan(move |state, _| {
+    //         let (selected_limiter_id, selected_rate_limiter) = rate_limiters
+    //             .choose_mut(&mut rand_gen)
+    //             .expect("we should be able to randomly choose a rate-limiter from our collection");
+    //         let data_read = data_gen.sample(&mut rand_gen);
+    //     })
+
+    //         for _ in 0..100000 {
+    //             let (selected_limiter_id, selected_rate_limiter) = rate_limiters
+    //                 .choose_mut(&mut rand_gen)
+    //                 .expect("we should be able to randomly choose a rate-limiter from our collection");
+    //         let data_read = data_gen.sample(&mut rand_gen);
+
+    //         selected_rate_limiter.rate_limit(data_read).await;
+    //         let last_deadline = *sleep_until_last_instant.borrow();
+    //         // let next_deadline = *sleep_until_last_instant.borrow();
+    //         // last_deadline = max(last_deadline, next_deadline);
+
+    //         total_data_scheduled += u128::from(data_read);
+
+    //         test_state.push((*selected_limiter_id, data_read));
+
+    //         let time_passed = time_gen.sample(&mut rand_gen);
+    //         current_time += Duration::from_millis(time_passed);
+    //         *time_to_return.borrow_mut() = current_time;
+
+    //         // check if used bandwidth was within expected bounds
+    //         let time_passed_for_limiter = last_deadline - initial_time;
+    //         if time_passed_for_limiter.is_zero() {
+    //             continue;
+    //         }
+
+    //         calculated_rate_limit =
+    //             total_data_scheduled * 1000 / (time_passed_for_limiter.as_millis() + 1000);
+
+    //         if calculated_rate_limit > rate_limit {
+    //             let diff = calculated_rate_limit - rate_limit;
+    //             assert!(
+    //                 diff <= rate_limit,
+    //                 "used bandwidth should be smaller that twice the rate-limit - rate_limit = {rate_limit}; diff = {diff}; rate_limiters.len() = {}; state: {:?}",
+    //                 rate_limiters.len(),
+    //                 test_state,
+    //             );
+    //         }
+    //     }
+    // }
 }
