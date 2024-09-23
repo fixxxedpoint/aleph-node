@@ -1,5 +1,5 @@
 use crate::{NonZeroRatePerSecond, RatePerSecond, LOG_TARGET};
-use futures::{future::pending, FutureExt};
+use futures::{future::pending, Future, FutureExt};
 use log::{trace, warn};
 use parking_lot::Mutex;
 use std::{
@@ -602,7 +602,7 @@ pub trait BandwidthDivider {
     // TODO perhaps return something that holds the counter and sub when dropped - meh, nope
     fn request_bandwidth(&mut self, requestd: u64) -> NonZeroRatePerSecond;
     fn notify_idle(&mut self);
-    async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond;
+    fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
 }
 
 // pub trait RateLimiterWaiter {
@@ -638,16 +638,12 @@ where
 impl<TP, SU> AsyncRateLimiter for AsyncTokenBucket<TP, SU>
 where
     TP: TimeProvider,
-    SU: SleepUntil,
+    SU: SleepUntil + Send,
 {
     fn rate_limit(&mut self, requested: u64) -> RateLimitResult {
         let result = TokenBucket::rate_limit(&mut self.token_bucket, requested);
         self.next_deadline = result.delay.map(Deadline::Instant);
         result
-    }
-
-    fn try_rate_limit(&mut self, requested: u64) -> RateLimitResult {
-        self.token_bucket.try_rate_limit_without_delay(requested)
     }
 
     fn set_rate(&mut self, rate: NonZeroRatePerSecond) {
@@ -657,36 +653,40 @@ where
         }
     }
 
-    async fn wait(&mut self) {
+    fn wait(&mut self) -> impl std::future::Future<Output = ()> + std::marker::Send {
         if self.rate_limit_changed {
             self.next_deadline = self.token_bucket.rate_limit(0);
             self.rate_limit_changed = false;
         }
-        match self.next_deadline {
-            Some(Deadline::Instant(deadline)) => self.sleep_until.sleep_until(deadline).await,
-            Some(Deadline::Never) => pending().await,
-            None => {}
+        async {
+            match self.next_deadline {
+                Some(Deadline::Instant(deadline)) => self.sleep_until.sleep_until(deadline).await,
+                Some(Deadline::Never) => pending().await,
+                _ => {}
+            }
+            ()
         }
     }
 }
 
 pub trait AsyncRateLimiter {
     fn rate_limit(&mut self, requested: u64) -> RateLimitResult;
-    fn try_rate_limit(&mut self, requested: u64) -> RateLimitResult;
     fn set_rate(&mut self, rate: NonZeroRatePerSecond);
-    async fn wait(&mut self);
+    fn wait(&mut self) -> impl std::future::Future<Output = ()> + std::marker::Send;
 }
 
 pub trait SleepUntil {
-    async fn sleep_until(&mut self, instant: Instant);
+    fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send;
 }
 
 #[derive(Clone)]
 pub struct TokioSleepUntil;
 
 impl SleepUntil for TokioSleepUntil {
-    async fn sleep_until(&mut self, instant: Instant) {
-        tokio::time::sleep_until(instant.into()).await;
+    fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
+        async move {
+            tokio::time::sleep_until(instant.into()).await;
+        }
     }
 }
 
@@ -730,9 +730,6 @@ where
             }
         }
     }
-
-    // fn rate_limit_internal(&mut self, requested: u64) -> RateLimitTryResult {
-    // }
 }
 
 #[cfg(test)]
@@ -746,6 +743,8 @@ mod tests {
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
+    use futures::Future;
+    use parking_lot::Mutex;
     use rand::distributions::Uniform;
 
     use crate::token_bucket::{
@@ -1246,11 +1245,11 @@ mod tests {
 
     #[derive(Clone)]
     struct TestSleepUntil {
-        last_instant: Rc<RefCell<Instant>>,
+        last_instant: Arc<Mutex<Instant>>,
     }
 
     impl TestSleepUntil {
-        pub fn new(initial_instant: Rc<RefCell<Instant>>) -> Self {
+        pub fn new(initial_instant: Arc<Mutex<Instant>>) -> Self {
             Self {
                 last_instant: initial_instant,
             }
@@ -1258,8 +1257,9 @@ mod tests {
     }
 
     impl SleepUntil for TestSleepUntil {
-        async fn sleep_until(&mut self, instant: Instant) {
-            *self.last_instant.borrow_mut() = instant;
+        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
+            *self.last_instant.lock() = instant;
+            async {}
         }
     }
 
@@ -1273,7 +1273,12 @@ mod tests {
         };
 
         // let mut test_state = vec![];
-        let test_state = vec![(2, 69368249, 3496), (5, 55111143, 4387), (3, 13730828, 842), (4, 1655360, 5985)];
+        let test_state = vec![
+            (2, 69368249, 3496),
+            (5, 55111143, 4387),
+            (3, 13730828, 842),
+            (4, 1655360, 5985),
+        ];
 
         let rate_limit = 4 * 1024 * 1024;
         let rate_limit_nonzero = rate_limit.try_into().expect("(4 * 1024 * 1024) > 0 qed");
@@ -1288,7 +1293,7 @@ mod tests {
         let shared_parent = Arc::new(SharedParent::new(NonZeroRatePerSecond(rate_limit_nonzero)));
         let rate_limiter = TokenBucket::new_with_time_provider(rate_limit_nonzero, time_provider);
 
-        let sleep_until_last_instant = Rc::new(RefCell::new(initial_time));
+        let sleep_until_last_instant = Arc::new(Mutex::new(initial_time));
         let sleep_until = TestSleepUntil::new(sleep_until_last_instant.clone());
         let rate_limiter = AsyncTokenBucket::new(rate_limiter, sleep_until);
         let rate_limiter = LinuxHierarchicalTokenBucket {
@@ -1334,19 +1339,19 @@ mod tests {
             // let time_passed = time_gen.sample(&mut rand_gen);
 
             let (selected_limiter_id, data_read, time_passed) = test_state[ix];
-            let selected_rate_limiter: &mut LinuxHierarchicalTokenBucket<_, _> = &mut rate_limiters[selected_limiter_id].1;
+            let selected_rate_limiter: &mut LinuxHierarchicalTokenBucket<_, _> =
+                &mut rate_limiters[selected_limiter_id].1;
 
             // test_state.push((*selected_limiter_id, data_read, time_passed));
 
             selected_rate_limiter.rate_limit(data_read).await;
             // let last_deadline = *sleep_until_last_instant.borrow();
-            let next_deadline = *sleep_until_last_instant.borrow();
+            let next_deadline = *sleep_until_last_instant.lock();
             last_deadline = max(last_deadline, next_deadline);
 
             total_data_scheduled += u128::from(data_read);
             current_time += Duration::from_millis(time_passed);
             *time_to_return.borrow_mut() = current_time;
-
 
             // check if used bandwidth was within expected bounds
             let time_passed_for_limiter = last_deadline - initial_time;
@@ -1378,7 +1383,6 @@ mod tests {
     // [(53, 79450328, 6255), (41, 71683386, 5414), (12, 102766851, 5002), (35, 41795159, 2869), (6, 4608297, 9832)]
 
     // rate_limiters.len() = 8; state: [(2, 69368249, 3496), (5, 55111143, 4387), (3, 13730828, 842), (4, 1655360, 5985)]
-
 
     // fn generate_test_data<D>(rate_limiters: Vec<D>) -> impl Iterator<Item = (D, usize, u64)> {
     //     let mut rand_gen = rand::rngs::StdRng::seed_from_u64(

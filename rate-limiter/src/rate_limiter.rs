@@ -2,14 +2,17 @@ use std::task::ready;
 
 use futures::{
     future::{pending, BoxFuture},
-    FutureExt,
+    Future, FutureExt,
 };
 use log::trace;
 use tokio::{io::AsyncRead, time::sleep_until};
 
 pub use crate::token_bucket::RateLimiter as RateLimiterT;
 use crate::{
-    token_bucket::{Deadline, HierarchicalRateLimiter, RateLimiterFacade},
+    token_bucket::{
+        AsyncRateLimiter, BandwidthDivider, Deadline, HierarchicalRateLimiter,
+        LinuxHierarchicalTokenBucket, RateLimiterFacade,
+    },
     NonZeroRatePerSecond, RatePerSecond, TokenBucket, LOG_TARGET,
 };
 
@@ -104,14 +107,17 @@ where
 }
 
 /// Wrapper around [SleepingRateLimiter] to simplify implementation of the [AsyncRead](futures::AsyncRead) trait.
-pub struct FuturesRateLimiter {
-    rate_limiter: BoxFuture<'static, SleepingRateLimiter>,
+pub struct FuturesRateLimiter<RL = HierarchicalRateLimiter> {
+    rate_limiter: BoxFuture<'static, SleepingRateLimiter<RL>>,
 }
 
-impl FuturesRateLimiter {
+impl<RL> FuturesRateLimiter<RL>
+where
+    RL: RateLimiterT + From<NonZeroRatePerSecond> + Send + 'static,
+{
     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
     /// ([SleepingRateLimiter]).
-    pub fn new(rate_limiter: SleepingRateLimiter) -> Self {
+    pub fn new(rate_limiter: SleepingRateLimiter<RL>) -> Self {
         Self {
             rate_limiter: Box::pin(rate_limiter.rate_limit(0)),
         }
@@ -133,6 +139,57 @@ impl FuturesRateLimiter {
         };
 
         self.rate_limiter = sleeping_rate_limiter.rate_limit(last_read_size).boxed();
+
+        result
+    }
+}
+
+pub struct FuturesRateLimiter2<BD, ARL> {
+    rate_limiter: BoxFuture<'static, LinuxHierarchicalTokenBucket<BD, ARL>>,
+}
+
+impl<BD, ARL> FuturesRateLimiter2<BD, ARL>
+where
+    BD: BandwidthDivider + Send + 'static,
+    ARL: AsyncRateLimiter + Send + 'static,
+{
+    /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
+    /// ([SleepingRateLimiter]).
+    pub fn new(rate_limiter: LinuxHierarchicalTokenBucket<BD, ARL>) -> Self {
+        FuturesRateLimiter2 {
+            rate_limiter: Box::pin(Self::rate_limit_internal(rate_limiter, 0)),
+        }
+    }
+
+    fn rate_limit_internal(
+        mut rate_limiter: LinuxHierarchicalTokenBucket<BD, ARL>,
+        requested: usize,
+    ) -> impl Future<Output = LinuxHierarchicalTokenBucket<BD, ARL>> {
+        async move {
+            rate_limiter
+                .rate_limit(requested.try_into().unwrap_or(u64::MAX))
+                .await;
+            rate_limiter
+        }
+    }
+
+    /// Helper method for the use of the [AsyncRead](futures::AsyncRead) implementation.
+    pub fn rate_limit<Read: futures::AsyncRead + Unpin>(
+        &mut self,
+        read: std::pin::Pin<&mut Read>,
+        cx: &mut std::task::Context<'_>,
+        buf: &mut [u8],
+    ) -> std::task::Poll<std::io::Result<usize>> {
+        let sleeping_rate_limiter = ready!(self.rate_limiter.poll_unpin(cx));
+
+        let result = read.poll_read(cx, buf);
+        let last_read_size = match &result {
+            std::task::Poll::Ready(Ok(read_size)) => *read_size,
+            _ => 0,
+        };
+
+        self.rate_limiter =
+            Self::rate_limit_internal(sleeping_rate_limiter, last_read_size).boxed();
 
         result
     }
