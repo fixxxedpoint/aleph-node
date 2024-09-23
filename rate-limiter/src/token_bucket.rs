@@ -651,8 +651,10 @@ where
     }
 
     fn set_rate(&mut self, rate: NonZeroRatePerSecond) {
-        self.token_bucket.set_rate(rate.into());
-        self.rate_limit_changed = true;
+        if self.token_bucket.rate() != RatePerSecond::Rate(rate) {
+            self.token_bucket.set_rate(rate.into());
+            self.rate_limit_changed = true;
+        }
     }
 
     async fn wait(&mut self) {
@@ -711,9 +713,9 @@ where
             return;
         }
 
-        let left_from_request = rate_limiter_result.dropped;
-        let rate = self.shared_parent.request_bandwidth(left_from_request);
-        self.rate_limiter.set_rate(rate);
+        // let left_from_request = rate_limiter_result.dropped;
+        // let rate = self.shared_parent.request_bandwidth(left_from_request);
+        // self.rate_limiter.set_rate(rate);
 
         loop {
             futures::select! {
@@ -1269,8 +1271,8 @@ mod tests {
             SeedableRng,
         };
 
-        let mut test_state = vec![];
-        // let test_state = vec![(53, 79450328, 6255), (41, 71683386, 5414), (12, 102766851, 5002), (35, 41795159, 2869), (6, 4608297, 9832)];
+        // let mut test_state = vec![];
+        let test_state = vec![(2, 69368249, 3496), (5, 55111143, 4387), (3, 13730828, 842), (4, 1655360, 5985)];
 
         let rate_limit = 4 * 1024 * 1024;
         let rate_limit_nonzero = rate_limit.try_into().expect("(4 * 1024 * 1024) > 0 qed");
@@ -1310,7 +1312,8 @@ mod tests {
                 *id += 1;
                 Some((limiter_id, new_rate_limiter))
             })
-            .take(limiters_count)
+            // .take(limiters_count)
+            .take(8)
             .collect::<Vec<_>>();
 
         let mut total_data_scheduled = 0;
@@ -1319,23 +1322,25 @@ mod tests {
         let time_gen = Uniform::from(0..1000 * 10);
 
         let mut calculated_rate_limit = rate_limit;
+        let mut last_deadline = initial_time;
 
+        // TODO with test-impl of sleep_until, bandwidth sharing doesn't work properly - easy solution would be to increase current_time to last_deadline, otherwise peers are getting too much bandwidth
         for ix in 0..100000 {
-            let (selected_limiter_id, selected_rate_limiter) = rate_limiters
-                .choose_mut(&mut rand_gen)
-                .expect("we should be able to randomly choose a rate-limiter from our collection");
-            let data_read = data_gen.sample(&mut rand_gen);
-            let time_passed = time_gen.sample(&mut rand_gen);
+            // let (selected_limiter_id, selected_rate_limiter) = rate_limiters
+            //     .choose_mut(&mut rand_gen)
+            //     .expect("we should be able to randomly choose a rate-limiter from our collection");
+            // let data_read = data_gen.sample(&mut rand_gen);
+            // let time_passed = time_gen.sample(&mut rand_gen);
 
-            // let (selected_limiter_id, data_read, time_passed) = test_state[ix];
-            // let selected_rate_limiter: &mut LinuxHierarchicalTokenBucket<_, _> = &mut rate_limiters[selected_limiter_id].1;
+            let (selected_limiter_id, data_read, time_passed) = test_state[ix];
+            let selected_rate_limiter: &mut LinuxHierarchicalTokenBucket<_, _> = &mut rate_limiters[selected_limiter_id].1;
 
-            test_state.push((*selected_limiter_id, data_read, time_passed));
+            // test_state.push((*selected_limiter_id, data_read, time_passed));
 
             selected_rate_limiter.rate_limit(data_read).await;
-            let last_deadline = *sleep_until_last_instant.borrow();
-            // let next_deadline = *sleep_until_last_instant.borrow();
-            // last_deadline = max(last_deadline, next_deadline);
+            // let last_deadline = *sleep_until_last_instant.borrow();
+            let next_deadline = *sleep_until_last_instant.borrow();
+            last_deadline = max(last_deadline, next_deadline);
 
             total_data_scheduled += u128::from(data_read);
             current_time += Duration::from_millis(time_passed);

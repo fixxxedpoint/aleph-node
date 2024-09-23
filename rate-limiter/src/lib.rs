@@ -13,7 +13,7 @@ pub use crate::token_bucket::{RateLimiter as RateLimiterT, TokenBucket};
 
 const LOG_TARGET: &str = "rate-limiter";
 
-#[derive(Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub struct NonZeroRatePerSecond(NonZeroU64);
 
 impl From<NonZeroRatePerSecond> for u64 {
@@ -28,6 +28,7 @@ impl From<NonZeroRatePerSecond> for NonZeroU64 {
     }
 }
 
+#[derive(PartialEq, Eq)]
 pub enum RatePerSecond {
     Block,
     Rate(NonZeroRatePerSecond),
