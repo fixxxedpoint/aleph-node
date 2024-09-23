@@ -707,11 +707,12 @@ where
         let rate = self.shared_parent.request_bandwidth(requested);
         self.rate_limiter.set_rate(rate);
 
-        let rate_limiter_result = self.rate_limiter.rate_limit(requested);
-        if rate_limiter_result.dropped == 0 {
-            self.shared_parent.notify_idle();
-            return;
-        }
+        self.rate_limiter.rate_limit(requested);
+        // let rate_limiter_result = self.rate_limiter.rate_limit(requested);
+        // if rate_limiter_result.dropped == 0 {
+        //     self.shared_parent.notify_idle();
+        //     return;
+        // }
 
         // let left_from_request = rate_limiter_result.dropped;
         // let rate = self.shared_parent.request_bandwidth(left_from_request);
