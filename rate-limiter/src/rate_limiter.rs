@@ -10,15 +10,13 @@ use tokio::{io::AsyncRead, time::sleep_until};
 pub use crate::token_bucket::RateLimiter as RateLimiterT;
 use crate::{
     token_bucket::{
-        AsyncRateLimiter, BandwidthDivider, Deadline, HierarchicalRateLimiter,
-        LinuxHierarchicalTokenBucket, RateLimiterFacade,
+        AsyncRateLimiter, BandwidthDivider, Deadline, LinuxHierarchicalTokenBucket,
+        RateLimiterFacade,
     },
     NonZeroRatePerSecond, RatePerSecond, TokenBucket, LOG_TARGET,
 };
 
 pub type PerConnectionRateLimiter = SleepingRateLimiter<TokenBucket>;
-
-pub type SharedHierarchicalRateLimiter = SleepingRateLimiter<HierarchicalRateLimiter>;
 
 pub type DefaultSharedRateLimiter = RateLimiterFacade<LinuxHierarchicalTokenBucket>;
 
@@ -29,7 +27,7 @@ pub trait RateLimiterSleeper {
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
 #[derive(Clone)]
-pub struct SleepingRateLimiter<RL = RateLimiterFacade<HierarchicalRateLimiter>> {
+pub struct SleepingRateLimiter<RL = PerConnectionRateLimiter> {
     rate_limiter: RL,
 }
 
@@ -49,7 +47,7 @@ where
 
     /// Given `read_size`, that is an amount of units of some governed resource, delays return of `Self` to satisfy configure
     /// rate.
-    pub async fn rate_limit(self, read_size: usize) -> Self {
+    pub async fn rate_limit(mut self, read_size: usize) -> Self {
         trace!(
             target: LOG_TARGET,
             "Rate-Limiter attempting to read {}.",
@@ -145,7 +143,7 @@ where
 }
 
 /// Wrapper around [SleepingRateLimiter] to simplify implementation of the [AsyncRead](futures::AsyncRead) trait.
-pub struct FuturesRateLimiter<RL = SleepingRateLimiter<HierarchicalRateLimiter>> {
+pub struct FuturesRateLimiter<RL = PerConnectionRateLimiter> {
     rate_limiter: BoxFuture<'static, RL>,
 }
 

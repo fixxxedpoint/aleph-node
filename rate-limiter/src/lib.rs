@@ -7,7 +7,7 @@ use tokio::io::AsyncRead;
 
 pub use crate::rate_limiter::{
     DefaultSharedRateLimiter, FuturesRateLimiter3, PerConnectionRateLimiter, RateLimiter,
-    RateLimiterSleeper, SharedHierarchicalRateLimiter, SleepingRateLimiter,
+    RateLimiterSleeper, SleepingRateLimiter,
 };
 pub use crate::token_bucket::{RateLimiter as RateLimiterT, TokenBucket};
 
@@ -25,6 +25,12 @@ impl From<NonZeroRatePerSecond> for u64 {
 impl From<NonZeroRatePerSecond> for NonZeroU64 {
     fn from(value: NonZeroRatePerSecond) -> Self {
         value.0
+    }
+}
+
+impl From<NonZeroU64> for NonZeroRatePerSecond {
+    fn from(value: NonZeroU64) -> Self {
+        NonZeroRatePerSecond(value)
     }
 }
 
