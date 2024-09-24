@@ -748,14 +748,17 @@ impl SleepUntil for TokioSleepUntil {
 pub struct LinuxHierarchicalTokenBucket<
     BD = ArcSharedParent,
     ARL = AsyncTokenBucket<DefaultTimeProvider, TokioSleepUntil>,
-> {
+> where
+    BD: BandwidthDivider,
+{
     shared_parent: BD,
     rate_limiter: ARL,
+    need_to_notify_parent: bool,
 }
 
 impl<BD, ARL> From<NonZeroRatePerSecond> for LinuxHierarchicalTokenBucket<BD, ARL>
 where
-    BD: From<NonZeroRatePerSecond>,
+    BD: BandwidthDivider + From<NonZeroRatePerSecond>,
     ARL: From<NonZeroRatePerSecond>,
 {
     fn from(rate: NonZeroRatePerSecond) -> Self {
@@ -763,7 +766,10 @@ where
     }
 }
 
-impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL> {
+impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL>
+where
+    BD: BandwidthDivider,
+{
     pub fn new(rate: NonZeroRatePerSecond) -> Self
     where
         BD: From<NonZeroRatePerSecond>,
@@ -772,6 +778,25 @@ impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL> {
         Self {
             shared_parent: BD::from(rate),
             rate_limiter: ARL::from(rate),
+            need_to_notify_parent: false,
+        }
+    }
+
+    fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond
+    where
+        BD: BandwidthDivider,
+    {
+        self.need_to_notify_parent = true;
+        self.shared_parent.request_bandwidth(requested)
+    }
+
+    fn notify_idle(&mut self)
+    where
+        BD: BandwidthDivider,
+    {
+        if self.need_to_notify_parent {
+            self.need_to_notify_parent = false;
+            self.shared_parent.notify_idle();
         }
     }
 
@@ -780,24 +805,15 @@ impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL> {
         BD: BandwidthDivider,
         ARL: AsyncRateLimiter,
     {
-        let rate = self.shared_parent.request_bandwidth(requested);
+        let rate = self.request_bandwidth(requested);
         self.rate_limiter.set_rate(rate);
 
         self.rate_limiter.rate_limit(requested);
-        // let rate_limiter_result = self.rate_limiter.rate_limit(requested);
-        // if rate_limiter_result.dropped == 0 {
-        //     self.shared_parent.notify_idle();
-        //     return;
-        // }
-
-        // let left_from_request = rate_limiter_result.dropped;
-        // let rate = self.shared_parent.request_bandwidth(left_from_request);
-        // self.rate_limiter.set_rate(rate);
 
         loop {
             futures::select! {
                 _ = self.rate_limiter.wait().fuse() => {
-                    self.shared_parent.notify_idle();
+                    self.notify_idle();
                     return;
                 },
                 rate = self.shared_parent.await_bandwidth_change().fuse() => {
@@ -805,6 +821,15 @@ impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL> {
                 },
             }
         }
+    }
+}
+
+impl<BD, ARL> Drop for LinuxHierarchicalTokenBucket<BD, ARL>
+where
+    BD: BandwidthDivider,
+{
+    fn drop(&mut self) {
+        self.notify_idle();
     }
 }
 
