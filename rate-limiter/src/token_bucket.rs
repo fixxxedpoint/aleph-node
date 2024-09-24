@@ -342,7 +342,7 @@ where
     }
 }
 
-impl<TP> RateLimiterController for TokenBucket<TP> {
+impl<TP> RateLimiterController for TokenBucket<TP> where TP: TimeProvider {
     fn rate(&self) -> RatePerSecond {
         self.rate_per_second.load(Ordering::Relaxed).into()
     }
@@ -352,8 +352,9 @@ impl<TP> RateLimiterController for TokenBucket<TP> {
             RatePerSecond::Block => return,
             RatePerSecond::Rate(value) => value.into(),
         };
+        self.update_tokens();
         self.rate_per_second
-            .store(rate_per_second, Ordering::Relaxed)
+            .store(rate_per_second, Ordering::Relaxed);
     }
 }
 
