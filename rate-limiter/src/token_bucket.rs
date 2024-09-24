@@ -342,7 +342,10 @@ where
     }
 }
 
-impl<TP> RateLimiterController for TokenBucket<TP> where TP: TimeProvider {
+impl<TP> RateLimiterController for TokenBucket<TP>
+where
+    TP: TimeProvider,
+{
     fn rate(&self) -> RatePerSecond {
         self.rate_per_second.load(Ordering::Relaxed).into()
     }
@@ -539,10 +542,7 @@ pub enum RateLimiterFacade<RL> {
     RateLimiter(RL),
 }
 
-impl<RL> RateLimiterFacade<RL>
-where
-    RL: RateLimiter,
-{
+impl<RL> RateLimiterFacade<RL> {
     pub fn new(rate: RatePerSecond) -> Self
     where
         RL: From<NonZeroRatePerSecond>,
@@ -553,10 +553,28 @@ where
         }
     }
 
-    pub fn rate_limit(&self, requested: u64) -> Option<Deadline> {
+    pub fn rate_limit(&self, requested: u64) -> Option<Deadline>
+    where
+        RL: RateLimiter,
+    {
         match self {
             RateLimiterFacade::NoTraffic => Some(Deadline::Never),
             RateLimiterFacade::RateLimiter(limiter) => limiter.rate_limit(requested),
+        }
+    }
+}
+
+impl RateLimiterSleeper for RateLimiterFacade<LinuxHierarchicalTokenBucket> {
+    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
+        async move {
+            match self {
+                RateLimiterFacade::NoTraffic => pending().await,
+                RateLimiterFacade::RateLimiter(rate_limiter) => RateLimiterFacade::RateLimiter(
+                    rate_limiter
+                        .rate_limit(read_size.try_into().unwrap_or(usize::MAX))
+                        .await,
+                ),
+            }
         }
     }
 }
@@ -727,11 +745,17 @@ pub struct LinuxHierarchicalTokenBucket<
     rate_limiter: ARL,
 }
 
-impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL>
+impl<BD, ARL> From<NonZeroRatePerSecond> for LinuxHierarchicalTokenBucket<BD, ARL>
 where
-    BD: BandwidthDivider,
-    ARL: AsyncRateLimiter,
+    BD: From<NonZeroRatePerSecond>,
+    ARL: From<NonZeroRatePerSecond>,
 {
+    fn from(rate: NonZeroRatePerSecond) -> Self {
+        LinuxHierarchicalTokenBucket::new(rate)
+    }
+}
+
+impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL> {
     pub fn new(rate: NonZeroRatePerSecond) -> Self
     where
         BD: From<NonZeroRatePerSecond>,
@@ -743,7 +767,11 @@ where
         }
     }
 
-    pub async fn rate_limit(&mut self, requested: u64) {
+    pub async fn rate_limit(&mut self, requested: u64)
+    where
+        BD: BandwidthDivider,
+        ARL: AsyncRateLimiter,
+    {
         let rate = self.shared_parent.request_bandwidth(requested);
         self.rate_limiter.set_rate(rate);
 

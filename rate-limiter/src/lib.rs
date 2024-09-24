@@ -89,7 +89,7 @@ impl<Read, RL> RateLimitedAsyncRead<Read, RL> {
 impl<Read, RL> AsyncRead for RateLimitedAsyncRead<Read, RL>
 where
     Read: AsyncRead + Unpin,
-    RL: token_bucket::RateLimiter + From<NonZeroRatePerSecond> + Send + 'static,
+    RL: RateLimiterSleeper + Send + 'static,
 {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,

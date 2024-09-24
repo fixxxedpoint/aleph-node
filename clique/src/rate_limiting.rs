@@ -1,5 +1,6 @@
 use rate_limiter::{
-    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiter, RateLimiterT, SleepingRateLimiter,
+    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiter, RateLimiterSleeper, RateLimiterT,
+    SleepingRateLimiter,
 };
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, PeerAddressInfo, Splittable, Splitted};
@@ -14,11 +15,11 @@ impl<Read: ConnectionInfo, RL> ConnectionInfo for RateLimitedAsyncRead<Read, RL>
 #[derive(Clone)]
 pub struct RateLimitingDialer<D, RL> {
     dialer: D,
-    rate_limiter: SleepingRateLimiter<RL>,
+    rate_limiter: RL,
 }
 
 impl<D, RL> RateLimitingDialer<D, RL> {
-    pub fn new(dialer: D, rate_limiter: SleepingRateLimiter<RL>) -> Self {
+    pub fn new(dialer: D, rate_limiter: RL) -> Self {
         Self {
             dialer,
             rate_limiter,
@@ -33,8 +34,8 @@ where
     D: Dialer<A>,
     <D::Connection as Splittable>::Sender: Unpin,
     <D::Connection as Splittable>::Receiver: Unpin,
-    RL: rate_limiter::RateLimiterT
-        + From<rate_limiter::NonZeroRatePerSecond>
+    RL: rate_limiter::RateLimiterSleeper
+        // + From<rate_limiter::NonZeroRatePerSecond>
         + Send
         + Clone
         + 'static,
@@ -58,11 +59,11 @@ where
 /// Implementation of the [Listener] trait governing all returned [Listener::Connection] instances by a rate-limiting wrapper.
 pub struct RateLimitingListener<L, RL> {
     listener: L,
-    rate_limiter: SleepingRateLimiter<RL>,
+    rate_limiter: RL,
 }
 
 impl<L, RL> RateLimitingListener<L, RL> {
-    pub fn new(listener: L, rate_limiter: SleepingRateLimiter<RL>) -> Self {
+    pub fn new(listener: L, rate_limiter: RL) -> Self {
         Self {
             listener,
             rate_limiter,
@@ -74,7 +75,7 @@ impl<L, RL> RateLimitingListener<L, RL> {
 impl<L, RL> Listener for RateLimitingListener<L, RL>
 where
     L: Listener + Send,
-    RL: RateLimiterT + From<NonZeroRatePerSecond> + Send + Clone + 'static,
+    RL: RateLimiterSleeper + Send + Clone + 'static,
 {
     type Connection = Splitted<
         RateLimitedAsyncRead<<L::Connection as Splittable>::Receiver, RL>,
