@@ -598,6 +598,14 @@ impl SharedParent {
 #[derive(Clone)]
 pub struct ArcSharedParent(Arc<SharedParent>);
 
+impl ArcSharedParent {
+    fn request_bandwidth_without_children_increament(&self) -> NonZeroRatePerSecond {
+        let active_children = self.0.active_children.load(Ordering::Relaxed);
+        let rate = u64::from(self.0.max_rate) / active_children;
+        NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
+    }
+}
+
 impl From<NonZeroRatePerSecond> for ArcSharedParent {
     fn from(rate: NonZeroRatePerSecond) -> Self {
         Self(Arc::new(SharedParent::new(rate)))
@@ -622,7 +630,7 @@ impl BandwidthDivider for ArcSharedParent {
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
         self.0.bandwidth_change.notified().await;
-        self.request_bandwidth(0)
+        self.request_bandwidth_without_children_increament()
     }
 }
 
