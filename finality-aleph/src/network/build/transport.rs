@@ -1,6 +1,6 @@
 use libp2p::{core::muxing::StreamMuxer, PeerId, Transport};
 use rate_limiter::{
-    FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter3, RateLimiterSleeper, SleepingRateLimiter,
+    FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, RateLimiterSleeper, SleepingRateLimiter,
 };
 
 struct RateLimitedStreamMuxer<SM, ARL = SleepingRateLimiter> {
@@ -45,7 +45,7 @@ where
             result.map(|substream| {
                 FuturesRateLimitedAsyncReadWrite::new(
                     substream,
-                    FuturesRateLimiter3::new(rate_limiter),
+                    FuturesRateLimiter::new(rate_limiter),
                 )
             })
         })
@@ -60,7 +60,7 @@ where
             result.map(|substream| {
                 FuturesRateLimitedAsyncReadWrite::new(
                     substream,
-                    FuturesRateLimiter3::new(rate_limiter),
+                    FuturesRateLimiter::new(rate_limiter),
                 )
             })
         })

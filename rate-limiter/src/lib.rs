@@ -6,7 +6,7 @@ use std::num::{NonZeroU64, TryFromIntError};
 use tokio::io::AsyncRead;
 
 pub use crate::rate_limiter::{
-    DefaultSharedRateLimiter, FuturesRateLimiter3, PerConnectionRateLimiter, RateLimiter,
+    DefaultSharedRateLimiter, FuturesRateLimiter, PerConnectionRateLimiter, RateLimiter,
     RateLimiterSleeper, SleepingRateLimiter,
 };
 pub use crate::token_bucket::{RateLimiter as RateLimiterT, TokenBucket};
@@ -109,12 +109,12 @@ where
 }
 
 pub struct FuturesRateLimitedAsyncReadWrite<ReadWrite, ARL> {
-    rate_limiter: FuturesRateLimiter3<ARL>,
+    rate_limiter: FuturesRateLimiter<ARL>,
     inner: ReadWrite,
 }
 
 impl<ReadWrite, ARL> FuturesRateLimitedAsyncReadWrite<ReadWrite, ARL> {
-    pub fn new(wrapped: ReadWrite, rate_limiter: FuturesRateLimiter3<ARL>) -> Self {
+    pub fn new(wrapped: ReadWrite, rate_limiter: FuturesRateLimiter<ARL>) -> Self {
         Self {
             rate_limiter,
             inner: wrapped,

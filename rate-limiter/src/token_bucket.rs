@@ -1,10 +1,7 @@
 use crate::{NonZeroRatePerSecond, RateLimiterSleeper, RatePerSecond, LOG_TARGET};
 use futures::{future::pending, Future, FutureExt};
-use log::{trace, warn};
-use parking_lot::Mutex;
+use log::trace;
 use std::{
-    cmp::{max, min},
-    iter::empty,
     num::NonZeroU64,
     sync::{
         atomic::{AtomicU64, Ordering},
@@ -12,8 +9,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-
-const SECOND_IN_MILLIS: u64 = 1_000;
 
 pub trait TimeProvider {
     fn now(&self) -> Instant;
@@ -40,11 +35,6 @@ impl TimeProvider for DefaultTimeProvider {
 pub struct RateLimitResult {
     pub delay: Instant,
     pub scheduled_for_later: u64,
-}
-
-pub trait RateLimiterController<Rate> {
-    fn rate(&self) -> Rate;
-    fn set_rate(&mut self, rate_per_second: Rate);
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
@@ -166,8 +156,7 @@ where
             .saturating_div(self.rate_per_second.into());
 
         Some(RateLimitResult {
-            delay: self.last_update
-                + Duration::from_micros(delay_micros.try_into().unwrap_or(u64::MAX)),
+            delay: self.last_update + Duration::from_micros(delay_micros),
             scheduled_for_later,
         })
     }
@@ -184,12 +173,21 @@ where
         let time_since_last_update = now.duration_since(self.last_update);
         self.last_update = now;
         let new_units = time_since_last_update
-            .as_micros()
+            .as_millis()
             .saturating_mul(u64::from(self.rate_per_second).into())
             .saturating_div(1_000_000)
             .try_into()
             .unwrap_or(u64::MAX);
         self.requested = self.requested.saturating_sub(new_units);
+    }
+
+    pub fn rate(&self) -> NonZeroRatePerSecond {
+        self.rate_per_second.into()
+    }
+
+    pub fn set_rate(&mut self, rate_per_second: NonZeroRatePerSecond) {
+        self.update_tokens();
+        self.rate_per_second = rate_per_second.into();
     }
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
@@ -225,20 +223,6 @@ where
     }
 }
 
-impl<TP> RateLimiterController<NonZeroRatePerSecond> for TokenBucket<TP>
-where
-    TP: TimeProvider,
-{
-    fn rate(&self) -> NonZeroRatePerSecond {
-        self.rate_per_second.into()
-    }
-
-    fn set_rate(&mut self, rate_per_second: NonZeroRatePerSecond) {
-        self.update_tokens();
-        self.rate_per_second = rate_per_second.into();
-    }
-}
-
 #[derive(Clone)]
 pub enum RateLimiterFacade<RL> {
     NoTraffic,
@@ -267,14 +251,14 @@ impl<RL> RateLimiterFacade<RL> {
     }
 }
 
-impl RateLimiterSleeper for RateLimiterFacade<LinuxHierarchicalTokenBucket> {
+impl RateLimiterSleeper for RateLimiterFacade<HierarchicalTokenBucket> {
     fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
         async move {
             match self {
                 RateLimiterFacade::NoTraffic => pending().await,
                 RateLimiterFacade::RateLimiter(rate_limiter) => RateLimiterFacade::RateLimiter(
                     rate_limiter
-                        .rate_limit(read_size.try_into().unwrap_or(usize::MAX))
+                        .rate_limit(read_size.try_into().unwrap_or(u64::MAX))
                         .await,
                 ),
             }
@@ -282,13 +266,13 @@ impl RateLimiterSleeper for RateLimiterFacade<LinuxHierarchicalTokenBucket> {
     }
 }
 
-struct SharedParent {
+struct AtomicSharedBandwidthDivider {
     max_rate: NonZeroRatePerSecond,
     active_children: AtomicU64,
     bandwidth_change: tokio::sync::Notify,
 }
 
-impl SharedParent {
+impl AtomicSharedBandwidthDivider {
     pub fn new(rate: NonZeroRatePerSecond) -> Self {
         Self {
             max_rate: rate,
@@ -299,9 +283,9 @@ impl SharedParent {
 }
 
 #[derive(Clone)]
-pub struct ArcSharedParent(Arc<SharedParent>);
+pub struct SharedBandwidthImpl(Arc<AtomicSharedBandwidthDivider>);
 
-impl ArcSharedParent {
+impl SharedBandwidthImpl {
     fn request_bandwidth_without_children_increament(&self) -> NonZeroRatePerSecond {
         let active_children = self.0.active_children.load(Ordering::Relaxed);
         let rate = u64::from(self.0.max_rate) / active_children;
@@ -309,13 +293,14 @@ impl ArcSharedParent {
     }
 }
 
-impl From<NonZeroRatePerSecond> for ArcSharedParent {
+impl From<NonZeroRatePerSecond> for SharedBandwidthImpl {
     fn from(rate: NonZeroRatePerSecond) -> Self {
-        Self(Arc::new(SharedParent::new(rate)))
+        Self(Arc::new(AtomicSharedBandwidthDivider::new(rate)))
     }
 }
 
-impl BandwidthDivider for ArcSharedParent {
+impl SharedBandwidth for SharedBandwidthImpl {
+    // TODO make it grow exponentially on per-connection basis. It won't depend on number of children, but only how often they are calling it.
     fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
         // let active_children = self.active_children.load(Ordering::Relaxed);
         let active_children = self.0.active_children.fetch_add(1, Ordering::Relaxed) + 1;
@@ -325,9 +310,6 @@ impl BandwidthDivider for ArcSharedParent {
 
     fn notify_idle(&mut self) {
         self.0.active_children.fetch_sub(1, Ordering::Relaxed);
-        // todo!();
-        // self.bandwidth_change.notify_all();
-        // self.cond_var.no
         self.0.bandwidth_change.notify_waiters();
     }
 
@@ -337,17 +319,12 @@ impl BandwidthDivider for ArcSharedParent {
     }
 }
 
-pub trait BandwidthDivider {
+pub trait SharedBandwidth {
     // TODO perhaps return something that holds the counter and sub when dropped - meh, nope
     fn request_bandwidth(&mut self, requestd: u64) -> NonZeroRatePerSecond;
     fn notify_idle(&mut self);
     fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
 }
-
-// pub trait RateLimiterWaiter {
-//     async fn wait(&mut self);
-//     fn set_rate(&mut self, rate: NonZeroRatePerSecond);
-// }
 
 #[derive(Clone)]
 pub struct AsyncTokenBucket<TP, SU>
@@ -416,7 +393,6 @@ where
                 Some(Deadline::Never) => pending().await,
                 _ => {}
             }
-            ()
         }
     }
 }
@@ -451,30 +427,30 @@ impl SleepUntil for TokioSleepUntil {
 // zeby ojciec nie musial wysylac sygnalu do wszystkich w sytuacji
 // async condvar
 #[derive(Clone)]
-pub struct LinuxHierarchicalTokenBucket<
-    BD = ArcSharedParent,
+pub struct HierarchicalTokenBucket<
+    BD = SharedBandwidthImpl,
     ARL = AsyncTokenBucket<DefaultTimeProvider, TokioSleepUntil>,
 > where
-    BD: BandwidthDivider,
+    BD: SharedBandwidth,
 {
     shared_parent: BD,
     rate_limiter: ARL,
     need_to_notify_parent: bool,
 }
 
-impl<BD, ARL> From<NonZeroRatePerSecond> for LinuxHierarchicalTokenBucket<BD, ARL>
+impl<BD, ARL> From<NonZeroRatePerSecond> for HierarchicalTokenBucket<BD, ARL>
 where
-    BD: BandwidthDivider + From<NonZeroRatePerSecond>,
+    BD: SharedBandwidth + From<NonZeroRatePerSecond>,
     ARL: From<NonZeroRatePerSecond>,
 {
     fn from(rate: NonZeroRatePerSecond) -> Self {
-        LinuxHierarchicalTokenBucket::new(rate)
+        HierarchicalTokenBucket::new(rate)
     }
 }
 
-impl<BD, ARL> LinuxHierarchicalTokenBucket<BD, ARL>
+impl<BD, ARL> HierarchicalTokenBucket<BD, ARL>
 where
-    BD: BandwidthDivider,
+    BD: SharedBandwidth,
 {
     pub fn new(rate: NonZeroRatePerSecond) -> Self
     where
@@ -490,7 +466,7 @@ where
 
     fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond
     where
-        BD: BandwidthDivider,
+        BD: SharedBandwidth,
     {
         self.need_to_notify_parent = true;
         self.shared_parent.request_bandwidth(requested)
@@ -498,7 +474,7 @@ where
 
     fn notify_idle(&mut self)
     where
-        BD: BandwidthDivider,
+        BD: SharedBandwidth,
     {
         if self.need_to_notify_parent {
             self.need_to_notify_parent = false;
@@ -506,9 +482,9 @@ where
         }
     }
 
-    pub async fn rate_limit(&mut self, requested: u64)
+    pub async fn rate_limit(mut self, requested: u64) -> Self
     where
-        BD: BandwidthDivider,
+        BD: SharedBandwidth,
         ARL: AsyncRateLimiter,
     {
         let rate = self.request_bandwidth(requested);
@@ -520,7 +496,7 @@ where
             futures::select! {
                 _ = self.rate_limiter.wait().fuse() => {
                     self.notify_idle();
-                    return;
+                    return self;
                 },
                 rate = self.shared_parent.await_bandwidth_change().fuse() => {
                     self.rate_limiter.set_rate(rate);
@@ -530,28 +506,24 @@ where
     }
 }
 
-impl<BD, ARL> Drop for LinuxHierarchicalTokenBucket<BD, ARL>
+impl<BD, ARL> Drop for HierarchicalTokenBucket<BD, ARL>
 where
-    BD: BandwidthDivider,
+    BD: SharedBandwidth,
 {
     fn drop(&mut self) {
         self.notify_idle();
     }
 }
 
-impl<BD, ARL> RateLimiterSleeper for LinuxHierarchicalTokenBucket<BD, ARL>
+impl<BD, ARL> RateLimiterSleeper for HierarchicalTokenBucket<BD, ARL>
 where
-    BD: BandwidthDivider + Send,
+    BD: SharedBandwidth + Send,
     ARL: AsyncRateLimiter + Send,
 {
-    fn rate_limit(mut self, read_size: usize) -> impl Future<Output = Self> + Send {
+    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
         async move {
-            LinuxHierarchicalTokenBucket::rate_limit(
-                &mut self,
-                read_size.try_into().unwrap_or(u64::MAX),
-            )
-            .await;
-            self
+            HierarchicalTokenBucket::rate_limit(self, read_size.try_into().unwrap_or(u64::MAX))
+                .await
         }
     }
 }
@@ -561,7 +533,7 @@ mod tests {
     use std::{
         cell::RefCell,
         cmp::max,
-        iter::{empty, repeat},
+        iter::repeat,
         rc::Rc,
         sync::Arc,
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
@@ -573,8 +545,8 @@ mod tests {
 
     use crate::{
         token_bucket::{
-            ArcSharedParent, AsyncTokenBucket, Deadline, LinuxHierarchicalTokenBucket,
-            NonZeroRatePerSecond, SharedParent,
+            AsyncTokenBucket, AtomicSharedBandwidthDivider, Deadline, HierarchicalTokenBucket,
+            NonZeroRatePerSecond, SharedBandwidthImpl,
         },
         RateLimiterT,
     };
@@ -1117,13 +1089,13 @@ mod tests {
         let time_provider: Rc<Box<dyn TimeProvider>> =
             Rc::new(Box::new(move || *time_provider.borrow()));
 
-        let shared_parent = ArcSharedParent::from(NonZeroRatePerSecond(rate_limit_nonzero));
+        let shared_parent = SharedBandwidthImpl::from(NonZeroRatePerSecond(rate_limit_nonzero));
         let rate_limiter = TokenBucket::new_with_time_provider(rate_limit_nonzero, time_provider);
 
         let sleep_until_last_instant = Arc::new(Mutex::new(initial_time));
         let sleep_until = TestSleepUntil::new(sleep_until_last_instant.clone());
         let rate_limiter = AsyncTokenBucket::new(rate_limiter, sleep_until);
-        let rate_limiter = LinuxHierarchicalTokenBucket {
+        let rate_limiter = HierarchicalTokenBucket {
             shared_parent,
             rate_limiter,
             need_to_notify_parent: false,
@@ -1144,7 +1116,7 @@ mod tests {
                 let limiter_id = *id;
                 *rate_limiter = new_state;
                 *id += 1;
-                Some((limiter_id, new_rate_limiter))
+                Some((limiter_id, Some(new_rate_limiter)))
             })
             // .take(limiters_count)
             .take(8)
@@ -1167,12 +1139,16 @@ mod tests {
             // let time_passed = time_gen.sample(&mut rand_gen);
 
             let (selected_limiter_id, data_read, time_passed) = test_state[ix];
-            let selected_rate_limiter: &mut LinuxHierarchicalTokenBucket<_, _> =
+            let selected_rate_limiter_pointer: &mut Option<HierarchicalTokenBucket<_, _>> =
                 &mut rate_limiters[selected_limiter_id].1;
+            let mut selected_rate_limiter = selected_rate_limiter_pointer
+                .take()
+                .expect("we should be able to retrieve a rate_limiter");
 
             // test_state.push((*selected_limiter_id, data_read, time_passed));
 
-            selected_rate_limiter.rate_limit(data_read).await;
+            selected_rate_limiter = selected_rate_limiter.rate_limit(data_read).await;
+            let _ = selected_rate_limiter_pointer.insert(selected_rate_limiter);
             // let last_deadline = *sleep_until_last_instant.borrow();
             let next_deadline = *sleep_until_last_instant.lock();
             last_deadline = max(last_deadline, next_deadline);
