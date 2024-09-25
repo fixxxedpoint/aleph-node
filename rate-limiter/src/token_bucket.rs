@@ -1,4 +1,7 @@
-use crate::{NonZeroRatePerSecond, RateLimiterSleeper, RatePerSecond, LOG_TARGET};
+use crate::{
+    rate_limiter::{Deadline, RateLimiter},
+    NonZeroRatePerSecond, RatePerSecond, SleepingRateLimiter, LOG_TARGET,
+};
 use futures::{future::pending, Future, FutureExt};
 use log::trace;
 use std::{
@@ -29,52 +32,6 @@ pub struct DefaultTimeProvider;
 impl TimeProvider for DefaultTimeProvider {
     fn now(&self) -> Instant {
         Instant::now()
-    }
-}
-
-pub struct RateLimitResult {
-    pub delay: Instant,
-    pub scheduled_for_later: u64,
-}
-
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
-pub enum Deadline {
-    Never,
-    Instant(Instant),
-}
-
-impl PartialOrd for Deadline {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for Deadline {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        use std::cmp::Ordering;
-        match (self, other) {
-            (Deadline::Never, Deadline::Never) => Ordering::Equal,
-            (Deadline::Never, Deadline::Instant(_)) => Ordering::Greater,
-            (Deadline::Instant(_), Deadline::Never) => Ordering::Less,
-            (Deadline::Instant(self_instant), Deadline::Instant(other_instant)) => {
-                self_instant.cmp(other_instant)
-            }
-        }
-    }
-}
-
-impl From<Deadline> for Option<Instant> {
-    fn from(value: Deadline) -> Self {
-        match value {
-            Deadline::Never => None,
-            Deadline::Instant(value) => Some(value),
-        }
-    }
-}
-
-impl From<Instant> for Deadline {
-    fn from(value: Instant) -> Self {
-        Deadline::Instant(value)
     }
 }
 
@@ -145,7 +102,7 @@ where
         self.requested = self.requested.saturating_add(requested);
     }
 
-    fn calculate_delay(&self) -> Option<RateLimitResult> {
+    fn calculate_delay(&self) -> Option<Deadline> {
         if self.available() > 0 {
             return None;
         }
@@ -155,10 +112,9 @@ where
             .saturating_mul(1_000_000)
             .saturating_div(self.rate_per_second.into());
 
-        Some(RateLimitResult {
-            delay: self.last_update + Duration::from_micros(delay_micros),
-            scheduled_for_later,
-        })
+        Some(Deadline::Instant(
+            self.last_update + Duration::from_micros(delay_micros),
+        ))
     }
 
     fn update_tokens(&mut self) {
@@ -192,7 +148,7 @@ where
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
     /// configured rate limit.
-    pub fn rate_limit(&mut self, requested: u64) -> Option<RateLimitResult> {
+    pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {} of requested bytes. Internal state: {:?}.",
@@ -208,61 +164,12 @@ where
     }
 }
 
-pub trait RateLimiter {
-    fn rate_limit(&mut self, requested: u64) -> Option<Deadline>;
-}
-
 impl<TP> RateLimiter for TokenBucket<TP>
 where
     TP: TimeProvider,
 {
     fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
-        Some(Deadline::Instant(
-            TokenBucket::rate_limit(self, requested).map(|result| result.delay)?,
-        ))
-    }
-}
-
-#[derive(Clone)]
-pub enum RateLimiterFacade<RL> {
-    NoTraffic,
-    RateLimiter(RL),
-}
-
-impl<RL> RateLimiterFacade<RL> {
-    pub fn new(rate: RatePerSecond) -> Self
-    where
-        RL: From<NonZeroRatePerSecond>,
-    {
-        match rate {
-            RatePerSecond::Block => Self::NoTraffic,
-            RatePerSecond::Rate(rate) => Self::RateLimiter(rate.into()),
-        }
-    }
-
-    pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline>
-    where
-        RL: RateLimiter,
-    {
-        match self {
-            RateLimiterFacade::NoTraffic => Some(Deadline::Never),
-            RateLimiterFacade::RateLimiter(limiter) => limiter.rate_limit(requested),
-        }
-    }
-}
-
-impl RateLimiterSleeper for RateLimiterFacade<HierarchicalTokenBucket> {
-    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
-        async move {
-            match self {
-                RateLimiterFacade::NoTraffic => pending().await,
-                RateLimiterFacade::RateLimiter(rate_limiter) => RateLimiterFacade::RateLimiter(
-                    rate_limiter
-                        .rate_limit(read_size.try_into().unwrap_or(u64::MAX))
-                        .await,
-                ),
-            }
-        }
+        TokenBucket::rate_limit(self, requested)
     }
 }
 
@@ -366,10 +273,9 @@ where
     TP: TimeProvider,
     SU: SleepUntil + Send,
 {
-    fn rate_limit(&mut self, requested: u64) -> Option<RateLimitResult> {
-        let result = TokenBucket::rate_limit(&mut self.token_bucket, requested)?;
-        self.next_deadline = Some(Deadline::Instant(result.delay));
-        Some(result)
+    fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
+        self.next_deadline = TokenBucket::rate_limit(&mut self.token_bucket, requested);
+        self.next_deadline
     }
 
     fn set_rate(&mut self, rate: NonZeroRatePerSecond) {
@@ -381,10 +287,7 @@ where
 
     fn wait(&mut self) -> impl std::future::Future<Output = ()> + std::marker::Send {
         if self.rate_limit_changed {
-            self.next_deadline = self
-                .token_bucket
-                .rate_limit(0)
-                .map(|result| Deadline::Instant(result.delay));
+            self.next_deadline = self.token_bucket.rate_limit(0);
             self.rate_limit_changed = false;
         }
         async {
@@ -398,7 +301,7 @@ where
 }
 
 pub trait AsyncRateLimiter {
-    fn rate_limit(&mut self, requested: u64) -> Option<RateLimitResult>;
+    fn rate_limit(&mut self, requested: u64) -> Option<Deadline>;
     fn set_rate(&mut self, rate: NonZeroRatePerSecond);
     fn wait(&mut self) -> impl std::future::Future<Output = ()> + std::marker::Send;
 }
@@ -515,7 +418,7 @@ where
     }
 }
 
-impl<BD, ARL> RateLimiterSleeper for HierarchicalTokenBucket<BD, ARL>
+impl<BD, ARL> SleepingRateLimiter for HierarchicalTokenBucket<BD, ARL>
 where
     BD: SharedBandwidth + Send,
     ARL: AsyncRateLimiter + Send,
@@ -524,6 +427,49 @@ where
         async move {
             HierarchicalTokenBucket::rate_limit(self, read_size.try_into().unwrap_or(u64::MAX))
                 .await
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum RateLimiterFacade<RL> {
+    NoTraffic,
+    RateLimiter(RL),
+}
+
+impl<RL> RateLimiterFacade<RL> {
+    pub fn new(rate: RatePerSecond) -> Self
+    where
+        RL: From<NonZeroRatePerSecond>,
+    {
+        match rate {
+            RatePerSecond::Block => Self::NoTraffic,
+            RatePerSecond::Rate(rate) => Self::RateLimiter(rate.into()),
+        }
+    }
+
+    pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline>
+    where
+        RL: RateLimiter,
+    {
+        match self {
+            RateLimiterFacade::NoTraffic => Some(Deadline::Never),
+            RateLimiterFacade::RateLimiter(limiter) => limiter.rate_limit(requested),
+        }
+    }
+}
+
+impl SleepingRateLimiter for RateLimiterFacade<HierarchicalTokenBucket> {
+    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
+        async move {
+            match self {
+                RateLimiterFacade::NoTraffic => pending().await,
+                RateLimiterFacade::RateLimiter(rate_limiter) => RateLimiterFacade::RateLimiter(
+                    rate_limiter
+                        .rate_limit(read_size.try_into().unwrap_or(u64::MAX))
+                        .await,
+                ),
+            }
         }
     }
 }
@@ -544,11 +490,11 @@ mod tests {
     use rand::distributions::Uniform;
 
     use crate::{
+        rate_limiter::RateLimiter,
         token_bucket::{
             AsyncTokenBucket, AtomicSharedBandwidthDivider, Deadline, HierarchicalTokenBucket,
             NonZeroRatePerSecond, SharedBandwidthImpl,
         },
-        RateLimiterT,
     };
 
     use super::{SleepUntil, TimeProvider, TokenBucket};
@@ -576,7 +522,7 @@ mod tests {
 
     fn token_bucket_sanity_check_test<RL>()
     where
-        RL: RateLimiterT + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
+        RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
         let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
@@ -605,7 +551,7 @@ mod tests {
 
     fn no_slowdown_while_within_rate_limit_test<RL>()
     where
-        RL: RateLimiterT + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
+        RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
         let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
@@ -636,7 +582,7 @@ mod tests {
 
     fn slowdown_when_limit_reached_test<RL>()
     where
-        RL: RateLimiterT + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
+        RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
         let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
@@ -670,7 +616,7 @@ mod tests {
 
     fn buildup_tokens_but_no_more_than_limit_test<RL>()
     where
-        RL: RateLimiterT + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
+        RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
         let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();
@@ -709,7 +655,7 @@ mod tests {
 
     fn multiple_calls_buildup_wait_time_test<RL>()
     where
-        RL: RateLimiterT + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
+        RL: RateLimiter + From<(NonZeroRatePerSecond, Rc<Box<dyn TimeProvider>>)>,
     {
         let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
         let now = Instant::now();

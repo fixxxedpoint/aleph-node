@@ -1,4 +1,4 @@
-use std::task::ready;
+use std::{task::ready, time::Instant};
 
 use futures::{
     future::{pending, BoxFuture},
@@ -7,30 +7,74 @@ use futures::{
 use log::trace;
 use tokio::{io::AsyncRead, time::sleep_until};
 
-pub use crate::token_bucket::RateLimiter as RateLimiterT;
 use crate::{
-    token_bucket::{Deadline, HierarchicalTokenBucket, RateLimiterFacade},
+    token_bucket::{HierarchicalTokenBucket, RateLimiterFacade},
     NonZeroRatePerSecond, RatePerSecond, TokenBucket, LOG_TARGET,
 };
 
-pub type PerConnectionRateLimiter = SleepingRateLimiter<TokenBucket>;
+pub type PerConnectionRateLimiter = SleepingRateLimiterImpl<TokenBucket>;
 
 pub type DefaultSharedRateLimiter = RateLimiterFacade<HierarchicalTokenBucket>;
 
-pub trait RateLimiterSleeper {
+pub trait SleepingRateLimiter {
     fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send;
+}
+
+#[derive(PartialEq, Eq, Debug, Copy, Clone)]
+pub enum Deadline {
+    Never,
+    Instant(Instant),
+}
+
+impl From<Deadline> for Option<Instant> {
+    fn from(value: Deadline) -> Self {
+        match value {
+            Deadline::Never => None,
+            Deadline::Instant(value) => Some(value),
+        }
+    }
+}
+
+// impl From<Instant> for Deadline {
+//     fn from(value: Instant) -> Self {
+//         Deadline::Instant(value)
+//     }
+// }
+
+// impl PartialOrd for Deadline {
+//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+//         Some(self.cmp(other))
+//     }
+// }
+
+// impl Ord for Deadline {
+//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+//         use std::cmp::Ordering;
+//         match (self, other) {
+//             (Deadline::Never, Deadline::Never) => Ordering::Equal,
+//             (Deadline::Never, Deadline::Instant(_)) => Ordering::Greater,
+//             (Deadline::Instant(_), Deadline::Never) => Ordering::Less,
+//             (Deadline::Instant(self_instant), Deadline::Instant(other_instant)) => {
+//                 self_instant.cmp(other_instant)
+//             }
+//         }
+//     }
+// }
+
+pub trait RateLimiter {
+    fn rate_limit(&mut self, requested: u64) -> Option<Deadline>;
 }
 
 /// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
 /// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
 #[derive(Clone)]
-pub struct SleepingRateLimiter<RL = PerConnectionRateLimiter> {
+pub struct SleepingRateLimiterImpl<RL = PerConnectionRateLimiter> {
     rate_limiter: RL,
 }
 
-impl<RL> SleepingRateLimiter<RateLimiterFacade<RL>>
+impl<RL> SleepingRateLimiterImpl<RateLimiterFacade<RL>>
 where
-    RL: RateLimiterT,
+    RL: RateLimiter,
 {
     /// Constructs a instance of [SleepingRateLimiter] with given target rate-per-second.
     pub fn new(rate_per_second: RatePerSecond) -> Self
@@ -73,12 +117,12 @@ where
     }
 }
 
-impl<RL> RateLimiterSleeper for SleepingRateLimiter<RateLimiterFacade<RL>>
+impl<RL> SleepingRateLimiter for SleepingRateLimiterImpl<RateLimiterFacade<RL>>
 where
-    RL: RateLimiterT + Send,
+    RL: RateLimiter + Send,
 {
     fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
-        SleepingRateLimiter::rate_limit(self, read_size)
+        SleepingRateLimiterImpl::rate_limit(self, read_size)
     }
 }
 
@@ -103,13 +147,13 @@ where
 // }
 
 /// Wrapper around [SleepingRateLimiter] to simplify implementation of the [AsyncRead](tokio::io::AsyncRead) trait.
-pub struct RateLimiter<RL> {
+pub struct RateLimiterImpl<RL> {
     rate_limiter: BoxFuture<'static, RL>,
 }
 
-impl<RL> RateLimiter<RL>
+impl<RL> RateLimiterImpl<RL>
 where
-    RL: RateLimiterSleeper + Send + 'static,
+    RL: SleepingRateLimiter + Send + 'static,
 {
     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
     /// ([SleepingRateLimiter]).
@@ -145,7 +189,7 @@ pub struct FuturesRateLimiter<ARL> {
 
 impl<ARL> FuturesRateLimiter<ARL>
 where
-    ARL: RateLimiterSleeper + 'static,
+    ARL: SleepingRateLimiter + 'static,
 {
     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
     /// ([SleepingRateLimiter]).

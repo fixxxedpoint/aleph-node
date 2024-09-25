@@ -1,5 +1,5 @@
 use rate_limiter::{
-    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiter, RateLimiterSleeper, RateLimiterT,
+    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiter, SleepingRateLimiter, RateLimiterT,
     SleepingRateLimiter,
 };
 
@@ -34,7 +34,7 @@ where
     D: Dialer<A>,
     <D::Connection as Splittable>::Sender: Unpin,
     <D::Connection as Splittable>::Receiver: Unpin,
-    RL: rate_limiter::RateLimiterSleeper
+    RL: rate_limiter::SleepingRateLimiter
         // + From<rate_limiter::NonZeroRatePerSecond>
         + Send
         + Clone
@@ -75,7 +75,7 @@ impl<L, RL> RateLimitingListener<L, RL> {
 impl<L, RL> Listener for RateLimitingListener<L, RL>
 where
     L: Listener + Send,
-    RL: RateLimiterSleeper + Send + Clone + 'static,
+    RL: SleepingRateLimiter + Send + Clone + 'static,
 {
     type Connection = Splitted<
         RateLimitedAsyncRead<<L::Connection as Splittable>::Receiver, RL>,

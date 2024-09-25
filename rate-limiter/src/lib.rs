@@ -3,13 +3,14 @@ mod token_bucket;
 
 use std::num::{NonZeroU64, TryFromIntError};
 
+use rate_limiter::RateLimiterImpl;
 use tokio::io::AsyncRead;
 
 pub use crate::rate_limiter::{
-    DefaultSharedRateLimiter, FuturesRateLimiter, PerConnectionRateLimiter, RateLimiter,
-    RateLimiterSleeper, SleepingRateLimiter,
+    DefaultSharedRateLimiter, FuturesRateLimiter, PerConnectionRateLimiter, SleepingRateLimiter,
+    SleepingRateLimiterImpl,
 };
-pub use crate::token_bucket::{RateLimiter as RateLimiterT, TokenBucket};
+pub use crate::token_bucket::TokenBucket;
 
 const LOG_TARGET: &str = "rate-limiter";
 
@@ -53,7 +54,7 @@ impl From<u64> for RatePerSecond {
         match value {
             0 => Self::Block,
             _ => Self::Rate(NonZeroRatePerSecond(
-                NonZeroU64::new(value).unwrap_or(NonZeroU64::MAX),
+                NonZeroU64::new(value).expect("`value` != 0 and `value`:u64 qed"),
             )),
         }
     }
@@ -75,12 +76,12 @@ impl From<NonZeroRatePerSecond> for RatePerSecond {
 }
 
 pub struct RateLimitedAsyncRead<Read, RL> {
-    rate_limiter: RateLimiter<RL>,
+    rate_limiter: RateLimiterImpl<RL>,
     inner: Read,
 }
 
 impl<Read, RL> RateLimitedAsyncRead<Read, RL> {
-    pub fn new(read: Read, rate_limiter: RateLimiter<RL>) -> Self {
+    pub fn new(read: Read, rate_limiter: RateLimiterImpl<RL>) -> Self {
         Self {
             rate_limiter,
             inner: read,
@@ -95,7 +96,7 @@ impl<Read, RL> RateLimitedAsyncRead<Read, RL> {
 impl<Read, RL> AsyncRead for RateLimitedAsyncRead<Read, RL>
 where
     Read: AsyncRead + Unpin,
-    RL: RateLimiterSleeper + Send + 'static,
+    RL: SleepingRateLimiter + Send + 'static,
 {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -133,7 +134,7 @@ impl<ReadWrite, ARL> FuturesRateLimitedAsyncReadWrite<ReadWrite, ARL> {
 impl<Read, ARL> futures::AsyncRead for FuturesRateLimitedAsyncReadWrite<Read, ARL>
 where
     Read: futures::AsyncRead + Unpin,
-    ARL: RateLimiterSleeper + 'static,
+    ARL: SleepingRateLimiter + 'static,
 {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,

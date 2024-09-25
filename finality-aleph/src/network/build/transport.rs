@@ -1,6 +1,6 @@
 use libp2p::{core::muxing::StreamMuxer, PeerId, Transport};
 use rate_limiter::{
-    FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, RateLimiterSleeper, SleepingRateLimiter,
+    FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, SleepingRateLimiter, SleepingRateLimiter,
 };
 
 struct RateLimitedStreamMuxer<SM, ARL = SleepingRateLimiter> {
@@ -30,7 +30,7 @@ impl<SM, ARL> StreamMuxer for RateLimitedStreamMuxer<SM, ARL>
 where
     SM: StreamMuxer + Unpin,
     SM::Substream: Unpin,
-    ARL: RateLimiterSleeper + Clone + Unpin + 'static,
+    ARL: SleepingRateLimiter + Clone + Unpin + 'static,
 {
     type Substream = FuturesRateLimitedAsyncReadWrite<SM::Substream, ARL>;
 
@@ -82,7 +82,7 @@ where
 }
 
 pub fn build_transport(
-    rate_limiter: impl RateLimiterSleeper + Clone + Unpin + Send + 'static,
+    rate_limiter: impl SleepingRateLimiter + Clone + Unpin + Send + 'static,
     config: sc_network::transport::NetworkConfig,
 ) -> impl Transport<
     Output = (
