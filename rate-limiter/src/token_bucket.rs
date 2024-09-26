@@ -94,8 +94,13 @@ where
         }
     }
 
-    fn available(&self) -> u64 {
-        u64::from(self.rate_per_second).saturating_sub(self.requested)
+    fn max_possible_available(&self) -> u64 {
+        self.rate_per_second.into()
+    }
+
+    fn available(&self) -> Option<u64> {
+        (self.requested <= self.max_possible_available())
+            .then(|| u64::from(self.rate_per_second).saturating_sub(self.requested))
     }
 
     fn account_requested(&mut self, requested: u64) {
@@ -103,7 +108,7 @@ where
     }
 
     fn calculate_delay(&self) -> Option<Deadline> {
-        if self.available() > 0 {
+        if self.available().is_some() {
             return None;
         }
 
@@ -129,7 +134,7 @@ where
         let time_since_last_update = now.duration_since(self.last_update);
         self.last_update = now;
         let new_units = time_since_last_update
-            .as_millis()
+            .as_micros()
             .saturating_mul(u64::from(self.rate_per_second).into())
             .saturating_div(1_000_000)
             .try_into()
@@ -155,7 +160,7 @@ where
             requested,
             self
         );
-        let now_available = self.available();
+        let now_available = self.available().unwrap_or(0);
         if now_available < requested {
             self.update_tokens()
         }
@@ -676,13 +681,13 @@ mod tests {
         ));
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(1);
-        assert_eq!(rate_limiter.rate_limit(9), None);
+        assert!(rate_limiter.rate_limit(9).is_none());
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(1);
         assert!(rate_limiter.rate_limit(12).is_some());
 
         *time_to_return.borrow_mut() = now + Duration::from_secs(3);
-        assert_eq!(rate_limiter.rate_limit(8), None);
+        assert!(rate_limiter.rate_limit(8).is_none());
     }
 
     #[test]
