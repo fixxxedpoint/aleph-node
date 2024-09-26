@@ -8,11 +8,11 @@ use log::trace;
 use tokio::{io::AsyncRead, time::sleep_until};
 
 use crate::{
-    token_bucket::{HierarchicalTokenBucket, RateLimiterFacade},
-    NonZeroRatePerSecond, RatePerSecond, TokenBucket, LOG_TARGET,
+    token_bucket::HierarchicalTokenBucket, NonZeroRatePerSecond, RatePerSecond, TokenBucket,
+    LOG_TARGET,
 };
 
-pub type PerConnectionRateLimiter = SleepingRateLimiterImpl<TokenBucket>;
+pub type PerConnectionRateLimiter = SleepingRateLimiterImpl<RateLimiterFacade<TokenBucket>>;
 
 pub type DefaultSharedRateLimiter = RateLimiterFacade<HierarchicalTokenBucket>;
 
@@ -217,5 +217,48 @@ where
         self.rate_limiter = sleeping_rate_limiter.rate_limit(last_read_size).boxed();
 
         result
+    }
+}
+
+#[derive(Clone)]
+pub enum RateLimiterFacade<RL> {
+    NoTraffic,
+    RateLimiter(RL),
+}
+
+impl<RL> RateLimiterFacade<RL> {
+    pub fn new(rate: RatePerSecond) -> Self
+    where
+        RL: From<NonZeroRatePerSecond>,
+    {
+        match rate {
+            RatePerSecond::Block => Self::NoTraffic,
+            RatePerSecond::Rate(rate) => Self::RateLimiter(rate.into()),
+        }
+    }
+
+    pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline>
+    where
+        RL: RateLimiter,
+    {
+        match self {
+            RateLimiterFacade::NoTraffic => Some(Deadline::Never),
+            RateLimiterFacade::RateLimiter(limiter) => limiter.rate_limit(requested),
+        }
+    }
+}
+
+impl SleepingRateLimiter for RateLimiterFacade<HierarchicalTokenBucket> {
+    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
+        async move {
+            match self {
+                RateLimiterFacade::NoTraffic => pending().await,
+                RateLimiterFacade::RateLimiter(rate_limiter) => RateLimiterFacade::RateLimiter(
+                    rate_limiter
+                        .rate_limit(read_size.try_into().unwrap_or(u64::MAX))
+                        .await,
+                ),
+            }
+        }
     }
 }
