@@ -169,7 +169,8 @@ where
             let available_after_rate_update = min(available.unwrap_or(0), max_for_available);
             self.requested = self.rate_per_second.get() - available_after_rate_update;
         } else {
-            self.requested = self.requested - previous_rate_per_second + self.max_possible_available();
+            self.requested =
+                self.requested - previous_rate_per_second + self.max_possible_available();
         }
     }
 
@@ -266,7 +267,7 @@ impl SharedBandwidth for SharedBandwidthManager {
 
         // notify everyone else
         let _ = self.0.bandwidth_change_notify.send(());
-        // let _ = self.0.bandwidth_change.try_recv();
+        let _ = self.0.bandwidth_change.try_recv();
 
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
@@ -556,7 +557,7 @@ mod tests {
     use futures::Future;
     use parking_lot::{Condvar, Mutex};
     use rand::distributions::Uniform;
-    use tokio::sync::{oneshot::Receiver, Barrier, Notify, Semaphore};
+    use tokio::sync::{futures::Notified, oneshot::Receiver, Barrier, Notify, Semaphore};
 
     use super::{AsyncRateLimiter, SharedBandwidth, SleepUntil, TimeProvider, TokenBucket};
     use crate::{
@@ -1054,23 +1055,13 @@ mod tests {
     }
 
     struct NotifyingSharedBandwidth<BM> {
-        cloned: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
-        notifier: Arc<Notify>,
+        notifier: tokio::sync::broadcast::Sender<()>,
         wrapped: BM,
     }
 
     impl<BM> NotifyingSharedBandwidth<BM> {
-        pub fn new(
-            wrapped: BM,
-            notifier: Arc<Notify>,
-            shared: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
-        ) -> Self {
-            shared.lock().take();
-            Self {
-                cloned: shared,
-                notifier,
-                wrapped,
-            }
+        pub fn new(wrapped: BM, notifier: tokio::sync::broadcast::Sender<()>) -> Self {
+            Self { notifier, wrapped }
         }
     }
 
@@ -1079,17 +1070,7 @@ mod tests {
         BM: Clone,
     {
         fn clone(&self) -> Self {
-            let mut locked_cloned = self.cloned.lock();
-            let new_notifier = match locked_cloned.take() {
-                Some(notifier) => notifier,
-                None => locked_cloned.insert(Arc::new(Notify::new())).clone(),
-            };
-
-            Self {
-                cloned: self.cloned.clone(),
-                notifier: new_notifier,
-                wrapped: self.wrapped.clone(),
-            }
+            Self::new(self.wrapped.clone(), self.notifier.clone())
         }
     }
 
@@ -1108,28 +1089,23 @@ mod tests {
         fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send {
             async {
                 let result = self.wrapped.await_bandwidth_change().await;
-                self.notifier.notify_one();
+                self.notifier.send(());
                 result
             }
         }
     }
 
     struct NotifiedSleepUntil<SU> {
-        cloned: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
-        notifier: Arc<Notify>,
+        // cloned: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
+        // notifier: Fut,
+        notifications: tokio::sync::broadcast::Receiver<()>,
         wrapped: SU,
     }
 
     impl<SU> NotifiedSleepUntil<SU> {
-        pub fn new(
-            wrapped: SU,
-            notifier: Arc<Notify>,
-            shared: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
-        ) -> Self {
-            shared.lock().take();
+        pub fn new(wrapped: SU, notifications: tokio::sync::broadcast::Receiver<()>) -> Self {
             Self {
-                cloned: shared,
-                notifier,
+                notifications,
                 wrapped,
             }
         }
@@ -1140,17 +1116,7 @@ mod tests {
         SU: Clone,
     {
         fn clone(&self) -> Self {
-            let mut locked_cloned = self.cloned.lock();
-            let new_notifier = match locked_cloned.take() {
-                Some(notifier) => notifier,
-                None => locked_cloned.insert(Arc::new(Notify::new())).clone(),
-            };
-
-            Self {
-                cloned: self.cloned.clone(),
-                notifier: new_notifier,
-                wrapped: self.wrapped.clone(),
-            }
+            Self::new(self.wrapped.clone(), self.notifications.resubscribe())
         }
     }
 
@@ -1160,7 +1126,7 @@ mod tests {
     {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
             async move {
-                self.notifier.notified().await;
+                self.notifications.recv().await;
                 self.wrapped.sleep_until(instant).await
             }
         }
@@ -1189,12 +1155,10 @@ mod tests {
         //     JoiningSleepUntil::new(2, TestSleepUntil::new(last_deadline.clone())),
         // ));
 
-        let notifier = Arc::new(Notify::new());
-        let shared_notifier = Arc::new(parking_lot::Mutex::new(None));
+        let (notifier, notifications_receiver) = tokio::sync::broadcast::channel(2);
         let shared_parent = NotifyingSharedBandwidth::new(
             SharedBandwidthManager::from(limit_per_second),
             notifier.clone(),
-            shared_notifier.clone(),
         );
         // let sleep_until = JoiningSleepUntil::new(
         //     2,
@@ -1204,10 +1168,14 @@ mod tests {
         //         shared_notifier,
         //     ),
         // );
+        // let sleep_until = NotifiedSleepUntil::new(
+        //     JoiningSleepUntil::new(2, TestSleepUntil::new(last_deadline.clone())),
+        //     notifier,
+        //     shared_notifier,
+        // );
         let sleep_until = NotifiedSleepUntil::new(
-            JoiningSleepUntil::new(2, TestSleepUntil::new(last_deadline.clone())),
-            notifier,
-            shared_notifier,
+            TestSleepUntil::new(last_deadline.clone()),
+            notifications_receiver,
         );
         let inner_rate_limiter =
             AsyncTokenBucket::from((limit_per_second, time_provider, sleep_until));
