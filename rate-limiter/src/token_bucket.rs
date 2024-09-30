@@ -392,6 +392,19 @@ where
     }
 }
 
+impl<BD, ARL> From<(BD, ARL)> for HierarchicalTokenBucket<BD, ARL>
+where
+    BD: SharedBandwidth,
+{
+    fn from((shared_bandwidth, async_token_bucket): (BD, ARL)) -> Self {
+        Self {
+            shared_parent: shared_bandwidth,
+            rate_limiter: async_token_bucket,
+            need_to_notify_parent: false,
+        }
+    }
+}
+
 // impl<BD, ARL, TP> From<(NonZeroRatePerSecond, TP)> for HierarchicalTokenBucket<BD, ARL>
 // where
 //     BD: SharedBandwidth + From<NonZeroRatePerSecond>,
@@ -515,7 +528,7 @@ mod tests {
     use futures::Future;
     use parking_lot::{Condvar, Mutex};
     use rand::distributions::Uniform;
-    use tokio::sync::{Barrier, Semaphore};
+    use tokio::sync::{oneshot::Receiver, Barrier, Notify, Semaphore};
 
     use super::{AsyncRateLimiter, SharedBandwidth, SleepUntil, TimeProvider, TokenBucket};
     use crate::{
@@ -972,6 +985,13 @@ mod tests {
         }
     }
 
+    // #[derive(Clone)]
+    // struct CondvarSleepUntil<SU> {
+    //     wait: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
+    //     // proceed: Arc<tokio::>,
+    //     wrapped: SU,
+    // }
+
     #[derive(Clone)]
     struct JoiningSleepUntil<SU> {
         wait: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
@@ -1002,6 +1022,119 @@ mod tests {
         }
     }
 
+    struct NotifyingSharedBandwidth<BM> {
+        cloned: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
+        notifier: Arc<Notify>,
+        wrapped: BM,
+    }
+
+    impl<BM> NotifyingSharedBandwidth<BM> {
+        pub fn new(
+            wrapped: BM,
+            notifier: Arc<Notify>,
+            shared: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
+        ) -> Self {
+            shared.lock().take();
+            Self {
+                cloned: shared,
+                notifier,
+                wrapped,
+            }
+        }
+    }
+
+    impl<BM> Clone for NotifyingSharedBandwidth<BM>
+    where
+        BM: Clone,
+    {
+        fn clone(&self) -> Self {
+            let mut locked_cloned = self.cloned.lock();
+            let new_notifier = match locked_cloned.take() {
+                Some(notifier) => notifier,
+                None => locked_cloned.insert(Arc::new(Notify::new())).clone(),
+            };
+
+            Self {
+                cloned: self.cloned.clone(),
+                notifier: new_notifier,
+                wrapped: self.wrapped.clone(),
+            }
+        }
+    }
+
+    impl<BM> SharedBandwidth for NotifyingSharedBandwidth<BM>
+    where
+        BM: SharedBandwidth + Send,
+    {
+        fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
+            self.wrapped.request_bandwidth(requested)
+        }
+
+        fn notify_idle(&mut self) {
+            self.wrapped.notify_idle()
+        }
+
+        fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send {
+            async {
+                let result = self.wrapped.await_bandwidth_change().await;
+                self.notifier.notify_one();
+                result
+            }
+        }
+    }
+
+    struct NotifiedSleepUntil<SU> {
+        cloned: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
+        notifier: Arc<Notify>,
+        wrapped: SU,
+    }
+
+    impl<SU> NotifiedSleepUntil<SU> {
+        pub fn new(
+            wrapped: SU,
+            notifier: Arc<Notify>,
+            shared: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
+        ) -> Self {
+            shared.lock().take();
+            Self {
+                cloned: shared,
+                notifier,
+                wrapped,
+            }
+        }
+    }
+
+    impl<SU> Clone for NotifiedSleepUntil<SU>
+    where
+        SU: Clone,
+    {
+        fn clone(&self) -> Self {
+            let mut locked_cloned = self.cloned.lock();
+            let new_notifier = match locked_cloned.take() {
+                Some(notifier) => notifier,
+                None => locked_cloned.insert(Arc::new(Notify::new())).clone(),
+            };
+
+            Self {
+                cloned: self.cloned.clone(),
+                notifier: new_notifier,
+                wrapped: self.wrapped.clone(),
+            }
+        }
+    }
+
+    impl<SU> SleepUntil for NotifiedSleepUntil<SU>
+    where
+        SU: SleepUntil + Send,
+    {
+        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
+            async move {
+                self.notifier.notified().await;
+                self.wrapped.sleep_until(instant).await
+            }
+        }
+    }
+
     #[tokio::test]
     async fn two_peers_can_share_bandwidth() {
         let limit_per_second = NonZeroRatePerSecond(10.try_into().expect("10 > 0 qed"));
@@ -1015,18 +1148,35 @@ mod tests {
         let last_deadline_cloned = last_deadline.clone();
 
         // TODO time_provider and sleep until should share a clock?
-        let mut rate_limiter = HierarchicalTokenBucket::<
-            TestBandwidthManager<SharedBandwidthManager>,
-            AsyncTokenBucket<_, _>,
-        >::from((
-            limit_per_second,
-            time_provider,
-            // TODO debug this
-            JoiningSleepUntil::new(2, TestSleepUntil::new(last_deadline.clone())),
-        ));
+        // let mut rate_limiter = HierarchicalTokenBucket::<
+        //     TestBandwidthManager<SharedBandwidthManager>,
+        //     AsyncTokenBucket<_, _>,
+        // >::from((
+        //     limit_per_second,
+        //     time_provider,
+        //     // TODO debug this
+        //     JoiningSleepUntil::new(2, TestSleepUntil::new(last_deadline.clone())),
+        // ));
 
+        let notifier = Arc::new(Notify::new());
+        let shared_notifier = Arc::new(parking_lot::Mutex::new(None));
+        let shared_parent = NotifyingSharedBandwidth::new(
+            SharedBandwidthManager::from(limit_per_second),
+            notifier.clone(),
+            shared_notifier.clone(),
+        );
+        let sleep_until = NotifiedSleepUntil::new(
+            TestSleepUntil::new(last_deadline.clone()),
+            notifier,
+            shared_notifier,
+        );
+        let inner_rate_limiter =
+            AsyncTokenBucket::from((limit_per_second, time_provider, sleep_until));
+
+        let mut rate_limiter = HierarchicalTokenBucket::from((shared_parent, inner_rate_limiter));
         let mut rate_limiter_cloned = rate_limiter.clone();
 
+        // TODO potrzebuje czegos co dostanie sygnal od BandwidthManagera, po otrzymaniu ktorego na pewno sie wait na nim zakonczy - jakis nie-async sygnal, to tym jak juz cos zwroci
         thread::scope(|s| {
             s.spawn(|| {
                 let runtime = tokio::runtime::Builder::new_current_thread()
