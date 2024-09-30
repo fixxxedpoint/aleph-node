@@ -101,7 +101,8 @@ where
         Self {
             last_update: time_provider.now(),
             rate_per_second,
-            requested: 0,
+            // requested: 0,
+            requested: rate_per_second.into(),
             time_provider,
         }
     }
@@ -161,11 +162,14 @@ where
     pub fn set_rate(&mut self, rate_per_second: NonZeroRatePerSecond) {
         self.update_tokens();
         let available = self.available();
+        let previous_rate_per_second = self.rate_per_second.get();
         self.rate_per_second = rate_per_second.into();
         if available.is_some() {
             let max_for_available = self.max_possible_available();
             let available_after_rate_update = min(available.unwrap_or(0), max_for_available);
             self.requested = self.rate_per_second.get() - available_after_rate_update;
+        } else {
+            self.requested = self.requested - previous_rate_per_second + self.max_possible_available();
         }
     }
 
@@ -205,22 +209,39 @@ pub trait SharedBandwidth {
 
 struct SharedBandwidthManagerImpl {
     max_rate: NonZeroRatePerSecond,
-    active_children: AtomicU64,
-    bandwidth_change: tokio::sync::Notify,
+    active_children: Arc<AtomicU64>,
+    // bandwidth_change: tokio::sync::Notify,
+    // notified: tokio::sync::Notified,
+    bandwidth_change: tokio::sync::broadcast::Receiver<()>,
+    bandwidth_change_notify: tokio::sync::broadcast::Sender<()>,
+}
+
+impl Clone for SharedBandwidthManagerImpl {
+    fn clone(&self) -> Self {
+        Self {
+            max_rate: self.max_rate.clone(),
+            active_children: self.active_children.clone(),
+            bandwidth_change: self.bandwidth_change_notify.subscribe(),
+            bandwidth_change_notify: self.bandwidth_change_notify.clone(),
+        }
+    }
 }
 
 impl SharedBandwidthManagerImpl {
     pub fn new(rate: NonZeroRatePerSecond) -> Self {
+        let (notify_sender, notify_receiver) = tokio::sync::broadcast::channel(2);
         Self {
             max_rate: rate,
-            active_children: AtomicU64::new(0),
-            bandwidth_change: tokio::sync::Notify::new(),
+            active_children: Arc::new(AtomicU64::new(0)),
+            // bandwidth_change: tokio::sync::Notify::new(),
+            bandwidth_change: notify_receiver,
+            bandwidth_change_notify: notify_sender,
         }
     }
 }
 
 #[derive(Clone)]
-pub struct SharedBandwidthManager(Arc<SharedBandwidthManagerImpl>);
+pub struct SharedBandwidthManager(SharedBandwidthManagerImpl);
 
 impl SharedBandwidthManager {
     fn request_bandwidth_without_children_increament(&self) -> NonZeroRatePerSecond {
@@ -232,7 +253,7 @@ impl SharedBandwidthManager {
 
 impl From<NonZeroRatePerSecond> for SharedBandwidthManager {
     fn from(rate: NonZeroRatePerSecond) -> Self {
-        Self(Arc::new(SharedBandwidthManagerImpl::new(rate)))
+        Self(SharedBandwidthManagerImpl::new(rate))
     }
 }
 
@@ -242,16 +263,23 @@ impl SharedBandwidth for SharedBandwidthManager {
         // let active_children = self.active_children.load(Ordering::Relaxed);
         let active_children = self.0.active_children.fetch_add(1, Ordering::Relaxed) + 1;
         let rate = u64::from(self.0.max_rate) / active_children;
+
+        // notify everyone else
+        let _ = self.0.bandwidth_change_notify.send(());
+        // let _ = self.0.bandwidth_change.try_recv();
+
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
 
     fn notify_idle(&mut self) {
         self.0.active_children.fetch_sub(1, Ordering::Relaxed);
-        self.0.bandwidth_change.notify_waiters();
+        // self.0.bandwidth_change.notify_waiters();
+        let _ = self.0.bandwidth_change_notify.send(());
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
-        self.0.bandwidth_change.notified().await;
+        // self.0.bandwidth_change.notified().await;
+        let _ = self.0.bandwidth_change.recv().await;
         self.request_bandwidth_without_children_increament()
     }
 }
@@ -994,15 +1022,17 @@ mod tests {
 
     #[derive(Clone)]
     struct JoiningSleepUntil<SU> {
-        wait: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
+        // wait: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
+        wait: Arc<tokio::sync::Barrier>,
         wrapped: SU,
     }
 
     impl<SU> JoiningSleepUntil<SU> {
         pub fn new(waiters_count: usize, sleep_until: SU) -> Self {
-            let wait = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(
-                waiters_count,
-            )));
+            // let wait = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(
+            //     waiters_count,
+            // )));
+            let wait = Arc::new(tokio::sync::Barrier::new(waiters_count));
             Self {
                 wait,
                 wrapped: sleep_until,
@@ -1016,7 +1046,8 @@ mod tests {
     {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
             async move {
-                let _ = self.wait.read().await.wait().await;
+                // let _ = self.wait.read().await.wait().await;
+                let _ = self.wait.wait().await;
                 self.wrapped.sleep_until(instant).await;
             }
         }
@@ -1165,8 +1196,16 @@ mod tests {
             notifier.clone(),
             shared_notifier.clone(),
         );
+        // let sleep_until = JoiningSleepUntil::new(
+        //     2,
+        //     NotifiedSleepUntil::new(
+        //         TestSleepUntil::new(last_deadline.clone()),
+        //         notifier,
+        //         shared_notifier,
+        //     ),
+        // );
         let sleep_until = NotifiedSleepUntil::new(
-            TestSleepUntil::new(last_deadline.clone()),
+            JoiningSleepUntil::new(2, TestSleepUntil::new(last_deadline.clone())),
             notifier,
             shared_notifier,
         );
@@ -1175,6 +1214,9 @@ mod tests {
 
         let mut rate_limiter = HierarchicalTokenBucket::from((shared_parent, inner_rate_limiter));
         let mut rate_limiter_cloned = rate_limiter.clone();
+
+        let barrier = Arc::new(tokio::sync::Barrier::new(2));
+        let barrier_cloned = barrier.clone();
 
         // TODO potrzebuje czegos co dostanie sygnal od BandwidthManagera, po otrzymaniu ktorego na pewno sie wait na nim zakonczy - jakis nie-async sygnal, to tym jak juz cos zwroci
         thread::scope(|s| {
@@ -1185,13 +1227,20 @@ mod tests {
                     .unwrap();
 
                 runtime.block_on(async move {
+                    barrier.wait().await;
                     // assert_eq!(RateLimiter::rate_limit(&mut rate_limiter, 5), None);
                     rate_limiter = rate_limiter.rate_limit(10).await;
-                    assert_eq!(*last_deadline.lock() - now, Duration::ZERO);
+
+                    barrier.wait().await;
+                    // TODO ewidentnie limiter najpierw dostaje wynik z 10/s, zanim zmieni mu sie rate na 5/s
+                    assert_eq!(*last_deadline.lock() - now, Duration::from_secs(2));
+                    barrier.wait().await;
 
                     // 500 ms - dostaja wiekszy rate, bo czas dla nich idzie osobno?
                     rate_limiter.rate_limit(10).await;
-                    assert_eq!(*last_deadline.lock() - now, Duration::from_secs(2));
+
+                    barrier.wait().await;
+                    assert_eq!(*last_deadline.lock() - now, Duration::from_secs(4));
                 });
             });
 
@@ -1202,11 +1251,17 @@ mod tests {
                     .unwrap();
 
                 runtime.block_on(async move {
+                    barrier_cloned.wait().await;
                     rate_limiter_cloned = rate_limiter_cloned.rate_limit(10).await;
-                    assert_eq!(*last_deadline_cloned.lock() - now, Duration::ZERO);
+
+                    barrier_cloned.wait().await;
+                    assert_eq!(*last_deadline_cloned.lock() - now, Duration::from_secs(2));
+                    barrier_cloned.wait().await;
 
                     rate_limiter_cloned.rate_limit(10).await;
-                    assert_eq!(*last_deadline_cloned.lock() - now, Duration::from_secs(2));
+
+                    barrier_cloned.wait().await;
+                    assert_eq!(*last_deadline_cloned.lock() - now, Duration::from_secs(4));
                 });
             });
         });
@@ -1499,7 +1554,8 @@ mod tests {
 
     impl SleepUntil for TestSleepUntil {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-            *self.last_instant.lock() = instant;
+            let mut last_instant = self.last_instant.lock();
+            *last_instant = max(*last_instant, instant);
             async {}
         }
     }
