@@ -267,7 +267,7 @@ impl SharedBandwidth for SharedBandwidthManager {
 
         // notify everyone else
         let _ = self.0.bandwidth_change_notify.send(());
-        let _ = self.0.bandwidth_change.try_recv();
+        // let _ = self.0.bandwidth_change.try_recv();
 
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
@@ -502,14 +502,18 @@ where
 
         self.rate_limiter.rate_limit(requested);
 
+        let mut debug_called = false;
+
         loop {
             futures::select! {
                 _ = self.rate_limiter.wait().fuse() => {
+                    println!("debug_called = {debug_called}");
                     self.notify_idle();
                     return self;
                 },
                 rate = self.shared_parent.await_bandwidth_change().fuse() => {
                     self.rate_limiter.set_rate(rate);
+                    debug_called = true;
                 },
             }
         }
@@ -1055,13 +1059,22 @@ mod tests {
     }
 
     struct NotifyingSharedBandwidth<BM> {
+        cloned: Arc<parking_lot::Mutex<Option<tokio::sync::broadcast::Sender<()>>>>,
         notifier: tokio::sync::broadcast::Sender<()>,
         wrapped: BM,
     }
 
     impl<BM> NotifyingSharedBandwidth<BM> {
-        pub fn new(wrapped: BM, notifier: tokio::sync::broadcast::Sender<()>) -> Self {
-            Self { notifier, wrapped }
+        pub fn new(
+            wrapped: BM,
+            notifier: tokio::sync::broadcast::Sender<()>,
+            shared_for_clone: Arc<parking_lot::Mutex<Option<tokio::sync::broadcast::Sender<()>>>>,
+        ) -> Self {
+            Self {
+                notifier,
+                wrapped,
+                cloned: shared_for_clone,
+            }
         }
     }
 
@@ -1070,7 +1083,21 @@ mod tests {
         BM: Clone,
     {
         fn clone(&self) -> Self {
-            Self::new(self.wrapped.clone(), self.notifier.clone())
+            let new_notifier = {
+                let mut locked_cloned = self.cloned.lock();
+                match locked_cloned.take() {
+                    Some(notifier) => notifier,
+                    None => locked_cloned
+                        .insert(tokio::sync::broadcast::channel(1).0)
+                        .clone(),
+                }
+            };
+
+            Self {
+                cloned: self.cloned.clone(),
+                notifier: new_notifier,
+                wrapped: self.wrapped.clone(),
+            }
         }
     }
 
@@ -1089,24 +1116,30 @@ mod tests {
         fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send {
             async {
                 let result = self.wrapped.await_bandwidth_change().await;
-                self.notifier.send(());
+                let _ = self.notifier.send(());
+                println!("broadcast called");
                 result
             }
         }
     }
 
     struct NotifiedSleepUntil<SU> {
-        // cloned: Arc<parking_lot::Mutex<Option<Arc<Notify>>>>,
+        cloned: Arc<parking_lot::Mutex<Option<tokio::sync::broadcast::Sender<()>>>>,
         // notifier: Fut,
         notifications: tokio::sync::broadcast::Receiver<()>,
         wrapped: SU,
     }
 
     impl<SU> NotifiedSleepUntil<SU> {
-        pub fn new(wrapped: SU, notifications: tokio::sync::broadcast::Receiver<()>) -> Self {
+        pub fn new(
+            wrapped: SU,
+            notifications: tokio::sync::broadcast::Receiver<()>,
+            shared_for_clone: Arc<parking_lot::Mutex<Option<tokio::sync::broadcast::Sender<()>>>>,
+        ) -> Self {
             Self {
                 notifications,
                 wrapped,
+                cloned: shared_for_clone,
             }
         }
     }
@@ -1116,7 +1149,20 @@ mod tests {
         SU: Clone,
     {
         fn clone(&self) -> Self {
-            Self::new(self.wrapped.clone(), self.notifications.resubscribe())
+            let new_notifier = match self.cloned.lock().take() {
+                Some(notifier) => notifier,
+                None => self
+                    .cloned
+                    .lock()
+                    .insert(tokio::sync::broadcast::channel(1).0)
+                    .clone(),
+            };
+
+            Self {
+                cloned: self.cloned.clone(),
+                notifications: new_notifier.subscribe(),
+                wrapped: self.wrapped.clone(),
+            }
         }
     }
 
@@ -1126,7 +1172,7 @@ mod tests {
     {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
             async move {
-                self.notifications.recv().await;
+                let _ = self.notifications.recv().await;
                 self.wrapped.sleep_until(instant).await
             }
         }
@@ -1156,9 +1202,11 @@ mod tests {
         // ));
 
         let (notifier, notifications_receiver) = tokio::sync::broadcast::channel(2);
+        let shared_for_cloning = Arc::new(parking_lot::Mutex::new(None));
         let shared_parent = NotifyingSharedBandwidth::new(
             SharedBandwidthManager::from(limit_per_second),
             notifier.clone(),
+            shared_for_cloning.clone(),
         );
         // let sleep_until = JoiningSleepUntil::new(
         //     2,
@@ -1176,6 +1224,7 @@ mod tests {
         let sleep_until = NotifiedSleepUntil::new(
             TestSleepUntil::new(last_deadline.clone()),
             notifications_receiver,
+            shared_for_cloning,
         );
         let inner_rate_limiter =
             AsyncTokenBucket::from((limit_per_second, time_provider, sleep_until));
@@ -1187,6 +1236,9 @@ mod tests {
         let barrier_cloned = barrier.clone();
 
         // TODO potrzebuje czegos co dostanie sygnal od BandwidthManagera, po otrzymaniu ktorego na pewno sie wait na nim zakonczy - jakis nie-async sygnal, to tym jak juz cos zwroci
+
+        // TODO don't do this, it's seems impossible to do correctly
+        // instead, change it into a simple test where you measure average bandwidth
         thread::scope(|s| {
             s.spawn(|| {
                 let runtime = tokio::runtime::Builder::new_current_thread()
@@ -1202,12 +1254,14 @@ mod tests {
                     barrier.wait().await;
                     // TODO ewidentnie limiter najpierw dostaje wynik z 10/s, zanim zmieni mu sie rate na 5/s
                     assert_eq!(*last_deadline.lock() - now, Duration::from_secs(2));
-                    barrier.wait().await;
+                    *time_to_return.lock() = *last_deadline.lock();
 
+                    barrier.wait().await;
                     // 500 ms - dostaja wiekszy rate, bo czas dla nich idzie osobno?
                     rate_limiter.rate_limit(10).await;
 
                     barrier.wait().await;
+                    // TODO tutaj sie nadal wywala! - czasami
                     assert_eq!(*last_deadline.lock() - now, Duration::from_secs(4));
                 });
             });
