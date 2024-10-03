@@ -14,6 +14,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+use tokio::sync::Notify;
 
 pub trait TimeProvider {
     fn now(&self) -> Instant;
@@ -208,79 +209,65 @@ pub trait SharedBandwidth {
     fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
 }
 
-struct SharedBandwidthManagerImpl {
+#[derive(Clone)]
+pub struct SharedBandwidthManager {
     max_rate: NonZeroRatePerSecond,
     active_children: Arc<AtomicU64>,
-    // bandwidth_change: tokio::sync::Notify,
-    // notified: tokio::sync::Notified,
-    bandwidth_change: tokio::sync::broadcast::Receiver<()>,
-    bandwidth_change_notify: tokio::sync::broadcast::Sender<()>,
+    bandwidth_change: Arc<tokio::sync::Notify>,
+    already_requested: Option<NonZeroRatePerSecond>,
 }
-
-impl Clone for SharedBandwidthManagerImpl {
-    fn clone(&self) -> Self {
-        Self {
-            max_rate: self.max_rate.clone(),
-            active_children: self.active_children.clone(),
-            bandwidth_change: self.bandwidth_change_notify.subscribe(),
-            bandwidth_change_notify: self.bandwidth_change_notify.clone(),
-        }
-    }
-}
-
-impl SharedBandwidthManagerImpl {
-    pub fn new(rate: NonZeroRatePerSecond) -> Self {
-        let (notify_sender, notify_receiver) = tokio::sync::broadcast::channel(2);
-        Self {
-            max_rate: rate,
-            active_children: Arc::new(AtomicU64::new(0)),
-            // bandwidth_change: tokio::sync::Notify::new(),
-            bandwidth_change: notify_receiver,
-            bandwidth_change_notify: notify_sender,
-        }
-    }
-}
-
-#[derive(Clone)]
-pub struct SharedBandwidthManager(SharedBandwidthManagerImpl);
 
 impl SharedBandwidthManager {
     fn request_bandwidth_without_children_increament(&self) -> NonZeroRatePerSecond {
-        let active_children = self.0.active_children.load(Ordering::Relaxed);
-        let rate = u64::from(self.0.max_rate) / active_children;
+        let active_children = self.active_children.load(Ordering::Relaxed);
+        let rate = u64::from(self.max_rate) / active_children;
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
 }
 
 impl From<NonZeroRatePerSecond> for SharedBandwidthManager {
     fn from(rate: NonZeroRatePerSecond) -> Self {
-        Self(SharedBandwidthManagerImpl::new(rate))
+        Self::new(rate)
+    }
+}
+
+impl SharedBandwidthManager {
+    pub fn new(max_rate: NonZeroRatePerSecond) -> Self {
+        Self {
+            max_rate,
+            active_children: Arc::new(AtomicU64::new(0)),
+            bandwidth_change: Arc::new(Notify::new()),
+            already_requested: None,
+        }
     }
 }
 
 impl SharedBandwidth for SharedBandwidthManager {
     // TODO make it grow exponentially on per-connection basis. It won't depend on number of children, but only how often they are calling it.
     fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
-        // let active_children = self.active_children.load(Ordering::Relaxed);
-        let active_children = self.0.active_children.fetch_add(1, Ordering::Relaxed) + 1;
-        let rate = u64::from(self.0.max_rate) / active_children;
+        if let Some(requested_rate) = self.already_requested {
+            return requested_rate;
+        }
+        let active_children = self.active_children.fetch_add(1, Ordering::Relaxed) + 1;
+        let rate = u64::from(self.max_rate) / active_children;
 
         // notify everyone else
-        let _ = self.0.bandwidth_change_notify.send(());
-        let _ = self.0.bandwidth_change.try_recv();
+        self.bandwidth_change.notify_waiters();
 
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
 
     fn notify_idle(&mut self) {
-        self.0.active_children.fetch_sub(1, Ordering::Relaxed);
-        // self.0.bandwidth_change.notify_waiters();
-        let _ = self.0.bandwidth_change_notify.send(());
+        if self.already_requested.is_none() {
+            return;
+        }
+        self.already_requested = None;
+        self.active_children.fetch_sub(1, Ordering::Relaxed);
+        self.bandwidth_change.notify_waiters();
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
-        // self.0.bandwidth_change.notified().await;
-        let _ = self.0.bandwidth_change.recv().await;
+        self.bandwidth_change.notify_waiters();
         self.request_bandwidth_without_children_increament()
     }
 }
@@ -549,6 +536,7 @@ mod tests {
     use std::{
         cell::RefCell,
         cmp::max,
+        io::Read,
         iter::repeat,
         ops::Deref,
         rc::Rc,
@@ -560,7 +548,7 @@ mod tests {
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
-    use futures::Future;
+    use futures::{future::join_all, Future};
     use parking_lot::{Condvar, Mutex};
     use rand::distributions::Uniform;
     use tokio::sync::{futures::Notified, oneshot::Receiver, Barrier, Notify, Semaphore};
@@ -570,7 +558,7 @@ mod tests {
         rate_limiter::RateLimiter,
         token_bucket::{
             AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond,
-            SharedBandwidthManager, SharedBandwidthManagerImpl,
+            SharedBandwidthManager,
         },
         SleepingRateLimiter,
     };
@@ -716,14 +704,17 @@ mod tests {
             }
         }
 
-        pub fn last_used_instant(&self) -> Instant {
-            *self.last_instant.lock()
+        pub fn last_used_instant(&self) -> Arc<Mutex<Instant>> {
+            self.last_instant.clone()
         }
     }
 
     impl SleepUntil for TestSleepUntilShared {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-            *self.last_instant.lock() = instant;
+            // *self.last_instant.lock() = instant;
+            // async {}
+            let last_instant = *self.last_instant.lock();
+            *self.last_instant.lock() = max(last_instant, instant);
             async {}
         }
     }
@@ -1349,8 +1340,38 @@ mod tests {
         );
     }
 
-    #[test]
-    fn avarage_bandwidth_should_be_within_some_bounds() {
+    #[derive(Clone)]
+    struct SleepUntilWithBarrier<SU> {
+        wrapped: SU,
+        barrier: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
+    }
+
+    impl<SU> SleepUntilWithBarrier<SU> {
+        pub fn new(
+            sleep_until: SU,
+            barrier: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
+        ) -> Self {
+            Self {
+                wrapped: sleep_until,
+                barrier,
+            }
+        }
+    }
+
+    impl<SU> SleepUntil for SleepUntilWithBarrier<SU>
+    where
+        SU: SleepUntil + Send,
+    {
+        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
+            async move {
+                self.barrier.read().await.wait().await;
+                self.wrapped.sleep_until(instant).await
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn avarage_bandwidth_should_be_within_some_bounds() {
         use rand::{
             distributions::{Distribution, Uniform},
             seq::SliceRandom,
@@ -1375,11 +1396,15 @@ mod tests {
         //         limit_per_second,
         //         time_provider,
         //     );
-        let mut rate_limiter =
+        let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
+        let last_used_deadline = test_sleep_until_shared.last_used_instant();
+        let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
+        let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(test_sleep_until_shared, barrier.clone());
+        let rate_limiter =
             HierarchicalTokenBucket::<SharedBandwidthManager, AsyncTokenBucket<_, _>>::from((
                 limit_per_second,
                 time_provider,
-                TestSleepUntilShared::new(initial_time),
+                test_sleep_until_with_barrier,
             ));
 
         let mut rand_gen = rand::rngs::StdRng::seed_from_u64(
@@ -1391,13 +1416,13 @@ mod tests {
 
         let limiters_count = Uniform::from(1..=64).sample(&mut rand_gen);
         let mut rate_limiters = repeat(())
-            .scan((0u64, rate_limiter), |(id, rate_limiter), _| {
+            .scan((0usize, rate_limiter), |(id, rate_limiter), _| {
                 let new_rate_limiter = rate_limiter.clone();
                 let new_state = rate_limiter.clone();
                 let limiter_id = *id;
                 *rate_limiter = new_state;
                 *id += 1;
-                Some((limiter_id, new_rate_limiter))
+                Some((limiter_id, Some(new_rate_limiter)))
             })
             .take(limiters_count)
             .collect::<Vec<_>>();
@@ -1408,22 +1433,62 @@ mod tests {
 
         let data_gen = Uniform::from(0..100 * 1024 * 1024);
         let time_gen = Uniform::from(0..1000 * 10);
+        let batch_gen = Uniform::from(2..100);
 
         let mut calculated_rate_limit = rate_limit;
 
         for _ in 0..100000 {
-            let (selected_limiter_id, selected_rate_limiter) = rate_limiters
-                .choose_mut(&mut rand_gen)
-                .expect("we should be able to randomly choose a rate-limiter from our collection");
-            let data_read = data_gen.sample(&mut rand_gen);
-            // let next_deadline = selected_rate_limiter.rate_limit(data_read);
-            let next_deadline = RateLimiter::rate_limit(selected_rate_limiter, data_read);
-            let next_deadline = Option::<Instant>::from(next_deadline.unwrap_or(Deadline::Never))
-                .unwrap_or(last_deadline);
-            last_deadline = max(last_deadline, next_deadline);
-            total_data_scheduled += u128::from(data_read);
+            let batch_size: usize = batch_gen.sample(&mut rand_gen);
+            *barrier.write().await = tokio::sync::Barrier::new(batch_size);
+            // let mut batch = Vec::with_capacity(batch_size);
 
-            test_state.push((*selected_limiter_id, data_read));
+            // let batch = rate_limiters.choose_multiple(&mut rand_gen, batch_size);
+            rate_limiters.shuffle(&mut rand_gen);
+            let batch = &mut rate_limiters[0..batch_size];
+            // .expect(
+            //     "we should be able to randomly choose a rate-limiter from our collection",
+            // );
+
+            let batch_test = batch.into_iter().map(|(selected_limiter_id, selected_rate_limiter)| {
+                let data_read = data_gen.sample(&mut rand_gen);
+                // let next_deadline = selected_rate_limiter.rate_limit(data_read);
+
+                let rate_limiter = selected_rate_limiter
+                    .take()
+                    .expect("we should be able to retrieve a rate-limiter");
+
+                let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
+
+                test_state.push((*selected_limiter_id, data_read));
+
+                total_data_scheduled += u128::from(data_read);
+
+                async move { (rate_task.await, selected_rate_limiter) }
+            });
+            // perform the actual rate-limiting
+            for (rate_limiter, store) in join_all(batch_test).await {
+                let _ = store.insert(rate_limiter);
+            }
+            // for (selected_limiter_id, selected_rate_limiter) in batch {
+            //     let data_read = data_gen.sample(&mut rand_gen);
+            //     // let next_deadline = selected_rate_limiter.rate_limit(data_read);
+
+            //     let rate_limiter = selected_rate_limiter
+            //         .take()
+            //         .expect("we should be able to retrieve a rate-limiter");
+
+            //     let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
+
+            //     test_state.push((*selected_limiter_id, data_read));
+
+            //     batch.push(async move { (rate_task.await, selected_rate_limiter) });
+
+            //     total_data_scheduled += u128::from(data_read);
+            // }
+
+            *time_to_return.borrow_mut() = *last_used_deadline.lock();
+            let next_deadline = *last_used_deadline.lock();
+            last_deadline = max(last_deadline, next_deadline);
 
             // let time_passed = rand_gen.gen_range(0..=10);
             let time_passed = time_gen.sample(&mut rand_gen);
@@ -1437,11 +1502,11 @@ mod tests {
             if calculated_rate_limit > rate_limit {
                 let diff = calculated_rate_limit - rate_limit;
                 assert!(
-                    diff <= rate_limit,
-                    "used bandwidth should be smaller that twice the rate-limit - rate_limit = {rate_limit}; diff = {diff}; rate_limiters.len() = {}; state: {:?}",
-                    rate_limiters.len(),
-                    test_state,
-                );
+                        diff <= rate_limit,
+                        "used bandwidth should be smaller that twice the rate-limit - rate_limit = {rate_limit}; diff = {diff}; rate_limiters.len() = {}; state: {:?}",
+                        rate_limiters.len(),
+                        test_state,
+                    );
             }
         }
         println!(
