@@ -548,7 +548,7 @@ mod tests {
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
-    use futures::{future::join_all, Future};
+    use futures::{future::Future, join, stream::FuturesUnordered, StreamExt};
     use parking_lot::{Condvar, Mutex};
     use rand::distributions::Uniform;
     use tokio::sync::{futures::Notified, oneshot::Receiver, Barrier, Notify, Semaphore};
@@ -1399,7 +1399,8 @@ mod tests {
         let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
         let last_used_deadline = test_sleep_until_shared.last_used_instant();
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
-        let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(test_sleep_until_shared, barrier.clone());
+        let test_sleep_until_with_barrier =
+            SleepUntilWithBarrier::new(test_sleep_until_shared, barrier.clone());
         let rate_limiter =
             HierarchicalTokenBucket::<SharedBandwidthManager, AsyncTokenBucket<_, _>>::from((
                 limit_per_second,
@@ -1426,65 +1427,48 @@ mod tests {
             })
             .take(limiters_count)
             .collect::<Vec<_>>();
-        // let rate_limiters = vec![rate_limiter, rate_limiter_cloned];
 
         let mut total_data_scheduled = 0u128;
         let mut last_deadline = initial_time;
 
         let data_gen = Uniform::from(0..100 * 1024 * 1024);
         let time_gen = Uniform::from(0..1000 * 10);
-        let batch_gen = Uniform::from(2..100);
+        let batch_gen = Uniform::from(2..limiters_count);
 
         let mut calculated_rate_limit = rate_limit;
 
         for _ in 0..100000 {
-            let batch_size: usize = batch_gen.sample(&mut rand_gen);
+            let batch_size = batch_gen.sample(&mut rand_gen);
             *barrier.write().await = tokio::sync::Barrier::new(batch_size);
-            // let mut batch = Vec::with_capacity(batch_size);
-
-            // let batch = rate_limiters.choose_multiple(&mut rand_gen, batch_size);
             rate_limiters.shuffle(&mut rand_gen);
             let batch = &mut rate_limiters[0..batch_size];
-            // .expect(
-            //     "we should be able to randomly choose a rate-limiter from our collection",
-            // );
 
-            let batch_test = batch.into_iter().map(|(selected_limiter_id, selected_rate_limiter)| {
-                let data_read = data_gen.sample(&mut rand_gen);
-                // let next_deadline = selected_rate_limiter.rate_limit(data_read);
+            let mut batch_test: FuturesUnordered<_> = batch
+                .into_iter()
+                .map(|(selected_limiter_id, selected_rate_limiter)| {
+                    let data_read = data_gen.sample(&mut rand_gen);
+                    // let next_deadline = selected_rate_limiter.rate_limit(data_read);
 
-                let rate_limiter = selected_rate_limiter
-                    .take()
-                    .expect("we should be able to retrieve a rate-limiter");
+                    let rate_limiter = selected_rate_limiter
+                        .take()
+                        .expect("we should be able to retrieve a rate-limiter");
 
-                let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
+                    let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
 
-                test_state.push((*selected_limiter_id, data_read));
+                    test_state.push((*selected_limiter_id, data_read));
 
-                total_data_scheduled += u128::from(data_read);
+                    total_data_scheduled += u128::from(data_read);
 
-                async move { (rate_task.await, selected_rate_limiter) }
-            });
+                    async move { (rate_task.await, selected_rate_limiter) }
+                })
+                .collect();
             // perform the actual rate-limiting
-            for (rate_limiter, store) in join_all(batch_test).await {
+            // for (rate_limiter, store) in join!(batch_test).await {
+            //     let _ = store.insert(rate_limiter);
+            // }
+            while let Some((rate_limiter, store)) = batch_test.next().await {
                 let _ = store.insert(rate_limiter);
             }
-            // for (selected_limiter_id, selected_rate_limiter) in batch {
-            //     let data_read = data_gen.sample(&mut rand_gen);
-            //     // let next_deadline = selected_rate_limiter.rate_limit(data_read);
-
-            //     let rate_limiter = selected_rate_limiter
-            //         .take()
-            //         .expect("we should be able to retrieve a rate-limiter");
-
-            //     let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
-
-            //     test_state.push((*selected_limiter_id, data_read));
-
-            //     batch.push(async move { (rate_task.await, selected_rate_limiter) });
-
-            //     total_data_scheduled += u128::from(data_read);
-            // }
 
             *time_to_return.borrow_mut() = *last_used_deadline.lock();
             let next_deadline = *last_used_deadline.lock();
@@ -1504,7 +1488,7 @@ mod tests {
                 assert!(
                         diff <= rate_limit,
                         "used bandwidth should be smaller that twice the rate-limit - rate_limit = {rate_limit}; diff = {diff}; rate_limiters.len() = {}; state: {:?}",
-                        rate_limiters.len(),
+                        limiters_count,
                         test_state,
                     );
             }
