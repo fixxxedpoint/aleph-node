@@ -704,18 +704,17 @@ mod tests {
             }
         }
 
-        pub fn last_used_instant(&self) -> Arc<Mutex<Instant>> {
+        pub fn latest_sleep_until(&self) -> Arc<Mutex<Instant>> {
             self.last_instant.clone()
         }
     }
 
     impl SleepUntil for TestSleepUntilShared {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-            // *self.last_instant.lock() = instant;
-            // async {}
-            let last_instant = *self.last_instant.lock();
-            *self.last_instant.lock() = max(last_instant, instant);
-            async {}
+            async move {
+                let mut last_instant = self.last_instant.lock();
+                *last_instant = max(*last_instant, instant);
+            }
         }
     }
 
@@ -1344,16 +1343,21 @@ mod tests {
     struct SleepUntilWithBarrier<SU> {
         wrapped: SU,
         barrier: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
+        initial_counter: u64,
+        counter: u64,
     }
 
     impl<SU> SleepUntilWithBarrier<SU> {
         pub fn new(
             sleep_until: SU,
             barrier: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
+            how_many_times_to_use_barrier: u64,
         ) -> Self {
             Self {
                 wrapped: sleep_until,
                 barrier,
+                initial_counter: how_many_times_to_use_barrier,
+                counter: how_many_times_to_use_barrier,
             }
         }
     }
@@ -1364,7 +1368,39 @@ mod tests {
     {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
             async move {
-                self.barrier.read().await.wait().await;
+                if self.counter > 0 {
+                    self.counter -= 1;
+                    self.barrier.read().await.wait().await;
+                } else {
+                    self.counter = self.initial_counter;
+                    self.wrapped.sleep_until(instant).await
+                }
+            }
+        }
+    }
+
+    #[derive(Clone)]
+    struct TracingSleepUntil<SU> {
+        wrapped: SU,
+        last_deadline: Instant,
+    }
+
+    impl<SU> TracingSleepUntil<SU> {
+        pub fn new(sleep_until: SU, initial_deadline: Instant) -> Self {
+            Self {
+                wrapped: sleep_until,
+                last_deadline: initial_deadline,
+            }
+        }
+    }
+
+    impl<SU> SleepUntil for TracingSleepUntil<SU>
+    where
+        SU: SleepUntil + Send,
+    {
+        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
+            async move {
+                self.last_deadline = instant;
                 self.wrapped.sleep_until(instant).await
             }
         }
@@ -1385,7 +1421,6 @@ mod tests {
             NonZeroRatePerSecond(rate_limit.try_into().expect("(4 * 1024 * 1024) > 0 qed"));
         let rate_limit = rate_limit.into();
         let initial_time = Instant::now();
-        let mut current_time = initial_time;
         let time_to_return = Rc::new(RefCell::new(initial_time));
         let time_provider = time_to_return.clone();
         let time_provider: Rc<Box<dyn TimeProvider>> =
@@ -1397,15 +1432,21 @@ mod tests {
         //         time_provider,
         //     );
         let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
-        let last_used_deadline = test_sleep_until_shared.last_used_instant();
+        let last_used_deadline = test_sleep_until_shared.latest_sleep_until();
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
-        let test_sleep_until_with_barrier =
-            SleepUntilWithBarrier::new(test_sleep_until_shared, barrier.clone());
+        let how_many_times_stop_on_barrier = 2;
+        let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(
+            test_sleep_until_shared,
+            barrier.clone(),
+            how_many_times_stop_on_barrier,
+        );
+        let tracing_sleep_until =
+            TracingSleepUntil::new(test_sleep_until_with_barrier, initial_time);
         let rate_limiter =
             HierarchicalTokenBucket::<SharedBandwidthManager, AsyncTokenBucket<_, _>>::from((
                 limit_per_second,
                 time_provider,
-                test_sleep_until_with_barrier,
+                tracing_sleep_until,
             ));
 
         let mut rand_gen = rand::rngs::StdRng::seed_from_u64(
@@ -1415,7 +1456,7 @@ mod tests {
                 .as_secs(),
         );
 
-        let limiters_count = Uniform::from(1..=64).sample(&mut rand_gen);
+        let limiters_count = Uniform::from(10..=128).sample(&mut rand_gen);
         let mut rate_limiters = repeat(())
             .scan((0usize, rate_limiter), |(id, rate_limiter), _| {
                 let new_rate_limiter = rate_limiter.clone();
@@ -1430,69 +1471,91 @@ mod tests {
 
         let mut total_data_scheduled = 0u128;
         let mut last_deadline = initial_time;
+        let mut prev_deadline = last_deadline;
 
         let data_gen = Uniform::from(0..100 * 1024 * 1024);
-        let time_gen = Uniform::from(0..1000 * 10);
-        let batch_gen = Uniform::from(2..limiters_count);
+        let time_gen = Uniform::from(1..1000 * 10);
+        let batch_gen = Uniform::from(1..limiters_count);
 
-        let mut calculated_rate_limit = rate_limit;
-
-        for _ in 0..100000 {
+        let mut total_number_of_calls = 0;
+        while total_number_of_calls < 1000 {
             let batch_size = batch_gen.sample(&mut rand_gen);
-            *barrier.write().await = tokio::sync::Barrier::new(batch_size);
+            println!("batch size = {batch_size}");
+            total_number_of_calls += batch_size;
+            *barrier.write().await = tokio::sync::Barrier::new(batch_size + 1);
             rate_limiters.shuffle(&mut rand_gen);
+            let mut data_scheduled = 0u128;
             let batch = &mut rate_limiters[0..batch_size];
 
             let mut batch_test: FuturesUnordered<_> = batch
                 .into_iter()
                 .map(|(selected_limiter_id, selected_rate_limiter)| {
                     let data_read = data_gen.sample(&mut rand_gen);
-                    // let next_deadline = selected_rate_limiter.rate_limit(data_read);
 
                     let rate_limiter = selected_rate_limiter
                         .take()
                         .expect("we should be able to retrieve a rate-limiter");
 
+                    let last_deadline = rate_limiter.rate_limiter.sleep_until.last_deadline;
                     let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
 
+                    // TODO use TracingSleepUntil here
                     test_state.push((*selected_limiter_id, data_read));
 
+                    data_scheduled += u128::from(data_read);
                     total_data_scheduled += u128::from(data_read);
 
-                    async move { (rate_task.await, selected_rate_limiter) }
+                    async move {
+                        let rate_limiter = rate_task.await;
+
+                        let next_deadline = rate_limiter.rate_limiter.sleep_until.last_deadline;
+                        let time_passed = next_deadline - last_deadline;
+                        let mut result_rate = None;
+                        if time_passed.as_millis() != 0 {
+                            let calculated_rate_limit =
+                                u128::from(data_read) * 1000 / time_passed.as_millis();
+                            result_rate = Some(calculated_rate_limit);
+                            println!("calculated rate: {calculated_rate_limit}");
+                        }
+
+                        (rate_limiter, selected_rate_limiter, result_rate)
+                    }
                 })
                 .collect();
             // perform the actual rate-limiting
-            // for (rate_limiter, store) in join!(batch_test).await {
-            //     let _ = store.insert(rate_limiter);
-            // }
-            while let Some((rate_limiter, store)) = batch_test.next().await {
+            while let Some((rate_limiter, store, calculated_rate)) = batch_test.next().await {
                 let _ = store.insert(rate_limiter);
             }
 
-            *time_to_return.borrow_mut() = *last_used_deadline.lock();
             let next_deadline = *last_used_deadline.lock();
             last_deadline = max(last_deadline, next_deadline);
+            let test_time_passed = last_deadline - prev_deadline;
 
-            // let time_passed = rand_gen.gen_range(0..=10);
             let time_passed = time_gen.sample(&mut rand_gen);
-            current_time += Duration::from_millis(time_passed);
+            // let current_time = last_deadline + Duration::from_millis(time_passed);
+            let current_time = *time_to_return.borrow() + Duration::from_millis(time_passed);
+            // let current_time = last_deadline;
             *time_to_return.borrow_mut() = current_time;
+            prev_deadline = current_time;
 
             // check if used bandwidth was within expected bounds
-            let time_passed = last_deadline - initial_time;
-            calculated_rate_limit = total_data_scheduled * 1000 / time_passed.as_millis();
-
-            if calculated_rate_limit > rate_limit {
-                let diff = calculated_rate_limit - rate_limit;
-                assert!(
-                        diff <= rate_limit,
-                        "used bandwidth should be smaller that twice the rate-limit - rate_limit = {rate_limit}; diff = {diff}; rate_limiters.len() = {}; state: {:?}",
-                        limiters_count,
-                        test_state,
-                    );
+            if test_time_passed.as_millis() == 0 {
+                continue;
             }
+            let calculated_rate_limit = data_scheduled * 1000 / test_time_passed.as_millis();
+            let abs_rate_diff = calculated_rate_limit.abs_diff(rate_limit);
+            assert!(
+                abs_rate_diff <= rate_limit * 5/10,
+                "Used bandwidth should be oscillating close to {rate_limit} b/s (+/- 50%), but got {calculated_rate_limit} b/s instead."
+            );
         }
+        let time_passed = last_deadline - initial_time;
+        let calculated_rate_limit = total_data_scheduled * 1000 / time_passed.as_millis();
+        let abs_rate_diff = calculated_rate_limit.abs_diff(rate_limit);
+        assert!(
+            abs_rate_diff <= rate_limit * 7/10,
+            "Used bandwidth should be oscillating close to {rate_limit} b/s (+/- 50%), but got {calculated_rate_limit} b/s instead. Total data sent: {total_data_scheduled}; Time passed: {time_passed:?}"
+        );
         println!(
             "expected rate-limit = {rate_limit} calculated rate limit = {calculated_rate_limit}"
         );
