@@ -1,9 +1,10 @@
 use libp2p::{core::muxing::StreamMuxer, PeerId, Transport};
 use rate_limiter::{
-    FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, SleepingRateLimiter, SleepingRateLimiter,
+    FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, HierarchicalTokenBucket,
+    SleepingRateLimiter,
 };
 
-struct RateLimitedStreamMuxer<SM, ARL = SleepingRateLimiter> {
+struct RateLimitedStreamMuxer<SM, ARL = HierarchicalTokenBucket> {
     rate_limiter: ARL,
     stream_muxer: SM,
 }

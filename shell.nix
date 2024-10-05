@@ -10,7 +10,7 @@ let
     extensions = [ "rust-src" ];
   };
   # nativeBuildInputs = [rust nixpkgs.cacert nixpkgs.openssl] ++ project.nativeBuildInputs;
-  nativeBuildInputs = [nixpkgs.nodejs nixpkgs.pkg-config nixpkgs.cacert nixpkgs.openssl (nixpkgs.aspellWithDicts (d: [d.en d.pl])) nixpkgs.cmake nixpkgs.libtool nixpkgs.gdb] ++ project.nativeBuildInputs;
+  nativeBuildInputs = [nixpkgs.nodejs nixpkgs.pkg-config nixpkgs.cacert nixpkgs.openssl (nixpkgs.aspellWithDicts (d: [d.en d.pl])) nixpkgs.cmake nixpkgs.libtool nixpkgs.gdb] ++ project.nativeBuildInputs ++ [nixpkgs.sqlite];
 
   # nativeBuildInputs = [nixpkgs.pkg-config nixpkgs.zlib nixpkgs.cacert nixpkgs.openssl];
   fixedNativeBuildInputs = nixpkgs.lib.lists.remove versions.rustToolchain.rust nativeBuildInputs;

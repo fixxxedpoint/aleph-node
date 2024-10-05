@@ -1,7 +1,7 @@
 use std::sync::{atomic::AtomicBool, Arc};
 
 use log::error;
-use rate_limiter::{DefaultSharedRateLimiter, SleepingRateLimiter};
+use rate_limiter::DefaultSharedRateLimiter;
 use sc_client_api::Backend;
 use sc_network::{
     config::{NetworkConfiguration, ProtocolId},

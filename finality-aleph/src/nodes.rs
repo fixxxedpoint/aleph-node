@@ -6,7 +6,7 @@ use log::{debug, error};
 use network_clique::{RateLimitingDialer, RateLimitingListener, Service, SpawnHandleT};
 use pallet_aleph_runtime_api::AlephSessionApi;
 use primitives::TransactionHash;
-use rate_limiter::{DefaultSharedRateLimiter, PerConnectionRateLimiter};
+use rate_limiter::DefaultSharedRateLimiter;
 use sc_client_api::Backend;
 use sc_keystore::{Keystore, LocalKeystore};
 use sc_transaction_pool_api::TransactionPool;

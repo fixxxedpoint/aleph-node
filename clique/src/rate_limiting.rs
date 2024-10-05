@@ -1,6 +1,5 @@
 use rate_limiter::{
-    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiter, SleepingRateLimiter, RateLimiterT,
-    SleepingRateLimiter,
+    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiterImpl, SleepingRateLimiter
 };
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, PeerAddressInfo, Splittable, Splitted};
@@ -50,7 +49,7 @@ where
         let connection = self.dialer.connect(address).await?;
         let (sender, receiver) = connection.split();
         Ok(Splitted(
-            RateLimitedAsyncRead::new(receiver, RateLimiter::new(self.rate_limiter.clone())),
+            RateLimitedAsyncRead::new(receiver, RateLimiterImpl::new(self.rate_limiter.clone())),
             sender,
         ))
     }
@@ -87,7 +86,7 @@ where
         let connection = self.listener.accept().await?;
         let (sender, receiver) = connection.split();
         Ok(Splitted(
-            RateLimitedAsyncRead::new(receiver, RateLimiter::new(self.rate_limiter.clone())),
+            RateLimitedAsyncRead::new(receiver, RateLimiterImpl::new(self.rate_limiter.clone())),
             sender,
         ))
     }

@@ -3,14 +3,14 @@ mod token_bucket;
 
 use std::num::{NonZeroU64, TryFromIntError};
 
-use rate_limiter::RateLimiterImpl;
+pub use rate_limiter::RateLimiterImpl;
 use tokio::io::AsyncRead;
 
 pub use crate::rate_limiter::{
     DefaultSharedRateLimiter, FuturesRateLimiter, PerConnectionRateLimiter, SleepingRateLimiter,
     SleepingRateLimiterImpl,
 };
-pub use crate::token_bucket::TokenBucket;
+pub use crate::token_bucket::{HierarchicalTokenBucket, TokenBucket};
 
 const LOG_TARGET: &str = "rate-limiter";
 
