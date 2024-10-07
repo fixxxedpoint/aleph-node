@@ -550,7 +550,7 @@ mod tests {
     };
 
     use futures::{
-        future::Future,
+        future::{BoxFuture, Future},
         join,
         stream::{FuturesOrdered, FuturesUnordered},
         StreamExt,
@@ -1348,12 +1348,30 @@ mod tests {
         );
     }
 
-    #[derive(Clone)]
+    // #[derive(Clone)]
     struct SleepUntilWithBarrier<SU> {
         wrapped: SU,
         barrier: Arc<tokio::sync::RwLock<tokio::sync::Barrier>>,
         initial_counter: u64,
         counter: u64,
+        to_wait: Option<BoxFuture<'static, ()>>,
+        id: u64,
+    }
+
+    impl<SU> Clone for SleepUntilWithBarrier<SU>
+    where
+        SU: Clone,
+    {
+        fn clone(&self) -> Self {
+            Self {
+                wrapped: self.wrapped.clone(),
+                barrier: self.barrier.clone(),
+                initial_counter: self.initial_counter.clone(),
+                counter: self.counter.clone(),
+                to_wait: None,
+                id: self.id + 1,
+            }
+        }
     }
 
     impl<SU> SleepUntilWithBarrier<SU> {
@@ -1367,7 +1385,13 @@ mod tests {
                 barrier,
                 initial_counter: how_many_times_to_use_barrier,
                 counter: how_many_times_to_use_barrier,
+                to_wait: None,
+                id: 0,
             }
+        }
+
+        pub fn reset(&mut self) {
+            self.counter = self.initial_counter;
         }
     }
 
@@ -1378,12 +1402,34 @@ mod tests {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
             async move {
                 if self.counter > 0 {
-                    self.counter -= 1;
                     yield_now().await;
-                    self.barrier.read().await.wait().await;
+                    // if self.counter == 1 {
+                    //     panic!("ok");
+                    // }
+                    // yield_now().await;
+                    // TODO not cancellation safe
+                    println!("start {}", self.id);
+
+                    self.to_wait
+                        .get_or_insert_with(|| {
+                            let barrier = self.barrier.clone();
+                            println!("about to wait {}", self.id);
+                            Box::pin(async move {
+                                barrier.read().await.wait().await;
+                            })
+                        })
+                        .await;
+                    self.to_wait = None;
+                    // self.barrier.read().await.wait().await;
+                    // yield_now().await;
+                    // panic!("jioj");
+                    println!("stop {}", self.id);
+                    self.counter -= 1;
                 } else {
-                    self.counter = self.initial_counter;
-                    self.wrapped.sleep_until(instant).await
+                    // panic!("reached");
+                    println!("finished {} {}", self.id, self.initial_counter);
+                    self.wrapped.sleep_until(instant).await;
+                    self.reset();
                 }
             }
         }
@@ -1439,7 +1485,7 @@ mod tests {
         let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
         let last_deadline = test_sleep_until_shared.latest_sleep_until();
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
-        let how_many_times_stop_on_barrier = 1;
+        let how_many_times_stop_on_barrier = 3;
         let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(
             test_sleep_until_shared,
             barrier.clone(),
@@ -1486,7 +1532,7 @@ mod tests {
             println!("batch size = {batch_size}");
 
             total_number_of_calls += batch_size;
-            *barrier.write().await = tokio::sync::Barrier::new(batch_size + 1);
+            *barrier.write().await = tokio::sync::Barrier::new(batch_size);
 
             rate_limiters.shuffle(&mut rand_gen);
             let batch = &mut rate_limiters[0..batch_size];
@@ -1497,9 +1543,10 @@ mod tests {
                 .map(|(selected_limiter_id, selected_rate_limiter)| {
                     let data_read = data_gen.sample(&mut rand_gen);
 
-                    let rate_limiter = selected_rate_limiter
+                    let mut rate_limiter = selected_rate_limiter
                         .take()
                         .expect("we should be able to retrieve a rate-limiter");
+                    rate_limiter.rate_limiter.sleep_until.wrapped.reset();
 
                     let last_deadline = rate_limiter.rate_limiter.sleep_until.last_deadline;
                     let start_time = max(last_deadline, current_time);
@@ -1529,17 +1576,22 @@ mod tests {
                 .collect();
             // perform the actual rate-limiting
             let mut rate_for_batch = 0;
+            let mut counter = 0;
             while let Some((rate_limiter, store, calculated_rate)) = batch_test.next().await {
+                counter += 1;
+                // if counter > 9 {
+                //     panic!("finisehd");
+                // }
                 let _ = store.insert(rate_limiter);
                 rate_for_batch += calculated_rate;
             }
-            panic!("jaisodaiosdj");
+            // panic!("jaisodaiosdj");
             total_rate = (total_rate + rate_for_batch) / 2;
             println!("batch rate: {rate_for_batch}");
 
             let time_passed = time_gen.sample(&mut rand_gen);
-            // let current_time = *time_to_return.borrow() + Duration::from_millis(time_passed);
-            let current_time = *last_deadline.lock() + Duration::from_millis(time_passed);
+            let current_time = *time_to_return.borrow() + Duration::from_millis(time_passed);
+            // let current_time = *last_deadline.lock() + Duration::from_millis(time_passed);
             *time_to_return.borrow_mut() = current_time;
         }
         let abs_rate_diff = total_rate.abs_diff(rate_limit);
