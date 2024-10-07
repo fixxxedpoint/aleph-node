@@ -204,8 +204,11 @@ where
 
 pub trait SharedBandwidth {
     // TODO perhaps return something that holds the counter and sub when dropped - meh, nope
-    fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond;
-    fn notify_idle(&mut self);
+    fn request_bandwidth(
+        &mut self,
+        requested: u64,
+    ) -> impl Future<Output = NonZeroRatePerSecond> + Send;
+    fn notify_idle(&mut self) -> impl Future<Output = ()>;
     fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
 }
 
@@ -244,7 +247,7 @@ impl SharedBandwidthManager {
 
 impl SharedBandwidth for SharedBandwidthManager {
     // TODO make it grow exponentially on per-connection basis. It won't depend on number of children, but only how often they are calling it.
-    fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
+    async fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
         if let Some(requested_rate) = self.already_requested {
             return requested_rate;
         }
@@ -257,7 +260,7 @@ impl SharedBandwidth for SharedBandwidthManager {
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
 
-    fn notify_idle(&mut self) {
+    async fn notify_idle(&mut self) {
         if self.already_requested.is_none() {
             return;
         }
@@ -395,7 +398,7 @@ pub struct HierarchicalTokenBucket<
 > where
     BD: SharedBandwidth,
 {
-    shared_parent: BD,
+    shared_bandwidth: BD,
     rate_limiter: ARL,
     need_to_notify_parent: bool,
 }
@@ -417,7 +420,7 @@ where
 {
     fn from((shared_bandwidth, async_token_bucket): (BD, ARL)) -> Self {
         Self {
-            shared_parent: shared_bandwidth,
+            shared_bandwidth,
             rate_limiter: async_token_bucket,
             need_to_notify_parent: false,
         }
@@ -462,24 +465,24 @@ where
         ARL: From<NonZeroRatePerSecond>,
     {
         Self {
-            shared_parent: BD::from(rate),
+            shared_bandwidth: BD::from(rate),
             rate_limiter: ARL::from(rate),
             need_to_notify_parent: false,
         }
     }
 
-    fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond
+    async fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond
     where
         BD: SharedBandwidth,
     {
         self.need_to_notify_parent = true;
-        self.shared_parent.request_bandwidth(requested)
+        self.shared_bandwidth.request_bandwidth(requested).await
     }
 
-    fn notify_idle(&mut self) {
+    async fn notify_idle(&mut self) {
         if self.need_to_notify_parent {
             self.need_to_notify_parent = false;
-            self.shared_parent.notify_idle();
+            self.shared_bandwidth.notify_idle().await;
         }
     }
 
@@ -487,7 +490,7 @@ where
     where
         ARL: AsyncRateLimiter,
     {
-        let rate = self.request_bandwidth(requested);
+        let rate = self.request_bandwidth(requested).await;
         self.rate_limiter.set_rate(rate);
 
         self.rate_limiter.rate_limit(requested);
@@ -501,7 +504,7 @@ where
                     self.notify_idle();
                     return self;
                 },
-                rate = self.shared_parent.await_bandwidth_change().fuse() => {
+                rate = self.shared_bandwidth.await_bandwidth_change().fuse() => {
                     self.rate_limiter.set_rate(rate);
                     debug_called = true;
                 },
@@ -597,7 +600,7 @@ mod tests {
             let shared_bandwidth = BD::from(rate);
             let async_token_bucket = ARL::from((rate, time_provider, sleep_until));
             Self {
-                shared_parent: shared_bandwidth,
+                shared_bandwidth,
                 rate_limiter: async_token_bucket,
                 need_to_notify_parent: false,
             }
@@ -1007,19 +1010,19 @@ mod tests {
 
     impl<BM> SharedBandwidth for TestBandwidthManager<BM>
     where
-        BM: SharedBandwidth,
+        BM: SharedBandwidth + Send,
     {
-        fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
-            self.wrapped.request_bandwidth(requested)
+        async fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
+            self.wrapped.request_bandwidth(requested).await
         }
 
-        fn notify_idle(&mut self) {
+        async fn notify_idle(&mut self) {
             self.wait.read().wait();
-            self.wrapped.notify_idle();
+            self.wrapped.notify_idle().await;
         }
 
-        fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send {
-            self.wrapped.await_bandwidth_change()
+        async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
+            self.wrapped.await_bandwidth_change().await
         }
     }
 
@@ -1120,21 +1123,19 @@ mod tests {
     where
         BM: SharedBandwidth + Send,
     {
-        fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
-            self.wrapped.request_bandwidth(requested)
+        async fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
+            self.wrapped.request_bandwidth(requested).await
         }
 
-        fn notify_idle(&mut self) {
-            self.wrapped.notify_idle()
+        async fn notify_idle(&mut self) {
+            self.wrapped.notify_idle().await
         }
 
-        fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send {
-            async {
-                let result = self.wrapped.await_bandwidth_change().await;
-                let _ = self.notifier.send(());
-                println!("broadcast called");
-                result
-            }
+        async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
+            let result = self.wrapped.await_bandwidth_change().await;
+            let _ = self.notifier.send(());
+            println!("broadcast called");
+            result
         }
     }
 
@@ -1720,7 +1721,7 @@ mod tests {
         let sleep_until = TestSleepUntil::new(sleep_until_last_instant.clone());
         let rate_limiter = AsyncTokenBucket::new(rate_limiter, sleep_until);
         let rate_limiter = HierarchicalTokenBucket {
-            shared_parent,
+            shared_bandwidth: shared_parent,
             rate_limiter,
             need_to_notify_parent: false,
         };
