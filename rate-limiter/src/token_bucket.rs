@@ -1549,7 +1549,7 @@ mod tests {
                     rate_limiter.rate_limiter.sleep_until.wrapped.reset();
 
                     let last_deadline = rate_limiter.rate_limiter.sleep_until.last_deadline;
-                    let start_time = max(last_deadline, current_time);
+                    let task_start_time = max(last_deadline, current_time);
 
                     let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
 
@@ -1563,7 +1563,7 @@ mod tests {
 
                         let next_deadline = rate_limiter.rate_limiter.sleep_until.last_deadline;
                         // let time_passed = next_deadline - last_deadline;
-                        let time_passed = next_deadline - start_time;
+                        let time_passed = next_deadline - task_start_time;
                         let mut result_rate = 0;
                         if time_passed.as_millis() != 0 {
                             result_rate = u128::from(data_read) * 1000 / time_passed.as_millis();
