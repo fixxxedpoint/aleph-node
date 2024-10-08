@@ -215,15 +215,15 @@ pub trait SharedBandwidth {
 #[derive(Clone)]
 pub struct SharedBandwidthManager {
     max_rate: NonZeroRatePerSecond,
-    active_children: Arc<AtomicU64>,
-    bandwidth_change: Arc<tokio::sync::Notify>,
+    bandwidth_change: tokio::sync::watch::Sender<u64>,
+    bandwidth_changes_receiver: tokio::sync::watch::Receiver<u64>,
     already_requested: Option<NonZeroRatePerSecond>,
 }
 
 impl SharedBandwidthManager {
-    fn request_bandwidth_without_children_increament(&self) -> NonZeroRatePerSecond {
-        let active_children = self.active_children.load(Ordering::Relaxed);
-        let rate = u64::from(self.max_rate) / active_children;
+    fn request_bandwidth_without_children_increament(&mut self) -> NonZeroRatePerSecond {
+        let active_children = self.bandwidth_changes_receiver.borrow_and_update();
+        let rate = u64::from(self.max_rate) / *active_children;
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
 }
@@ -236,10 +236,11 @@ impl From<NonZeroRatePerSecond> for SharedBandwidthManager {
 
 impl SharedBandwidthManager {
     pub fn new(max_rate: NonZeroRatePerSecond) -> Self {
+        let (tx, rx) = tokio::sync::watch::channel(0);
         Self {
             max_rate,
-            active_children: Arc::new(AtomicU64::new(0)),
-            bandwidth_change: Arc::new(Notify::new()),
+            bandwidth_change: tx,
+            bandwidth_changes_receiver: rx,
             already_requested: None,
         }
     }
@@ -251,11 +252,13 @@ impl SharedBandwidth for SharedBandwidthManager {
         if let Some(requested_rate) = self.already_requested {
             return requested_rate;
         }
-        let active_children = self.active_children.fetch_add(1, Ordering::Relaxed) + 1;
+        let mut active_children = 0;
+        // this will also notify everyone
+        self.bandwidth_change.send_modify(|count| {
+            *count += 1;
+            active_children = *count;
+        });
         let rate = u64::from(self.max_rate) / active_children;
-
-        // notify everyone else
-        self.bandwidth_change.notify_waiters();
 
         NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
     }
@@ -265,13 +268,12 @@ impl SharedBandwidth for SharedBandwidthManager {
             return;
         }
         self.already_requested = None;
-        self.active_children.fetch_sub(1, Ordering::Relaxed);
-        self.bandwidth_change.notify_waiters();
+        self.bandwidth_change.send_modify(|count| *count -= 1);
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
         // self.bandwidth_change.notify_waiters();
-        self.bandwidth_change.notified().await;
+        let _ = self.bandwidth_changes_receiver.changed().await;
         self.request_bandwidth_without_children_increament()
     }
 }
