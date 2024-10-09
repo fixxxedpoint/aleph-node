@@ -208,7 +208,7 @@ pub trait SharedBandwidth {
         &mut self,
         requested: u64,
     ) -> impl Future<Output = NonZeroRatePerSecond> + Send;
-    fn notify_idle(&mut self) -> impl Future<Output = ()>;
+    fn notify_idle(&mut self) -> impl Future<Output = ()> + Send;
     fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
 }
 
@@ -360,9 +360,17 @@ where
     fn wait(&mut self) -> impl std::future::Future<Output = ()> + std::marker::Send {
         async {
             match self.next_deadline {
-                Some(Deadline::Instant(deadline)) => self.sleep_until.sleep_until(deadline).await,
-                Some(Deadline::Never) => pending().await,
-                _ => {}
+                Some(Deadline::Instant(deadline)) => {
+                    self.sleep_until.sleep_until(deadline).await;
+                    println!("deadline");
+                }
+                Some(Deadline::Never) => {
+                    println!("never");
+                    pending().await
+                }
+                _ => {
+                    println!("eee");
+                }
             }
         }
     }
@@ -503,7 +511,7 @@ where
             futures::select! {
                 _ = self.rate_limiter.wait().fuse() => {
                     println!("debug_called = {debug_called}");
-                    self.notify_idle();
+                    self.notify_idle().await;
                     return self;
                 },
                 rate = self.shared_bandwidth.await_bandwidth_change().fuse() => {
@@ -1404,35 +1412,39 @@ mod tests {
     {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
             async move {
-                if self.counter > 0 {
-                    yield_now().await;
-                    // if self.counter == 1 {
-                    //     panic!("ok");
-                    // }
-                    // yield_now().await;
-                    // TODO not cancellation safe
-                    println!("start {}", self.id);
+                loop {
+                    if self.counter > 0 {
+                        // if self.counter == 1 {
+                        //     panic!("ok");
+                        // }
+                        // yield_now().await;
+                        // TODO not cancellation safe
+                        println!("start {}", self.id);
 
-                    self.to_wait
-                        .get_or_insert_with(|| {
-                            let barrier = self.barrier.clone();
-                            println!("about to wait {}", self.id);
-                            Box::pin(async move {
-                                barrier.read().await.wait().await;
+                        yield_now().await;
+                        self.to_wait
+                            .get_or_insert_with(|| {
+                                let barrier = self.barrier.clone();
+                                println!("about to wait {}", self.id);
+                                Box::pin(async move {
+                                    barrier.read().await.wait().await;
+                                })
                             })
-                        })
-                        .await;
-                    self.to_wait = None;
-                    // self.barrier.read().await.wait().await;
-                    // yield_now().await;
-                    // panic!("jioj");
-                    println!("stop {}", self.id);
-                    self.counter -= 1;
-                } else {
-                    // panic!("reached");
-                    println!("finished {} {}", self.id, self.initial_counter);
-                    self.wrapped.sleep_until(instant).await;
-                    self.reset();
+                            .await;
+                        self.to_wait = None;
+                        // self.barrier.read().await.wait().await;
+                        // yield_now().await;
+                        // panic!("jioj");
+                        println!("stop {}", self.id);
+                        self.counter -= 1;
+                        yield_now().await;
+                    } else {
+                        // panic!("reached");
+                        println!("finished {} {}", self.id, self.initial_counter);
+                        self.wrapped.sleep_until(instant).await;
+                        self.reset();
+                        return;
+                    }
                 }
             }
         }
@@ -1593,8 +1605,9 @@ mod tests {
             println!("batch rate: {rate_for_batch}");
 
             let time_passed = time_gen.sample(&mut rand_gen);
-            let current_time = *time_to_return.borrow() + Duration::from_millis(time_passed);
-            // let current_time = *last_deadline.lock() + Duration::from_millis(time_passed);
+            // let current_time = *time_to_return.borrow() + Duration::from_millis(time_passed);
+            let current_time = max(*time_to_return.borrow(), *last_deadline.lock())
+                + Duration::from_millis(time_passed);
             *time_to_return.borrow_mut() = current_time;
         }
         let abs_rate_diff = total_rate.abs_diff(rate_limit);
