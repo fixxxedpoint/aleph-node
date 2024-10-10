@@ -259,8 +259,7 @@ impl SharedBandwidth for SharedBandwidthManager {
             active_children = *count;
         });
         let rate = u64::from(self.max_rate) / active_children;
-
-        NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN))
+        *self.already_requested.insert(NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN)))
     }
 
     async fn notify_idle(&mut self) {
@@ -272,6 +271,7 @@ impl SharedBandwidth for SharedBandwidthManager {
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
+        // let _: u64 = pending().await;
         // self.bandwidth_change.notify_waiters();
         let _ = self.bandwidth_changes_receiver.changed().await;
         self.request_bandwidth_without_children_increament()
@@ -362,7 +362,7 @@ where
             match self.next_deadline {
                 Some(Deadline::Instant(deadline)) => {
                     self.sleep_until.sleep_until(deadline).await;
-                    println!("deadline");
+                    println!("deadline was {deadline:?}");
                 }
                 Some(Deadline::Never) => {
                     println!("never");
@@ -491,8 +491,8 @@ where
 
     async fn notify_idle(&mut self) {
         if self.need_to_notify_parent {
-            self.need_to_notify_parent = false;
             self.shared_bandwidth.notify_idle().await;
+            self.need_to_notify_parent = false;
         }
     }
 
@@ -552,7 +552,7 @@ mod tests {
         cmp::max,
         io::Read,
         iter::repeat,
-        ops::Deref,
+        ops::{Deref, DerefMut},
         rc::Rc,
         sync::{
             atomic::{AtomicUsize, Ordering},
@@ -1027,7 +1027,7 @@ mod tests {
         }
 
         async fn notify_idle(&mut self) {
-            self.wait.read().wait();
+            // self.wait.read().wait().await;
             self.wrapped.notify_idle().await;
         }
 
@@ -1246,6 +1246,7 @@ mod tests {
             });
 
             let second_handle = s.spawn(|| {
+                // return 0u128;
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
@@ -1273,9 +1274,11 @@ mod tests {
         //     10,
         //     ""
         // );
+        let duration = *last_deadline.lock() - now;
+        let rate = total_data_sent * 1000 / duration.as_millis();
         assert!(
-            (total_data_sent * 1000 / (*last_deadline.lock() - now).as_millis()).abs_diff(10) <= 3,
-            "calculated bandwidth should be within some error bounds"
+            rate.abs_diff(10) <= 3,
+            "calculated bandwidth should be within some error bounds: rate = {rate}; duration = {duration:?}"
         );
     }
 
@@ -1412,40 +1415,36 @@ mod tests {
     {
         fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
             async move {
-                loop {
-                    if self.counter > 0 {
-                        // if self.counter == 1 {
-                        //     panic!("ok");
-                        // }
-                        // yield_now().await;
-                        // TODO not cancellation safe
-                        println!("start {}", self.id);
+                while self.counter > 0 {
+                    // if self.counter == 1 {
+                    //     panic!("ok");
+                    // }
+                    // yield_now().await;
+                    // TODO not cancellation safe
+                    println!("start {}", self.id);
 
-                        yield_now().await;
-                        self.to_wait
-                            .get_or_insert_with(|| {
-                                let barrier = self.barrier.clone();
-                                println!("about to wait {}", self.id);
-                                Box::pin(async move {
-                                    barrier.read().await.wait().await;
-                                })
+                    // yield_now().await;
+                    self.to_wait
+                        .get_or_insert_with(|| {
+                            let barrier = self.barrier.clone();
+                            println!("about to wait {}", self.id);
+                            Box::pin(async move {
+                                barrier.read().await.wait().await;
                             })
-                            .await;
-                        self.to_wait = None;
-                        // self.barrier.read().await.wait().await;
-                        // yield_now().await;
-                        // panic!("jioj");
-                        println!("stop {}", self.id);
-                        self.counter -= 1;
-                        yield_now().await;
-                    } else {
-                        // panic!("reached");
-                        println!("finished {} {}", self.id, self.initial_counter);
-                        self.wrapped.sleep_until(instant).await;
-                        self.reset();
-                        return;
-                    }
+                        })
+                        .await;
+                    self.to_wait = None;
+                    // self.barrier.read().await.wait().await;
+                    // yield_now().await;
+                    // panic!("jioj");
+                    println!("stop {}", self.id);
+                    self.counter -= 1;
+                    yield_now().await;
                 }
+                // panic!("reached");
+                println!("finished {} {}", self.id, self.initial_counter);
+                self.wrapped.sleep_until(instant).await;
+                self.reset();
             }
         }
     }
@@ -1487,6 +1486,18 @@ mod tests {
 
         let mut test_state = vec![];
 
+        let seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("back to the future")
+            .as_secs();
+        let mut rand_gen = rand::rngs::StdRng::seed_from_u64(seed);
+        // let time_rand_gen = RefCell::new(rand::rngs::StdRng::seed_from_u64(seed));
+
+        let data_gen = Uniform::from(0..100 * 1024 * 1024);
+        let time_gen = Uniform::from(1..1000 * 10);
+        let limiters_count = Uniform::from(10..=128).sample(&mut rand_gen);
+        let batch_gen = Uniform::from(1..limiters_count);
+
         let rate_limit = 4 * 1024 * 1024;
         let limit_per_second =
             NonZeroRatePerSecond(rate_limit.try_into().expect("(4 * 1024 * 1024) > 0 qed"));
@@ -1494,13 +1505,24 @@ mod tests {
         let initial_time = Instant::now();
         let time_to_return = Rc::new(RefCell::new(initial_time));
         let time_provider = time_to_return.clone();
-        let time_provider: Rc<Box<dyn TimeProvider>> =
-            Rc::new(Box::new(move || *time_provider.borrow()));
+        let time_provider: Rc<Box<dyn TimeProvider>> = Rc::new(Box::new(move || {
+            // TODO this broke Barrier in sleep_until
+            // return *time_provider.borrow();
+            // let time_passed =
+            //     Duration::from_millis(time_gen.sample(time_rand_gen.borrow_mut().deref_mut()));
+            // let mut current_time = time_provider.borrow_mut();
+            // *current_time += time_passed;
+            // *current_time
+
+            let mut current_time = time_provider.borrow_mut();
+            *current_time += Duration::from_micros(1);
+            *current_time
+        }));
 
         let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
         let last_deadline = test_sleep_until_shared.latest_sleep_until();
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
-        let how_many_times_stop_on_barrier = 3;
+        let how_many_times_stop_on_barrier = 2;
         let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(
             test_sleep_until_shared,
             barrier.clone(),
@@ -1515,13 +1537,6 @@ mod tests {
                 tracing_sleep_until,
             ));
 
-        let seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("back to the future")
-            .as_secs();
-        let mut rand_gen = rand::rngs::StdRng::seed_from_u64(seed);
-
-        let limiters_count = Uniform::from(10..=128).sample(&mut rand_gen);
         let mut rate_limiters = repeat(())
             .scan((0usize, rate_limiter), |(id, rate_limiter), _| {
                 let new_rate_limiter = rate_limiter.clone();
@@ -1536,10 +1551,6 @@ mod tests {
 
         let mut total_data_scheduled = 0;
         let mut total_rate = 0;
-
-        let data_gen = Uniform::from(0..100 * 1024 * 1024);
-        let time_gen = Uniform::from(1..1000 * 10);
-        let batch_gen = Uniform::from(1..limiters_count);
 
         let mut total_number_of_calls = 0;
         while total_number_of_calls < 1000 {
