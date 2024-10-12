@@ -1407,15 +1407,9 @@ mod tests {
         pub fn reset(&mut self) {
             self.counter = self.initial_counter;
         }
-    }
 
-    impl<SU> SleepUntil for SleepUntilWithBarrier<SU>
-    where
-        SU: SleepUntil + Send,
-    {
-        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-            async move {
-                while self.counter > 0 {
+        pub async fn wait(&mut self) {
+            while self.counter > 0 {
                     // if self.counter == 1 {
                     //     panic!("ok");
                     // }
@@ -1441,6 +1435,16 @@ mod tests {
                     self.counter -= 1;
                     yield_now().await;
                 }
+        }
+    }
+
+    impl<SU> SleepUntil for SleepUntilWithBarrier<SU>
+    where
+        SU: SleepUntil + Send,
+    {
+        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
+            async move {
+                self.wait().await;
                 // panic!("reached");
                 println!("finished {} {}", self.id, self.initial_counter);
                 self.wrapped.sleep_until(instant).await;
@@ -1448,6 +1452,11 @@ mod tests {
             }
         }
     }
+
+//     struct TestHTB {
+// // TODO wrap HTB to allow some custom code after rate_limit finishes (e.g. call barrier few more times)
+//         wrapped: Callback,
+//     }
 
     #[derive(Clone)]
     struct TracingSleepUntil<SU> {
@@ -1491,7 +1500,7 @@ mod tests {
             .expect("back to the future")
             .as_secs();
         let mut rand_gen = rand::rngs::StdRng::seed_from_u64(seed);
-        // let time_rand_gen = RefCell::new(rand::rngs::StdRng::seed_from_u64(seed));
+        let time_rand_gen = RefCell::new(rand::rngs::StdRng::seed_from_u64(seed));
 
         let data_gen = Uniform::from(0..100 * 1024 * 1024);
         let time_gen = Uniform::from(1..1000 * 10);
@@ -1508,21 +1517,21 @@ mod tests {
         let time_provider: Rc<Box<dyn TimeProvider>> = Rc::new(Box::new(move || {
             // TODO this broke Barrier in sleep_until
             // return *time_provider.borrow();
-            // let time_passed =
-            //     Duration::from_millis(time_gen.sample(time_rand_gen.borrow_mut().deref_mut()));
-            // let mut current_time = time_provider.borrow_mut();
-            // *current_time += time_passed;
-            // *current_time
-
+            let time_passed =
+                Duration::from_millis(time_gen.sample(time_rand_gen.borrow_mut().deref_mut()));
             let mut current_time = time_provider.borrow_mut();
-            *current_time += Duration::from_micros(1);
+            *current_time += time_passed;
             *current_time
+
+            // let mut current_time = time_provider.borrow_mut();
+            // *current_time += Duration::from_micros(1);
+            // *current_time
         }));
 
         let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
         let last_deadline = test_sleep_until_shared.latest_sleep_until();
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
-        let how_many_times_stop_on_barrier = 2;
+        let how_many_times_stop_on_barrier = 1;
         let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(
             test_sleep_until_shared,
             barrier.clone(),
@@ -1585,7 +1594,8 @@ mod tests {
                     total_data_scheduled += u128::from(data_read);
 
                     async move {
-                        let rate_limiter = rate_task.await;
+                        let mut rate_limiter = rate_task.await;
+                        rate_limiter.rate_limiter.sleep_until.wrapped.wait().await;
 
                         let next_deadline = rate_limiter.rate_limiter.sleep_until.last_deadline;
                         // let time_passed = next_deadline - last_deadline;
@@ -1602,12 +1612,7 @@ mod tests {
                 .collect();
             // perform the actual rate-limiting
             let mut rate_for_batch = 0;
-            let mut counter = 0;
             while let Some((rate_limiter, store, calculated_rate)) = batch_test.next().await {
-                counter += 1;
-                // if counter > 9 {
-                //     panic!("finisehd");
-                // }
                 let _ = store.insert(rate_limiter);
                 rate_for_batch += calculated_rate;
             }
