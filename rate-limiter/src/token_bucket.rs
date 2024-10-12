@@ -1448,7 +1448,7 @@ mod tests {
                 // panic!("reached");
                 println!("finished {} {}", self.id, self.initial_counter);
                 self.wrapped.sleep_until(instant).await;
-                self.reset();
+                // self.reset();
             }
         }
     }
