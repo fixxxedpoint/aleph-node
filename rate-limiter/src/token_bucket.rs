@@ -4,6 +4,7 @@ use crate::{
 };
 use futures::{future::pending, Future, FutureExt};
 use log::trace;
+use parking_lot::Mutex;
 use std::{
     cmp::min,
     num::NonZeroU64,
@@ -208,13 +209,15 @@ pub trait SharedBandwidth {
         &mut self,
         requested: u64,
     ) -> impl Future<Output = NonZeroRatePerSecond> + Send;
-    fn notify_idle(&mut self) -> impl Future<Output = ()> + Send;
+    fn notify_idle(&mut self);
     fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
 }
 
 #[derive(Clone)]
 pub struct SharedBandwidthManager {
     max_rate: NonZeroRatePerSecond,
+    notify: Arc<parking_lot::Mutex<tokio::sync::Notify>>,
+    peer_counter: Arc<AtomicU64>,
     bandwidth_change: tokio::sync::watch::Sender<u64>,
     bandwidth_changes_receiver: tokio::sync::watch::Receiver<u64>,
     already_requested: Option<NonZeroRatePerSecond>,
@@ -239,6 +242,8 @@ impl SharedBandwidthManager {
         let (tx, rx) = tokio::sync::watch::channel(0);
         Self {
             max_rate,
+            notify: Arc::new(Mutex::new(tokio::sync::Notify::new())),
+            peer_counter: Arc::new(0.into()),
             bandwidth_change: tx,
             bandwidth_changes_receiver: rx,
             already_requested: None,
@@ -252,22 +257,23 @@ impl SharedBandwidth for SharedBandwidthManager {
         if let Some(requested_rate) = self.already_requested {
             return requested_rate;
         }
-        let mut active_children = 0;
-        // this will also notify everyone
-        self.bandwidth_change.send_modify(|count| {
-            *count += 1;
-            active_children = *count;
-        });
+        if let Some(notify) = self.notify.try_lock() {
+            notify.notify_waiters();
+        }
+        let active_children = self.peer_counter.fetch_add(1, Ordering::Relaxed) + 1;
         let rate = u64::from(self.max_rate) / active_children;
         *self.already_requested.insert(NonZeroRatePerSecond(NonZeroU64::new(rate).unwrap_or(NonZeroU64::MIN)))
     }
 
-    async fn notify_idle(&mut self) {
+    fn notify_idle(&mut self) {
         if self.already_requested.is_none() {
             return;
         }
         self.already_requested = None;
-        self.bandwidth_change.send_modify(|count| *count -= 1);
+        self.peer_counter.fetch_sub(1, Ordering::Relaxed);
+        if let Some(notify) = self.notify.try_lock() {
+            notify.notify_waiters();
+        }
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
@@ -489,9 +495,9 @@ where
         self.shared_bandwidth.request_bandwidth(requested).await
     }
 
-    async fn notify_idle(&mut self) {
+    fn notify_idle(&mut self) {
         if self.need_to_notify_parent {
-            self.shared_bandwidth.notify_idle().await;
+            self.shared_bandwidth.notify_idle();
             self.need_to_notify_parent = false;
         }
     }
@@ -511,7 +517,7 @@ where
             futures::select! {
                 _ = self.rate_limiter.wait().fuse() => {
                     println!("debug_called = {debug_called}");
-                    self.notify_idle().await;
+                    self.notify_idle();
                     return self;
                 },
                 rate = self.shared_bandwidth.await_bandwidth_change().fuse() => {
@@ -1026,9 +1032,8 @@ mod tests {
             self.wrapped.request_bandwidth(requested).await
         }
 
-        async fn notify_idle(&mut self) {
-            // self.wait.read().wait().await;
-            self.wrapped.notify_idle().await;
+        fn notify_idle(&mut self) {
+            self.wrapped.notify_idle();
         }
 
         async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
@@ -1137,8 +1142,8 @@ mod tests {
             self.wrapped.request_bandwidth(requested).await
         }
 
-        async fn notify_idle(&mut self) {
-            self.wrapped.notify_idle().await
+        fn notify_idle(&mut self) {
+            self.wrapped.notify_idle()
         }
 
         async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
@@ -1512,24 +1517,28 @@ mod tests {
             NonZeroRatePerSecond(rate_limit.try_into().expect("(4 * 1024 * 1024) > 0 qed"));
         let rate_limit = rate_limit.into();
         let initial_time = Instant::now();
+
+        let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
+        let last_deadline = test_sleep_until_shared.latest_sleep_until();
+        let last_deadline_from_time_provider = last_deadline.clone();
+
         let time_to_return = Rc::new(RefCell::new(initial_time));
         let time_provider = time_to_return.clone();
         let time_provider: Rc<Box<dyn TimeProvider>> = Rc::new(Box::new(move || {
             // TODO this broke Barrier in sleep_until
             // return *time_provider.borrow();
-            let time_passed =
-                Duration::from_millis(time_gen.sample(time_rand_gen.borrow_mut().deref_mut()));
-            let mut current_time = time_provider.borrow_mut();
-            *current_time += time_passed;
-            *current_time
+            // let time_passed =
+            //     Duration::from_millis(time_gen.sample(time_rand_gen.borrow_mut().deref_mut()));
+            // let mut current_time = time_provider.borrow_mut();
+            // *current_time += time_passed;
+            // *current_time
 
             // let mut current_time = time_provider.borrow_mut();
             // *current_time += Duration::from_micros(1);
             // *current_time
+            *last_deadline_from_time_provider.lock()
         }));
 
-        let test_sleep_until_shared = TestSleepUntilShared::new(initial_time);
-        let last_deadline = test_sleep_until_shared.latest_sleep_until();
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
         let how_many_times_stop_on_barrier = 1;
         let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(
@@ -1620,16 +1629,20 @@ mod tests {
             total_rate = (total_rate + rate_for_batch) / 2;
             println!("batch rate: {rate_for_batch}");
 
-            let time_passed = time_gen.sample(&mut rand_gen);
+            // let time_passed = time_gen.sample(&mut rand_gen);
             // let current_time = *time_to_return.borrow() + Duration::from_millis(time_passed);
-            let current_time = max(*time_to_return.borrow(), *last_deadline.lock())
-                + Duration::from_millis(time_passed);
+            // let current_time = max(*time_to_return.borrow(), *last_deadline.lock())
+            //     + Duration::from_millis(time_passed);
+            let current_time = max(*time_to_return.borrow(), *last_deadline.lock());
             *time_to_return.borrow_mut() = current_time;
         }
-        let abs_rate_diff = total_rate.abs_diff(rate_limit);
+        // TODO try to compute real rate instead of this
+        // let abs_rate_diff = total_rate.abs_diff(rate_limit);
         let time_passed = *last_deadline.lock() - initial_time;
+        let total_rate = total_data_scheduled * 1000 / time_passed.as_millis();
+        let abs_rate_diff = total_rate.abs_diff(rate_limit);
         assert!(
-            abs_rate_diff <= rate_limit * 7/10,
+            abs_rate_diff <= rate_limit * 5/10,
             "Used bandwidth should be oscillating close to {rate_limit} b/s (+/- 50%), but got {total_rate} b/s instead. Total data sent: {total_data_scheduled}; Time: {time_passed:?}"
         );
         println!("expected rate-limit = {rate_limit} calculated rate limit = {total_rate}");
