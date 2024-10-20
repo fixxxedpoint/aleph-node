@@ -15,23 +15,31 @@ pub use crate::token_bucket::{HierarchicalTokenBucket, TokenBucket};
 const LOG_TARGET: &str = "rate-limiter";
 
 #[derive(PartialEq, Eq, Clone, Copy)]
-pub struct NonZeroRatePerSecond(NonZeroU64);
+pub struct NonZeroRatePerSecond {
+    bits_per_second: NonZeroU64,
+}
+
+pub const MIN: NonZeroRatePerSecond = NonZeroRatePerSecond {
+    bits_per_second: NonZeroU64::MIN,
+};
 
 impl From<NonZeroRatePerSecond> for u64 {
     fn from(value: NonZeroRatePerSecond) -> Self {
-        value.0.into()
+        value.bits_per_second.into()
     }
 }
 
 impl From<NonZeroRatePerSecond> for NonZeroU64 {
     fn from(value: NonZeroRatePerSecond) -> Self {
-        value.0
+        value.bits_per_second
     }
 }
 
 impl From<NonZeroU64> for NonZeroRatePerSecond {
     fn from(value: NonZeroU64) -> Self {
-        NonZeroRatePerSecond(value)
+        NonZeroRatePerSecond {
+            bits_per_second: value,
+        }
     }
 }
 
@@ -39,7 +47,9 @@ impl TryFrom<u64> for NonZeroRatePerSecond {
     type Error = TryFromIntError;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
-        Ok(NonZeroRatePerSecond(NonZeroU64::try_from(value)?))
+        Ok(NonZeroRatePerSecond {
+            bits_per_second: NonZeroU64::try_from(value)?,
+        })
     }
 }
 
@@ -53,9 +63,9 @@ impl From<u64> for RatePerSecond {
     fn from(value: u64) -> Self {
         match value {
             0 => Self::Block,
-            _ => Self::Rate(NonZeroRatePerSecond(
-                NonZeroU64::new(value).expect("`value` != 0 and `value`:u64 qed"),
-            )),
+            _ => Self::Rate(NonZeroRatePerSecond {
+                bits_per_second: NonZeroU64::new(value).expect("`value` != 0 and `value`:u64 qed"),
+            }),
         }
     }
 }
@@ -64,7 +74,7 @@ impl From<RatePerSecond> for u64 {
     fn from(value: RatePerSecond) -> Self {
         match value {
             RatePerSecond::Block => 0,
-            RatePerSecond::Rate(NonZeroRatePerSecond(value)) => value.into(),
+            RatePerSecond::Rate(value) => value.into(),
         }
     }
 }

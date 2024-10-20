@@ -174,7 +174,8 @@ where
 
         let filled_before = buf.filled().len();
         let result = read.poll_read(cx, buf);
-        let filled_after = buf.filled().len();
+        let filled_after: &[u8] = buf.filled();
+        let filled_after = 8 * filled_after.len();
         let last_read_size = filled_after.saturating_sub(filled_before);
 
         self.rate_limiter = sleeping_rate_limiter.rate_limit(last_read_size).boxed();
@@ -210,7 +211,7 @@ where
 
         let result = read.poll_read(cx, buf);
         let last_read_size = match &result {
-            std::task::Poll::Ready(Ok(read_size)) => *read_size,
+            std::task::Poll::Ready(Ok(read_size)) => 8 * *read_size,
             _ => 0,
         };
 
@@ -249,16 +250,14 @@ impl<RL> RateLimiterFacade<RL> {
 }
 
 impl SleepingRateLimiter for RateLimiterFacade<HierarchicalTokenBucket> {
-    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
-        async move {
-            match self {
-                RateLimiterFacade::NoTraffic => pending().await,
-                RateLimiterFacade::RateLimiter(rate_limiter) => RateLimiterFacade::RateLimiter(
-                    rate_limiter
-                        .rate_limit(read_size.try_into().unwrap_or(u64::MAX))
-                        .await,
-                ),
-            }
+    async fn rate_limit(self, read_size: usize) -> Self {
+        match self {
+            RateLimiterFacade::NoTraffic => pending().await,
+            RateLimiterFacade::RateLimiter(rate_limiter) => RateLimiterFacade::RateLimiter(
+                rate_limiter
+                    .rate_limit(read_size.try_into().unwrap_or(u64::MAX))
+                    .await,
+            ),
         }
     }
 }
