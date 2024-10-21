@@ -16,7 +16,7 @@ pub type PerConnectionRateLimiter = SleepingRateLimiterImpl<RateLimiterFacade<To
 
 pub type DefaultSharedRateLimiter = RateLimiterFacade<HierarchicalTokenBucket>;
 
-pub trait SleepingRateLimiter {
+pub trait SleepingRateLimiter: Sized {
     fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send;
 }
 

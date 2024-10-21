@@ -488,11 +488,9 @@ where
 #[cfg(test)]
 mod tests {
     use std::{
-        cell::RefCell,
         cmp::max,
         iter::repeat,
         ops::DerefMut,
-        rc::Rc,
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc,
@@ -551,7 +549,7 @@ mod tests {
         TP: TimeProvider,
     {
         fn from((rate, time_provider, sleep_until): (NonZeroRatePerSecond, TP, SU)) -> Self {
-            let token_bucket = TokenBucket::from((rate, time_provider)).into();
+            let token_bucket = TokenBucket::from((rate, time_provider));
             AsyncTokenBucket::new(token_bucket, sleep_until)
         }
     }
@@ -677,7 +675,7 @@ mod tests {
 
     impl TimeProvider for Arc<Box<dyn TimeProvider + Send + Sync + 'static>> {
         fn now(&self) -> Instant {
-            self.now()
+            self.as_ref().now()
         }
     }
 
@@ -1175,7 +1173,7 @@ mod tests {
                 TestSleepUntilShared::new(now),
             ));
 
-        panic!("asdsd");
+        // panic!("asdsd");
 
         *time_to_return.write() = now + Duration::from_secs(1);
 
@@ -1225,28 +1223,29 @@ mod tests {
 
         let time_to_return = Arc::new(parking_lot::RwLock::new(initial_time));
         let time_provider = time_to_return.clone();
-        let time_provider: Arc<Box<dyn TimeProvider + Send + Sync>> = Arc::new(Box::new(move || {
-            // TODO this broke Barrier in sleep_until
-            // return *time_provider.borrow();
-            let mut current_time = time_provider.write();
-            let millis_from_current_time: u64 = last_deadline_from_time_provider
-                .lock()
-                .duration_since(*current_time)
-                .as_millis()
-                .try_into()
-                .expect("something wrong with our `time` calculations");
-            let time_gen = Uniform::from(1..1000 * 10 + millis_from_current_time);
-            let time_passed =
-                Duration::from_millis(time_gen.sample(time_rand_gen.write().deref_mut()));
-            *current_time += time_passed;
-            *current_time
+        let time_provider: Arc<Box<dyn TimeProvider + Send + Sync>> =
+            Arc::new(Box::new(move || {
+                // TODO this broke Barrier in sleep_until
+                // return *time_provider.borrow();
+                let mut current_time = time_provider.write();
+                let millis_from_current_time: u64 = last_deadline_from_time_provider
+                    .lock()
+                    .duration_since(*current_time)
+                    .as_millis()
+                    .try_into()
+                    .expect("something wrong with our `time` calculations");
+                let time_gen = Uniform::from(1..1000 * 10 + millis_from_current_time);
+                let time_passed =
+                    Duration::from_millis(time_gen.sample(time_rand_gen.write().deref_mut()));
+                *current_time += time_passed;
+                *current_time
 
-            // let mut current_time = time_provider.borrow_mut();
-            // *current_time += Duration::from_micros(1);
-            // *current_time
+                // let mut current_time = time_provider.borrow_mut();
+                // *current_time += Duration::from_micros(1);
+                // *current_time
 
-            // *last_deadline_from_time_provider.lock()
-        }));
+                // *last_deadline_from_time_provider.lock()
+            }));
 
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
         let how_many_times_stop_on_barrier = 3;
