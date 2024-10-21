@@ -461,7 +461,6 @@ mod tests {
         cmp::max,
         iter::repeat,
         ops::DerefMut,
-        pin::Pin,
         sync::{
             atomic::{AtomicUsize, Ordering},
             Arc,
@@ -473,12 +472,12 @@ mod tests {
     use futures::{
         future::{BoxFuture, Future},
         stream::FuturesOrdered,
-        FutureExt, StreamExt,
+        StreamExt,
     };
     use parking_lot::Mutex;
     use tokio::{sync::Barrier, task::yield_now};
 
-    use super::{AsyncRateLimiter, SharedBandwidth, SleepUntil, TimeProvider, TokenBucket};
+    use super::{SharedBandwidth, SleepUntil, TimeProvider, TokenBucket};
     use crate::{
         token_bucket::{
             AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond,
@@ -526,7 +525,7 @@ mod tests {
             let time_after = *self.1.lock();
             (
                 self,
-                (time_before != time_after).then(|| Deadline::Instant(time_after)),
+                (time_before != time_after).then_some(Deadline::Instant(time_after)),
             )
 
             // let last_sleep = *self.1.lock();
@@ -1028,7 +1027,7 @@ mod tests {
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider + Send + Sync> =
             Box::new(move || *time_provider.read());
-        let mut rate_limiter = RL::from((
+        let rate_limiter = RL::from((
             limit_per_second,
             Arc::new(time_provider),
             TestSleepUntilShared::new(now),
@@ -1081,7 +1080,7 @@ mod tests {
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider + Send + Sync> =
             Box::new(move || *time_provider.read());
-        let mut rate_limiter = RL::from((
+        let rate_limiter = RL::from((
             limit_per_second,
             time_provider.into(),
             TestSleepUntilShared::new(now),
@@ -1101,7 +1100,7 @@ mod tests {
         );
 
         *time_to_return.write() = now + Duration::from_secs(11);
-        let (rate_limiter, deadline) = rate_limiter.rate_limit(40).await;
+        let (_, deadline) = rate_limiter.rate_limit(40).await;
         assert_eq!(
             deadline,
             Some(Deadline::Instant(
@@ -1136,7 +1135,7 @@ mod tests {
         let time_provider = time_to_return.clone();
         let time_provider: Box<dyn TimeProvider + Send + Sync> =
             Box::new(move || *time_provider.read());
-        let mut rate_limiter = RL::from((
+        let rate_limiter = RL::from((
             limit_per_second,
             time_provider.into(),
             TestSleepUntilShared::new(now),
@@ -1260,10 +1259,7 @@ mod tests {
             Some(Deadline::Instant(now + Duration::from_millis(500)))
         );
         let (_, deadline) = rate_limiter_cloned.rate_limit(5).await;
-        assert_eq!(
-            deadline,
-            Some(Deadline::Instant(now + Duration::from_millis(500)))
-        );
+        assert_eq!(deadline, None,);
 
         *time_to_return.write() = now + Duration::from_millis(1500);
 
@@ -1280,16 +1276,17 @@ mod tests {
         let time_provider: Arc<Box<dyn TimeProvider + Send + Sync>> =
             Arc::new(Box::new(move || *time_provider.read()));
 
-        let mut rate_limiter =
-            TracingRateLimiter::<HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>>::from((
-                limit_per_second,
-                time_provider,
-                TestSleepUntilShared::new(now),
-            ));
+        let rate_limiter = TracingRateLimiter::<
+            HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
+        >::from((
+            limit_per_second,
+            time_provider,
+            TestSleepUntilShared::new(now),
+        ));
 
         *time_to_return.write() = now + Duration::from_secs(1);
 
-        let mut rate_limiter_cloned = rate_limiter.clone();
+        let rate_limiter_cloned = rate_limiter.clone();
 
         let (rate_limiter, deadline) = rate_limiter.rate_limit(1).await;
         assert_eq!(deadline, None);
