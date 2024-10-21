@@ -1,6 +1,4 @@
-use rate_limiter::{
-    NonZeroRatePerSecond, RateLimitedAsyncRead, RateLimiterImpl, SleepingRateLimiter
-};
+use rate_limiter::{RateLimitedAsyncRead, RateLimiterImpl, SleepingRateLimiter};
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, PeerAddressInfo, Splittable, Splitted};
 

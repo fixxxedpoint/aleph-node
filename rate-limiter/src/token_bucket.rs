@@ -56,15 +56,6 @@ impl<T> std::fmt::Debug for TokenBucket<T> {
     }
 }
 
-impl<TP> From<(NonZeroRatePerSecond, TP)> for TokenBucket<TP>
-where
-    TP: TimeProvider,
-{
-    fn from((rate_per_second, time_provider): (NonZeroRatePerSecond, TP)) -> Self {
-        Self::new_with_time_provider(rate_per_second, time_provider)
-    }
-}
-
 impl<TP> From<NonZeroRatePerSecond> for TokenBucket<TP>
 where
     TP: TimeProvider + Default,
@@ -359,20 +350,12 @@ pub trait SleepUntil {
     fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct TokioSleepUntil;
 
-impl Default for TokioSleepUntil {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
 impl SleepUntil for TokioSleepUntil {
-    fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-        async move {
-            tokio::time::sleep_until(instant.into()).await;
-        }
+    async fn sleep_until(&mut self, instant: Instant) {
+        tokio::time::sleep_until(instant.into()).await;
     }
 }
 
@@ -533,6 +516,15 @@ mod tests {
         }
     }
 
+    impl<TP> From<(NonZeroRatePerSecond, TP)> for TokenBucket<TP>
+    where
+        TP: TimeProvider,
+    {
+        fn from((rate_per_second, time_provider): (NonZeroRatePerSecond, TP)) -> Self {
+            Self::new_with_time_provider(rate_per_second, time_provider)
+        }
+    }
+
     impl<TP, SU> From<(TokenBucket<TP>, SU)> for AsyncTokenBucket<TP, SU>
     where
         TP: TimeProvider,
@@ -613,11 +605,9 @@ mod tests {
     where
         SU: SleepUntil + Send,
     {
-        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-            async move {
-                self.last_deadline = instant;
-                self.wrapped.sleep_until(instant).await
-            }
+        async fn sleep_until(&mut self, instant: Instant) {
+            self.last_deadline = instant;
+            self.wrapped.sleep_until(instant).await
         }
     }
 
@@ -665,11 +655,9 @@ mod tests {
     }
 
     impl SleepUntil for TestSleepUntilShared {
-        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-            async move {
-                let mut last_instant = self.last_instant.lock();
-                *last_instant = max(*last_instant, instant);
-            }
+        async fn sleep_until(&mut self, instant: Instant) {
+            let mut last_instant = self.last_instant.lock();
+            *last_instant = max(*last_instant, instant);
         }
     }
 
@@ -714,8 +702,8 @@ mod tests {
             Self {
                 wrapped: self.wrapped.clone(),
                 barrier: self.barrier.clone(),
-                initial_counter: self.initial_counter.clone(),
-                counter: self.counter.clone(),
+                initial_counter: self.initial_counter,
+                counter: self.counter,
                 to_wait: None,
                 id: self.id + 1,
             }
@@ -763,11 +751,9 @@ mod tests {
     where
         SU: SleepUntil + Send,
     {
-        fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-            async move {
-                self.wait().await;
-                self.wrapped.sleep_until(instant).await;
-            }
+        async fn sleep_until(&mut self, instant: Instant) {
+            self.wait().await;
+            self.wrapped.sleep_until(instant).await;
         }
     }
 
@@ -1287,11 +1273,10 @@ mod tests {
             *barrier.write().await = tokio::sync::Barrier::new(batch_size);
 
             rate_limiters.shuffle(&mut rand_gen);
-            let batch = &mut rate_limiters[0..batch_size];
 
             let current_time = *time_to_return.read();
-            let mut batch_test: FuturesOrdered<_> = batch
-                .into_iter()
+            let mut batch_test: FuturesOrdered<_> = rate_limiters[0..batch_size]
+                .iter_mut()
                 .map(|(selected_limiter_id, selected_rate_limiter)| {
                     let data_read = data_gen.sample(&mut rand_gen);
 

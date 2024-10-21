@@ -85,11 +85,7 @@ where
     let network_rate_limit = network_config.substrate_network_bit_rate;
     // let rate_limiter = SleepingRateLimiter::new(network_rate_limit.into());
     // TODO allow 0
-    let rate_limiter = DefaultSharedRateLimiter::new(
-        network_rate_limit
-            .try_into()
-            .expect("'substrate-network-bit-rate' should be greater than 0"),
-    );
+    let rate_limiter = DefaultSharedRateLimiter::new(network_rate_limit.into());
     let transport_builder = |config| transport::build_transport(rate_limiter, config);
 
     let (
