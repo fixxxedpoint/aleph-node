@@ -4,15 +4,9 @@ use futures::{
     future::{pending, BoxFuture},
     Future, FutureExt,
 };
-use log::trace;
-use tokio::{io::AsyncRead, time::sleep_until};
+use tokio::io::AsyncRead;
 
-use crate::{
-    token_bucket::HierarchicalTokenBucket, NonZeroRatePerSecond, RatePerSecond, TokenBucket,
-    LOG_TARGET,
-};
-
-pub type PerConnectionRateLimiter = SleepingRateLimiterImpl<RateLimiterFacade<TokenBucket>>;
+use crate::{token_bucket::HierarchicalTokenBucket, NonZeroRatePerSecond, RatePerSecond};
 
 pub type DefaultSharedRateLimiter = RateLimiterFacade<HierarchicalTokenBucket>;
 
@@ -34,117 +28,6 @@ impl From<Deadline> for Option<Instant> {
         }
     }
 }
-
-// impl From<Instant> for Deadline {
-//     fn from(value: Instant) -> Self {
-//         Deadline::Instant(value)
-//     }
-// }
-
-// impl PartialOrd for Deadline {
-//     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-//         Some(self.cmp(other))
-//     }
-// }
-
-// impl Ord for Deadline {
-//     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-//         use std::cmp::Ordering;
-//         match (self, other) {
-//             (Deadline::Never, Deadline::Never) => Ordering::Equal,
-//             (Deadline::Never, Deadline::Instant(_)) => Ordering::Greater,
-//             (Deadline::Instant(_), Deadline::Never) => Ordering::Less,
-//             (Deadline::Instant(self_instant), Deadline::Instant(other_instant)) => {
-//                 self_instant.cmp(other_instant)
-//             }
-//         }
-//     }
-// }
-
-pub trait RateLimiter {
-    fn rate_limit(&mut self, requested: u64) -> Option<Deadline>;
-}
-
-/// Allows to limit access to some resource. Given a preferred rate (units of something) and last used amount of units of some
-/// resource, it calculates how long we should delay our next access to that resource in order to satisfy that rate.
-#[derive(Clone)]
-pub struct SleepingRateLimiterImpl<RL = PerConnectionRateLimiter> {
-    rate_limiter: RL,
-}
-
-impl<RL> SleepingRateLimiterImpl<RateLimiterFacade<RL>>
-where
-    RL: RateLimiter,
-{
-    /// Constructs a instance of [SleepingRateLimiter] with given target rate-per-second.
-    pub fn new(rate_per_second: RatePerSecond) -> Self
-    where
-        RL: From<NonZeroRatePerSecond>,
-    {
-        Self {
-            rate_limiter: RateLimiterFacade::<RL>::new(rate_per_second),
-        }
-    }
-
-    /// Given `read_size`, that is an amount of units of some governed resource, delays return of `Self` to satisfy configure
-    /// rate.
-    pub async fn rate_limit(mut self, read_size: usize) -> Self {
-        trace!(
-            target: LOG_TARGET,
-            "Rate-Limiter attempting to read {}.",
-            read_size
-        );
-
-        let delay = self
-            .rate_limiter
-            .rate_limit(read_size.try_into().unwrap_or(u64::MAX));
-
-        match delay {
-            None => {}
-            Some(Deadline::Never) => pending().await,
-            Some(Deadline::Instant(delay)) => {
-                trace!(
-                    target: LOG_TARGET,
-                    "Rate-Limiter will sleep {:?} after reading {} byte(s).",
-                    delay,
-                    read_size
-                );
-                sleep_until(delay.into()).await;
-            }
-        }
-
-        self
-    }
-}
-
-impl<RL> SleepingRateLimiter for SleepingRateLimiterImpl<RateLimiterFacade<RL>>
-where
-    RL: RateLimiter + Send,
-{
-    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send {
-        SleepingRateLimiterImpl::rate_limit(self, read_size)
-    }
-}
-
-// impl<RL> RateLimiterSleeper for SleepingRateLimiter<RL>
-// where
-//     RL: RateLimiterT + From<NonZeroRatePerSecond> + Send,
-// {
-//     fn rate_limit(self, read_size: u64) -> impl Future<Output = Self> + Send {
-//         async move {
-//             self.rate_limit(read_size.try_into().unwrap_or(usize::MAX))
-//                 .await
-//         }
-//     }
-// }
-
-// impl<RL> RateLimiterSleeper for SleepingRateLimiter<RL>
-// where
-//     RL: RateLimiterSleeper + Send,
-// {
-//     fn rate_limit(self, read_size: u64) -> impl Future<Output = Self> + Send {
-//     }
-// }
 
 /// Wrapper around [SleepingRateLimiter] to simplify implementation of the [AsyncRead](tokio::io::AsyncRead) trait.
 pub struct RateLimiterImpl<RL> {
@@ -235,16 +118,6 @@ impl<RL> RateLimiterFacade<RL> {
         match rate {
             RatePerSecond::Block => Self::NoTraffic,
             RatePerSecond::Rate(rate) => Self::RateLimiter(rate.into()),
-        }
-    }
-
-    pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline>
-    where
-        RL: RateLimiter,
-    {
-        match self {
-            RateLimiterFacade::NoTraffic => Some(Deadline::Never),
-            RateLimiterFacade::RateLimiter(limiter) => limiter.rate_limit(requested),
         }
     }
 }

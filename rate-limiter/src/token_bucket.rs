@@ -1,7 +1,4 @@
-use crate::{
-    rate_limiter::{Deadline, RateLimiter},
-    NonZeroRatePerSecond, SleepingRateLimiter, LOG_TARGET, MIN,
-};
+use crate::{rate_limiter::Deadline, NonZeroRatePerSecond, SleepingRateLimiter, LOG_TARGET, MIN};
 use futures::{future::pending, Future, FutureExt};
 use log::trace;
 use parking_lot::Mutex;
@@ -34,6 +31,19 @@ pub struct DefaultTimeProvider;
 impl TimeProvider for DefaultTimeProvider {
     fn now(&self) -> Instant {
         Instant::now()
+    }
+}
+
+pub trait SleepUntil {
+    fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send;
+}
+
+#[derive(Clone, Default)]
+pub struct TokioSleepUntil;
+
+impl SleepUntil for TokioSleepUntil {
+    async fn sleep_until(&mut self, instant: Instant) {
+        tokio::time::sleep_until(instant.into()).await;
     }
 }
 
@@ -169,15 +179,6 @@ where
         }
         self.account_requested_tokens(requested);
         self.calculate_delay()
-    }
-}
-
-impl<TP> RateLimiter for TokenBucket<TP>
-where
-    TP: TimeProvider,
-{
-    fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
-        TokenBucket::rate_limit(self, requested)
     }
 }
 
@@ -346,19 +347,6 @@ where
     }
 }
 
-pub trait SleepUntil {
-    fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send;
-}
-
-#[derive(Clone, Default)]
-pub struct TokioSleepUntil;
-
-impl SleepUntil for TokioSleepUntil {
-    async fn sleep_until(&mut self, instant: Instant) {
-        tokio::time::sleep_until(instant.into()).await;
-    }
-}
-
 #[derive(Clone)]
 pub struct HierarchicalTokenBucket<
     BD = SharedBandwidthManager,
@@ -491,13 +479,23 @@ mod tests {
     use tokio::{sync::Barrier, task::yield_now};
 
     use super::{AsyncRateLimiter, SharedBandwidth, SleepUntil, TimeProvider, TokenBucket};
-    use crate::{
-        rate_limiter::RateLimiter,
-        token_bucket::{
-            AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond,
-            SharedBandwidthManager,
-        },
+    use crate::token_bucket::{
+        AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond,
+        SharedBandwidthManager,
     };
+
+    trait RateLimiter {
+        fn rate_limit(&mut self, requested: u64) -> Option<Deadline>;
+    }
+
+    impl<TP> RateLimiter for TokenBucket<TP>
+    where
+        TP: TimeProvider,
+    {
+        fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
+            TokenBucket::rate_limit(self, requested)
+        }
+    }
 
     impl<BD, ARL, TP, SU> From<(NonZeroRatePerSecond, TP, SU)> for HierarchicalTokenBucket<BD, ARL>
     where
@@ -555,15 +553,6 @@ mod tests {
             self.rate_limiter.rate_limit(requested)
         }
     }
-
-    // impl<TP> TimeProvider for Arc<TP>
-    // where
-    //     TP: TimeProvider,
-    // {
-    //     fn now(&self) -> Instant {
-    //         self.as_ref().now()
-    //     }
-    // }
 
     impl<TP> TimeProvider for std::rc::Rc<TP>
     where
