@@ -66,22 +66,23 @@ where
     TP: TimeProvider + Default,
 {
     fn from(rate_per_second: NonZeroRatePerSecond) -> Self {
+        Self::new(rate_per_second)
+    }
+}
+
+impl<TP> TokenBucket<TP>
+where
+    TP: TimeProvider,
+{
+    /// Constructs a instance of [`TokenBucket`] with given target rate-per-second.
+    pub fn new(rate_per_second: NonZeroRatePerSecond) -> Self
+    where
+        TP: Default,
+    {
         Self::new_with_time_provider(rate_per_second, TP::default())
     }
-}
 
-impl TokenBucket {
-    /// Constructs a instance of [`TokenBucket`] with given target rate-per-second.
-    pub fn new(rate_per_second: NonZeroRatePerSecond) -> Self {
-        Self::new_with_time_provider(rate_per_second, DefaultTimeProvider)
-    }
-}
-
-impl<T> TokenBucket<T>
-where
-    T: TimeProvider,
-{
-    fn new_with_time_provider(rate_per_second: NonZeroRatePerSecond, time_provider: T) -> Self {
+    fn new_with_time_provider(rate_per_second: NonZeroRatePerSecond, time_provider: TP) -> Self {
         Self {
             last_update: time_provider.now(),
             rate_per_second: rate_per_second.into(),
@@ -89,7 +90,12 @@ where
             time_provider,
         }
     }
+}
 
+impl<TP> TokenBucket<TP>
+where
+    TP: TimeProvider,
+{
     fn max_possible_available_tokens(&self) -> u64 {
         self.rate_per_second.into()
     }
@@ -177,22 +183,22 @@ where
     }
 }
 
-/// Allows to share a resource between multiple instances of rate-limiter. Implementations should allow to share some given
-/// bandwidth within multiple connections. It allows to track number of active connections and is responsible for notifying all
-/// existing connections of any changes of their allocated bandwidth.
-pub trait SharedBandwidth {
-    /// Based on the given number of requested bits to process, allocate and return a non-zero rate
-    /// of bits per second.
-    fn request_bandwidth(
-        &mut self,
-        requested: u64,
-    ) -> impl Future<Output = NonZeroRatePerSecond> + Send;
-    /// Notify this manager that we already processed requested data and no longer use our allocated
-    /// bandwidth.
-    fn notify_idle(&mut self);
-    /// Allows to await any changes in bandwidth configuration that was allocated for this instance.
-    fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
-}
+// /// Allows to share a resource between multiple instances of rate-limiter. Implementations should allow to share some given
+// /// bandwidth within multiple connections. It allows to track number of active connections and is responsible for notifying all
+// /// existing connections of any changes of their allocated bandwidth.
+// pub trait SharedBandwidth {
+//     /// Based on the given number of requested bits to process, allocate and return a non-zero rate
+//     /// of bits per second.
+//     fn request_bandwidth(
+//         &mut self,
+//         requested: u64,
+//     ) -> impl Future<Output = NonZeroRatePerSecond> + Send;
+//     /// Notify this manager that we already processed requested data and no longer use our allocated
+//     /// bandwidth.
+//     fn notify_idle(&mut self);
+//     /// Allows to await any changes in bandwidth configuration that was allocated for this instance.
+//     fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
+// }
 
 /// Implementation of the [`SharedBandwidth`] trait that uses [`tokio::sync::watch`] for notifications about changes
 /// about currently allocated bandwidth.
@@ -206,7 +212,7 @@ pub struct SharedBandwidthManager {
 impl Clone for SharedBandwidthManager {
     fn clone(&self) -> Self {
         Self {
-            max_rate: self.max_rate.clone(),
+            max_rate: self.max_rate,
             watch_sender: self.watch_sender.clone(),
             watch_receiver: self.watch_receiver.clone(),
             already_requested: false,
@@ -243,8 +249,8 @@ impl SharedBandwidthManager {
     }
 }
 
-impl SharedBandwidth for SharedBandwidthManager {
-    async fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
+impl SharedBandwidthManager {
+    pub async fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
         let active_children = (!self.already_requested).then(|| {
             let mut active_children = 1;
             self.watch_sender.send_modify(|peer_count| {
@@ -254,27 +260,20 @@ impl SharedBandwidth for SharedBandwidthManager {
             self.already_requested = true;
             active_children
         });
-        let rate = self.calculate_bandwidth_without_children_increament(active_children);
-        rate.try_into().unwrap_or(MIN)
+        self.calculate_bandwidth_without_children_increament(active_children)
     }
 
-    fn notify_idle(&mut self) {
+    pub fn notify_idle(&mut self) {
         if self.already_requested {
             self.watch_sender.send_modify(|peer_count| *peer_count -= 1);
             self.already_requested = false;
         }
     }
 
-    async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
+    pub async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
         let _ = self.watch_receiver.changed().await;
         self.calculate_bandwidth_without_children_increament(None)
     }
-}
-
-pub trait AsyncRateLimiter {
-    fn rate_limit(&mut self, requested: u64);
-    fn set_rate(&mut self, rate: NonZeroRatePerSecond);
-    fn wait(&mut self) -> impl std::future::Future<Output = ()> + std::marker::Send;
 }
 
 #[derive(Clone)]
@@ -294,10 +293,7 @@ where
     }
 }
 
-impl<TP, SU> AsyncTokenBucket<TP, SU>
-where
-    TP: TimeProvider,
-{
+impl<TP, SU> AsyncTokenBucket<TP, SU> {
     pub fn new(token_bucket: TokenBucket<TP>, sleep_until: SU) -> Self {
         Self {
             token_bucket,
@@ -307,23 +303,26 @@ where
     }
 }
 
-impl<TP, SU> AsyncRateLimiter for AsyncTokenBucket<TP, SU>
+impl<TP, SU> AsyncTokenBucket<TP, SU>
 where
-    TP: TimeProvider + Send,
-    SU: SleepUntil + Send,
+    TP: TimeProvider,
 {
-    fn rate_limit(&mut self, requested: u64) {
+    pub fn rate_limit(&mut self, requested: u64) {
         self.next_deadline = TokenBucket::rate_limit(&mut self.token_bucket, requested);
     }
 
-    fn set_rate(&mut self, rate: NonZeroRatePerSecond) {
+    pub fn set_rate(&mut self, rate: NonZeroRatePerSecond) {
         if self.token_bucket.rate() != rate {
             self.token_bucket.set_rate(rate);
             self.next_deadline = self.token_bucket.rate_limit(0);
         }
     }
 
-    async fn wait(&mut self) {
+    pub async fn wait(&mut self)
+    where
+        TP: TimeProvider + Send,
+        SU: SleepUntil + Send,
+    {
         match self.next_deadline {
             Some(Deadline::Instant(deadline)) => {
                 self.sleep_until.sleep_until(deadline).await;
@@ -335,60 +334,64 @@ where
 }
 
 #[derive(Clone)]
-pub struct HierarchicalTokenBucket<
-    BD = SharedBandwidthManager,
-    ARL = AsyncTokenBucket<DefaultTimeProvider, TokioSleepUntil>,
-> where
-    BD: SharedBandwidth,
-{
-    shared_bandwidth: BD,
-    rate_limiter: ARL,
+pub struct HierarchicalTokenBucket<TP = DefaultTimeProvider, SU = TokioSleepUntil> {
+    shared_bandwidth: SharedBandwidthManager,
+    rate_limiter: AsyncTokenBucket<TP, SU>,
     need_to_notify_parent: bool,
 }
 
-impl<BD, ARL> From<NonZeroRatePerSecond> for HierarchicalTokenBucket<BD, ARL>
+impl<TP, SU> From<NonZeroRatePerSecond> for HierarchicalTokenBucket<TP, SU>
 where
-    BD: SharedBandwidth + From<NonZeroRatePerSecond>,
-    ARL: From<NonZeroRatePerSecond>,
+    TP: TimeProvider + Default,
+    SU: Default,
 {
     fn from(rate: NonZeroRatePerSecond) -> Self {
         HierarchicalTokenBucket::new(rate)
     }
 }
 
-impl<BD, ARL> From<(BD, ARL)> for HierarchicalTokenBucket<BD, ARL>
-where
-    BD: SharedBandwidth,
+// impl<BD, ARL> From<(BD, ARL)> for HierarchicalTokenBucket<BD, ARL>
+// where
+//     BD: SharedBandwidth,
+// {
+//     fn from((shared_bandwidth, async_token_bucket): (BD, ARL)) -> Self {
+//         Self {
+//             shared_bandwidth,
+//             rate_limiter: async_token_bucket,
+//             need_to_notify_parent: false,
+//         }
+//     }
+// }
+
+impl<TP, SU> From<(NonZeroRatePerSecond, AsyncTokenBucket<TP, SU>)>
+    for HierarchicalTokenBucket<TP, SU>
 {
-    fn from((shared_bandwidth, async_token_bucket): (BD, ARL)) -> Self {
+    fn from((rate, rate_limiter): (NonZeroRatePerSecond, AsyncTokenBucket<TP, SU>)) -> Self {
         Self {
-            shared_bandwidth,
-            rate_limiter: async_token_bucket,
+            shared_bandwidth: SharedBandwidthManager::new(rate),
+            rate_limiter,
             need_to_notify_parent: false,
         }
     }
 }
 
-impl<BD, ARL> HierarchicalTokenBucket<BD, ARL>
-where
-    BD: SharedBandwidth,
-{
+impl<TP, SU> HierarchicalTokenBucket<TP, SU> {
     pub fn new(rate: NonZeroRatePerSecond) -> Self
     where
-        BD: From<NonZeroRatePerSecond>,
-        ARL: From<NonZeroRatePerSecond>,
+        TP: TimeProvider + Default,
+        SU: Default,
     {
+        let token_bucket = TokenBucket::<TP>::new(rate);
+        let sleep_until = SU::default();
+        let rate_limiter = AsyncTokenBucket::new(token_bucket, sleep_until);
         Self {
-            shared_bandwidth: BD::from(rate),
-            rate_limiter: ARL::from(rate),
+            shared_bandwidth: SharedBandwidthManager::new(rate),
+            rate_limiter,
             need_to_notify_parent: false,
         }
     }
 
-    async fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond
-    where
-        BD: SharedBandwidth,
-    {
+    async fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
         self.need_to_notify_parent = true;
         self.shared_bandwidth.request_bandwidth(requested).await
     }
@@ -402,7 +405,8 @@ where
 
     pub async fn rate_limit(mut self, requested: u64) -> Self
     where
-        ARL: AsyncRateLimiter,
+        TP: TimeProvider + Send,
+        SU: SleepUntil + Send,
     {
         let rate = self.request_bandwidth(requested).await;
         self.rate_limiter.set_rate(rate);
@@ -423,19 +427,16 @@ where
     }
 }
 
-impl<BD, ARL> Drop for HierarchicalTokenBucket<BD, ARL>
-where
-    BD: SharedBandwidth,
-{
+impl<TP, SU> Drop for HierarchicalTokenBucket<TP, SU> {
     fn drop(&mut self) {
         self.notify_idle();
     }
 }
 
-impl<BD, ARL> SleepingRateLimiter for HierarchicalTokenBucket<BD, ARL>
+impl<TP, SU> SleepingRateLimiter for HierarchicalTokenBucket<TP, SU>
 where
-    BD: SharedBandwidth + Send,
-    ARL: AsyncRateLimiter + Send,
+    TP: TimeProvider + Send,
+    SU: SleepUntil + Send,
 {
     async fn rate_limit(self, read_size: usize) -> Self {
         HierarchicalTokenBucket::rate_limit(self, read_size.try_into().unwrap_or(u64::MAX)).await
@@ -448,10 +449,7 @@ mod tests {
         cmp::max,
         iter::repeat,
         ops::DerefMut,
-        sync::{
-            atomic::{AtomicUsize, Ordering},
-            Arc,
-        },
+        sync::Arc,
         thread,
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
@@ -462,14 +460,11 @@ mod tests {
         StreamExt,
     };
     use parking_lot::Mutex;
-    use tokio::{sync::Barrier, task::yield_now};
+    use tokio::task::yield_now;
 
-    use super::{SharedBandwidth, SleepUntil, TimeProvider, TokenBucket};
+    use super::{SleepUntil, TimeProvider, TokenBucket};
     use crate::{
-        token_bucket::{
-            AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond,
-            SharedBandwidthManager,
-        },
+        token_bucket::{AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond},
         SleepingRateLimiter,
     };
 
@@ -538,20 +533,14 @@ mod tests {
         }
     }
 
-    impl<BD, ARL, TP, SU> From<(NonZeroRatePerSecond, TP, SU)> for HierarchicalTokenBucket<BD, ARL>
+    impl<TP, SU> From<(NonZeroRatePerSecond, TP, SU)> for HierarchicalTokenBucket<TP, SU>
     where
-        BD: From<NonZeroRatePerSecond> + SharedBandwidth,
-        ARL: From<(NonZeroRatePerSecond, TP, SU)>,
         TP: TimeProvider,
     {
         fn from((rate, time_provider, sleep_until): (NonZeroRatePerSecond, TP, SU)) -> Self {
-            let shared_bandwidth = BD::from(rate);
-            let async_token_bucket = ARL::from((rate, time_provider, sleep_until));
-            Self {
-                shared_bandwidth,
-                rate_limiter: async_token_bucket,
-                need_to_notify_parent: false,
-            }
+            let token_bucket = TokenBucket::new_with_time_provider(rate, time_provider);
+            let async_token_bucket = AsyncTokenBucket::new(token_bucket, sleep_until);
+            Self::from((rate, async_token_bucket))
         }
     }
 
@@ -812,65 +801,65 @@ mod tests {
         }
     }
 
-    struct TestBandwidthManager<BM> {
-        wrapped: BM,
-        waiters_counter: Arc<AtomicUsize>,
-        wait: Arc<parking_lot::RwLock<Barrier>>,
-    }
+    // struct TestBandwidthManager<BM> {
+    //     wrapped: BM,
+    //     waiters_counter: Arc<AtomicUsize>,
+    //     wait: Arc<parking_lot::RwLock<Barrier>>,
+    // }
 
-    impl<BM> TestBandwidthManager<BM> {
-        pub fn new(bandwidth_manager: BM) -> Self {
-            let wait = Arc::new(parking_lot::RwLock::new(Barrier::new(1)));
-            Self {
-                wrapped: bandwidth_manager,
-                wait,
-                waiters_counter: Arc::new(AtomicUsize::new(1)),
-            }
-        }
-    }
+    // impl<BM> TestBandwidthManager<BM> {
+    //     pub fn new(bandwidth_manager: BM) -> Self {
+    //         let wait = Arc::new(parking_lot::RwLock::new(Barrier::new(1)));
+    //         Self {
+    //             wrapped: bandwidth_manager,
+    //             wait,
+    //             waiters_counter: Arc::new(AtomicUsize::new(1)),
+    //         }
+    //     }
+    // }
 
-    impl<BM> Clone for TestBandwidthManager<BM>
-    where
-        BM: Clone,
-    {
-        fn clone(&self) -> Self {
-            let mut lock = self.wait.write();
-            let waiters_counter = self.waiters_counter.fetch_add(1, Ordering::Relaxed) + 1;
-            *lock = Barrier::new(waiters_counter);
-            Self {
-                wrapped: self.wrapped.clone(),
-                wait: self.wait.clone(),
-                waiters_counter: self.waiters_counter.clone(),
-            }
-        }
-    }
+    // impl<BM> Clone for TestBandwidthManager<BM>
+    // where
+    //     BM: Clone,
+    // {
+    //     fn clone(&self) -> Self {
+    //         let mut lock = self.wait.write();
+    //         let waiters_counter = self.waiters_counter.fetch_add(1, Ordering::Relaxed) + 1;
+    //         *lock = Barrier::new(waiters_counter);
+    //         Self {
+    //             wrapped: self.wrapped.clone(),
+    //             wait: self.wait.clone(),
+    //             waiters_counter: self.waiters_counter.clone(),
+    //         }
+    //     }
+    // }
 
-    impl<BM> SharedBandwidth for TestBandwidthManager<BM>
-    where
-        BM: SharedBandwidth + Send,
-    {
-        async fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
-            self.wrapped.request_bandwidth(requested).await
-        }
+    // impl<BM> SharedBandwidth for TestBandwidthManager<BM>
+    // where
+    //     BM: SharedBandwidth + Send,
+    // {
+    //     async fn request_bandwidth(&mut self, requested: u64) -> NonZeroRatePerSecond {
+    //         self.wrapped.request_bandwidth(requested).await
+    //     }
 
-        fn notify_idle(&mut self) {
-            self.wrapped.notify_idle();
-        }
+    //     fn notify_idle(&mut self) {
+    //         self.wrapped.notify_idle();
+    //     }
 
-        async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
-            self.wrapped.await_bandwidth_change().await
-        }
-    }
+    //     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
+    //         self.wrapped.await_bandwidth_change().await
+    //     }
+    // }
 
-    impl<BD> From<NonZeroRatePerSecond> for TestBandwidthManager<BD>
-    where
-        BD: From<NonZeroRatePerSecond> + SharedBandwidth,
-    {
-        fn from(value: NonZeroRatePerSecond) -> Self {
-            let shared_bandwidth = BD::from(value);
-            Self::new(shared_bandwidth)
-        }
-    }
+    // impl<BD> From<NonZeroRatePerSecond> for TestBandwidthManager<BD>
+    // where
+    //     BD: From<NonZeroRatePerSecond> + SharedBandwidth,
+    // {
+    //     fn from(value: NonZeroRatePerSecond) -> Self {
+    //         let shared_bandwidth = BD::from(value);
+    //         Self::new(shared_bandwidth)
+    //     }
+    // }
 
     impl
         From<(
@@ -879,10 +868,7 @@ mod tests {
             TestSleepUntilShared,
         )>
         for TracingRateLimiter<
-            HierarchicalTokenBucket<
-                SharedBandwidthManager,
-                AsyncTokenBucket<Arc<Box<dyn TimeProvider + Send + Sync>>, TestSleepUntilShared>,
-            >,
+            HierarchicalTokenBucket<Arc<Box<dyn TimeProvider + Send + Sync>>, TestSleepUntilShared>,
         >
     {
         fn from(
@@ -900,12 +886,7 @@ mod tests {
     #[tokio::test]
     async fn rate_limiter_sanity_check() {
         token_bucket_sanity_check_test::<TokenBucket<_>>().await;
-        token_bucket_sanity_check_test::<
-            TracingRateLimiter<
-                HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
-            >,
-        >()
-        .await
+        token_bucket_sanity_check_test::<TracingRateLimiter<HierarchicalTokenBucket<_, _>>>().await
     }
 
     async fn token_bucket_sanity_check_test<RL>()
@@ -947,7 +928,7 @@ mod tests {
         no_slowdown_while_within_rate_limit_test::<TokenBucket<_>>().await;
         no_slowdown_while_within_rate_limit_test::<
             TracingRateLimiter<
-                HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
+                HierarchicalTokenBucket<_, _>,
             >,
         >()
         .await;
@@ -991,12 +972,8 @@ mod tests {
     #[tokio::test]
     async fn slowdown_when_limit_reached_token_bucket() {
         slowdown_when_limit_reached_test::<TokenBucket<_>>().await;
-        slowdown_when_limit_reached_test::<
-            TracingRateLimiter<
-                HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
-            >,
-        >()
-        .await
+        slowdown_when_limit_reached_test::<TracingRateLimiter<HierarchicalTokenBucket<_, _>>>()
+            .await
     }
 
     async fn slowdown_when_limit_reached_test<RL>()
@@ -1045,9 +1022,7 @@ mod tests {
     async fn buildup_tokens_but_no_more_than_limit_token_bucket() {
         buildup_tokens_but_no_more_than_limit_test::<TokenBucket<_>>().await;
         buildup_tokens_but_no_more_than_limit_test::<
-            TracingRateLimiter<
-                HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
-            >,
+            TracingRateLimiter<HierarchicalTokenBucket<_, _>>,
         >()
         .await
     }
@@ -1099,12 +1074,8 @@ mod tests {
     #[tokio::test]
     async fn multiple_calls_buildup_wait_time() {
         multiple_calls_buildup_wait_time_test::<TokenBucket<_>>().await;
-        multiple_calls_buildup_wait_time_test::<
-            TracingRateLimiter<
-                HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
-            >,
-        >()
-        .await
+        multiple_calls_buildup_wait_time_test::<TracingRateLimiter<HierarchicalTokenBucket<_, _>>>()
+            .await
     }
 
     async fn multiple_calls_buildup_wait_time_test<RL>()
@@ -1169,12 +1140,11 @@ mod tests {
 
         let last_deadline = time_to_return.clone();
 
-        let mut rate_limiter =
-            HierarchicalTokenBucket::<SharedBandwidthManager, AsyncTokenBucket<_, _>>::from((
-                limit_per_second,
-                time_provider,
-                TestSleepUntil::new(last_deadline.clone()),
-            ));
+        let mut rate_limiter = HierarchicalTokenBucket::<_, _>::from((
+            limit_per_second,
+            time_provider,
+            TestSleepUntil::new(last_deadline.clone()),
+        ));
         let mut rate_limiter_cloned = rate_limiter.clone();
 
         let total_data_sent = thread::scope(|s| {
@@ -1230,9 +1200,7 @@ mod tests {
         let time_provider: Arc<Box<dyn TimeProvider + Send + Sync>> =
             Arc::new(Box::new(move || *time_provider.read()));
 
-        let rate_limiter = TracingRateLimiter::<
-            HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
-        >::from((
+        let rate_limiter = TracingRateLimiter::<HierarchicalTokenBucket<_, _>>::from((
             limit_per_second,
             time_provider,
             TestSleepUntilShared::new(now),
@@ -1263,9 +1231,7 @@ mod tests {
         let time_provider: Arc<Box<dyn TimeProvider + Send + Sync>> =
             Arc::new(Box::new(move || *time_provider.read()));
 
-        let rate_limiter = TracingRateLimiter::<
-            HierarchicalTokenBucket<SharedBandwidthManager, AsyncTokenBucket<_, _>>,
-        >::from((
+        let rate_limiter = TracingRateLimiter::<HierarchicalTokenBucket<_, _>>::from((
             limit_per_second,
             time_provider,
             TestSleepUntilShared::new(now),
@@ -1358,12 +1324,11 @@ mod tests {
         );
         let tracing_sleep_until =
             TracingSleepUntil::new(test_sleep_until_with_barrier, initial_time);
-        let rate_limiter =
-            HierarchicalTokenBucket::<SharedBandwidthManager, AsyncTokenBucket<_, _>>::from((
-                limit_per_second,
-                time_provider,
-                tracing_sleep_until,
-            ));
+        let rate_limiter = HierarchicalTokenBucket::<_, _>::from((
+            limit_per_second,
+            time_provider,
+            tracing_sleep_until,
+        ));
 
         let mut rate_limiters = repeat(())
             .scan((0usize, rate_limiter), |(id, rate_limiter), _| {
