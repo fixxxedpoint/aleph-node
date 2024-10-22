@@ -1,14 +1,9 @@
 use crate::{rate_limiter::Deadline, NonZeroRatePerSecond, SleepingRateLimiter, LOG_TARGET, MIN};
 use futures::{future::pending, Future, FutureExt};
 use log::trace;
-use parking_lot::Mutex;
 use std::{
     cmp::min,
     num::NonZeroU64,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
     time::{Duration, Instant},
 };
 
@@ -47,7 +42,7 @@ impl SleepUntil for TokioSleepUntil {
     }
 }
 
-/// Implementation of the `Token Bucket` algorithm for the purpose of rate-limiting access to some abstract resource.
+/// Implementation of the `Token Bucket` algorithm for the purpose of rate-limiting access to some resource.
 #[derive(Clone)]
 pub struct TokenBucket<T = DefaultTimeProvider> {
     last_update: Instant,
@@ -182,9 +177,9 @@ where
     }
 }
 
-/// Implementations should allow to share some given bandwidth within multiple connections. It
-/// allows to track number of active connections and is responsible for notifying all existing
-/// connections of any changes of their currently allocated bandwidth.
+/// Allows to share a resource between multiple instances of rate-limiter. Implementations should allow to share some given
+/// bandwidth within multiple connections. It allows to track number of active connections and is responsible for notifying all
+/// existing connections of any changes of their allocated bandwidth.
 pub trait SharedBandwidth {
     /// Based on the given number of requested bits to process, allocate and return a non-zero rate
     /// of bits per second.
@@ -202,15 +197,17 @@ pub trait SharedBandwidth {
 #[derive(Clone)]
 pub struct SharedBandwidthManager {
     max_rate: NonZeroRatePerSecond,
-    update_mutex: Arc<parking_lot::Mutex<()>>,
-    notify: Arc<tokio::sync::Notify>,
-    peer_counter: Arc<AtomicU64>,
+    watch_sender: tokio::sync::watch::Sender<u64>,
+    watch_receiver: tokio::sync::watch::Receiver<u64>,
     already_requested: Option<NonZeroRatePerSecond>,
 }
 
 impl SharedBandwidthManager {
-    fn request_bandwidth_without_children_increament(&mut self) -> NonZeroRatePerSecond {
-        let active_children = self.peer_counter.load(Ordering::Relaxed);
+    fn request_bandwidth_without_children_increament(
+        &mut self,
+        active_children: Option<u64>,
+    ) -> NonZeroRatePerSecond {
+        let active_children = active_children.unwrap_or_else(|| *self.watch_receiver.borrow());
         let rate = u64::from(self.max_rate) / active_children;
         rate.try_into().unwrap_or(MIN)
     }
@@ -224,12 +221,12 @@ impl From<NonZeroRatePerSecond> for SharedBandwidthManager {
 
 impl SharedBandwidthManager {
     pub fn new(max_rate: NonZeroRatePerSecond) -> Self {
+        let (watch_sender, watch_receiver) = tokio::sync::watch::channel(0);
         Self {
             max_rate,
-            update_mutex: Arc::new(Mutex::new(())),
-            notify: Arc::new(tokio::sync::Notify::new()),
-            peer_counter: Arc::new(0.into()),
             already_requested: None,
+            watch_sender,
+            watch_receiver,
         }
     }
 }
@@ -239,11 +236,12 @@ impl SharedBandwidth for SharedBandwidthManager {
         if let Some(requested_rate) = self.already_requested {
             return requested_rate;
         }
-        if let Some(_guard) = self.update_mutex.try_lock() {
-            self.notify.notify_waiters();
-        }
-        let active_children = self.peer_counter.fetch_add(1, Ordering::Relaxed) + 1;
-        let rate = u64::from(self.max_rate) / active_children;
+        let mut active_children = 1;
+        self.watch_sender.send_modify(|peer_count| {
+            *peer_count += 1;
+            active_children = *peer_count;
+        });
+        let rate = self.request_bandwidth_without_children_increament(Some(active_children));
         *self
             .already_requested
             .insert(rate.try_into().unwrap_or(MIN))
@@ -254,15 +252,12 @@ impl SharedBandwidth for SharedBandwidthManager {
             return;
         }
         self.already_requested = None;
-        self.peer_counter.fetch_sub(1, Ordering::Relaxed);
-        if let Some(_guard) = self.update_mutex.try_lock() {
-            self.notify.notify_waiters();
-        }
+        self.watch_sender.send_modify(|peer_count| *peer_count -= 1);
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
-        self.notify.notified().await;
-        self.request_bandwidth_without_children_increament()
+        let _ = self.watch_receiver.changed().await;
+        self.request_bandwidth_without_children_increament(None)
     }
 }
 
@@ -1324,6 +1319,7 @@ mod tests {
             Arc::new(Box::new(move || {
                 // TODO this broke Barrier in sleep_until
                 // return *time_provider.borrow();
+
                 let mut current_time = time_provider.write();
                 let millis_from_current_time: u64 = last_deadline_from_time_provider
                     .lock()
