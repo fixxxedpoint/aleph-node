@@ -8,11 +8,7 @@ use tokio::io::AsyncRead;
 
 use crate::{token_bucket::HierarchicalTokenBucket, RatePerSecond};
 
-pub type DefaultSharedRateLimiter = RateLimiterFacade;
-
-// pub trait SleepingRateLimiter: Sized {
-//     fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send;
-// }
+pub type SharingRateLimiter = RateLimiterFacade;
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum Deadline {

@@ -6,7 +6,7 @@ use std::num::{NonZeroU64, TryFromIntError};
 pub use rate_limiter::RateLimiterImpl;
 use tokio::io::AsyncRead;
 
-pub use crate::rate_limiter::{DefaultSharedRateLimiter, FuturesRateLimiter, RateLimiterFacade};
+pub use crate::rate_limiter::{SharingRateLimiter, FuturesRateLimiter};
 pub use crate::token_bucket::{HierarchicalTokenBucket, TokenBucket};
 
 const LOG_TARGET: &str = "rate-limiter";

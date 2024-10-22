@@ -1,13 +1,15 @@
 use libp2p::{core::muxing::StreamMuxer, PeerId, Transport};
-use rate_limiter::{FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, RateLimiterFacade};
+use rate_limiter::{
+    SharingRateLimiter, FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter,
+};
 
 struct RateLimitedStreamMuxer<SM> {
-    rate_limiter: RateLimiterFacade,
+    rate_limiter: SharingRateLimiter,
     stream_muxer: SM,
 }
 
 impl<SM> RateLimitedStreamMuxer<SM> {
-    pub fn new(stream_muxer: SM, rate_limiter: RateLimiterFacade) -> Self {
+    pub fn new(stream_muxer: SM, rate_limiter: SharingRateLimiter) -> Self {
         Self {
             rate_limiter,
             stream_muxer,
@@ -78,7 +80,7 @@ where
 }
 
 pub fn build_transport(
-    rate_limiter: RateLimiterFacade,
+    rate_limiter: SharingRateLimiter,
     config: sc_network::transport::NetworkConfig,
 ) -> impl Transport<
     Output = (

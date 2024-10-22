@@ -72,7 +72,6 @@ impl TokenBucket {
             rate_per_second: rate_per_second.into(),
             requested: rate_per_second.into(),
         }
-        // Self::from((rate_per_second, DefaultTimeProvider::default()))
     }
 }
 
@@ -149,7 +148,7 @@ where
         }
     }
 
-    /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
+    /// Calculates amount of time by which we should delay next call to some governed resource in order to satisfy
     /// specified rate limit.
     pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
         trace!(
@@ -167,8 +166,8 @@ where
     }
 }
 
-/// Implementation of the [`SharedBandwidth`] trait that uses [`tokio::sync::watch`] for notifications about changes
-/// about currently allocated bandwidth.
+/// Implementation of the bandwidth sharing strategy that attempts to assign equal portion of the total bandwidth to all active
+/// consumers of the bandwidth.
 pub struct SharedBandwidthManager {
     max_rate: NonZeroRatePerSecond,
     watch_sender: tokio::sync::watch::Sender<u64>,
@@ -203,9 +202,9 @@ impl SharedBandwidthManager {
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(0);
         Self {
             max_rate,
-            already_requested: false,
             watch_sender,
             watch_receiver,
+            already_requested: false,
         }
     }
 }
@@ -893,7 +892,6 @@ mod tests {
             });
 
             let second_handle = s.spawn(|| {
-                // return 0u128;
                 let runtime = tokio::runtime::Builder::new_current_thread()
                     .enable_all()
                     .build()
@@ -1150,6 +1148,6 @@ mod tests {
             abs_rate_diff <= rate_limit * 5/10,
             "Used bandwidth should be oscillating close to {rate_limit} b/s (+/- 50%), but got {total_rate} b/s instead. Total data sent: {total_data_scheduled}; Time: {time_passed:?}"
         );
-        // panic!("expected rate-limit = {rate_limit} calculated rate limit = {total_rate}");
+        panic!("expected rate-limit = {rate_limit} calculated rate limit = {total_rate}");
     }
 }

@@ -1,4 +1,4 @@
-use rate_limiter::{RateLimitedAsyncRead, RateLimiterFacade, RateLimiterImpl};
+use rate_limiter::{SharingRateLimiter, RateLimitedAsyncRead, RateLimiterImpl};
 
 use crate::{ConnectionInfo, Data, Dialer, Listener, PeerAddressInfo, Splittable, Splitted};
 
@@ -12,11 +12,11 @@ impl<Read: ConnectionInfo> ConnectionInfo for RateLimitedAsyncRead<Read> {
 #[derive(Clone)]
 pub struct RateLimitingDialer<D> {
     dialer: D,
-    rate_limiter: RateLimiterFacade,
+    rate_limiter: SharingRateLimiter,
 }
 
 impl<D> RateLimitingDialer<D> {
-    pub fn new(dialer: D, rate_limiter: RateLimiterFacade) -> Self {
+    pub fn new(dialer: D, rate_limiter: SharingRateLimiter) -> Self {
         Self {
             dialer,
             rate_limiter,
@@ -51,11 +51,11 @@ where
 /// Implementation of the [Listener] trait governing all returned [Listener::Connection] instances by a rate-limiting wrapper.
 pub struct RateLimitingListener<L> {
     listener: L,
-    rate_limiter: RateLimiterFacade,
+    rate_limiter: SharingRateLimiter,
 }
 
 impl<L> RateLimitingListener<L> {
-    pub fn new(listener: L, rate_limiter: RateLimiterFacade) -> Self {
+    pub fn new(listener: L, rate_limiter: SharingRateLimiter) -> Self {
         Self {
             listener,
             rate_limiter,
