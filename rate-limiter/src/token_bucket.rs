@@ -206,7 +206,6 @@ pub struct SharedBandwidthManager {
     notify: Arc<tokio::sync::Notify>,
     peer_counter: Arc<AtomicU64>,
     already_requested: Option<NonZeroRatePerSecond>,
-    last_rate: NonZeroRatePerSecond,
 }
 
 impl SharedBandwidthManager {
@@ -231,7 +230,6 @@ impl SharedBandwidthManager {
             notify: Arc::new(tokio::sync::Notify::new()),
             peer_counter: Arc::new(0.into()),
             already_requested: None,
-            last_rate: max_rate,
         }
     }
 }
@@ -242,8 +240,7 @@ impl SharedBandwidth for SharedBandwidthManager {
             return requested_rate;
         }
         if let Some(_guard) = self.update_mutex.try_lock() {
-            // self.notify.notify_waiters();
-            self.notify.notify_one();
+            self.notify.notify_waiters();
         }
         let active_children = self.peer_counter.fetch_add(1, Ordering::Relaxed) + 1;
         let rate = u64::from(self.max_rate) / active_children;
@@ -259,27 +256,13 @@ impl SharedBandwidth for SharedBandwidthManager {
         self.already_requested = None;
         self.peer_counter.fetch_sub(1, Ordering::Relaxed);
         if let Some(_guard) = self.update_mutex.try_lock() {
-            // self.notify.notify_waiters();
-            self.notify.notify_one();
+            self.notify.notify_waiters();
         }
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
         self.notify.notified().await;
-        // self.notify.notify_one();
-        // if let Some(_guard) = self.update_mutex.try_lock() {
-        //     // self.notify.notify_waiters();
-        //     self.notify.notify_one();
-        // }
-        let rate = self.request_bandwidth_without_children_increament();
-        if rate != self.last_rate {
-            self.last_rate = rate;
-            if let Some(_guard) = self.update_mutex.try_lock() {
-                // self.notify.notify_waiters();
-                self.notify.notify_one();
-            }
-        }
-        rate
+        self.request_bandwidth_without_children_increament()
     }
 }
 
