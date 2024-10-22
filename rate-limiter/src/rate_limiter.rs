@@ -2,17 +2,17 @@ use std::{task::ready, time::Instant};
 
 use futures::{
     future::{pending, BoxFuture},
-    Future, FutureExt,
+    FutureExt,
 };
 use tokio::io::AsyncRead;
 
-use crate::{token_bucket::HierarchicalTokenBucket, NonZeroRatePerSecond, RatePerSecond};
+use crate::{token_bucket::HierarchicalTokenBucket, RatePerSecond};
 
-pub type DefaultSharedRateLimiter = RateLimiterFacade<HierarchicalTokenBucket>;
+pub type DefaultSharedRateLimiter = RateLimiterFacade;
 
-pub trait SleepingRateLimiter: Sized {
-    fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send;
-}
+// pub trait SleepingRateLimiter: Sized {
+//     fn rate_limit(self, read_size: usize) -> impl Future<Output = Self> + Send;
+// }
 
 #[derive(PartialEq, Eq, Debug, Copy, Clone)]
 pub enum Deadline {
@@ -29,18 +29,15 @@ impl From<Deadline> for Option<Instant> {
     }
 }
 
-/// Wrapper around [SleepingRateLimiter] to simplify implementation of the [AsyncRead](tokio::io::AsyncRead) trait.
-pub struct RateLimiterImpl<RL> {
-    rate_limiter: BoxFuture<'static, RL>,
+/// Wrapper around [RateLimiterFacade] to simplify implementation of the [AsyncRead](tokio::io::AsyncRead) trait.
+pub struct RateLimiterImpl {
+    rate_limiter: BoxFuture<'static, RateLimiterFacade>,
 }
 
-impl<RL> RateLimiterImpl<RL>
-where
-    RL: SleepingRateLimiter + Send + 'static,
-{
+impl RateLimiterImpl {
     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
-    /// ([SleepingRateLimiter]).
-    pub fn new(rate_limiter: RL) -> Self {
+    /// ([RateLimiterFacade]).
+    pub fn new(rate_limiter: RateLimiterFacade) -> Self {
         Self {
             rate_limiter: Box::pin(rate_limiter.rate_limit(0)),
         }
@@ -67,17 +64,14 @@ where
     }
 }
 
-pub struct FuturesRateLimiter<ARL> {
-    rate_limiter: BoxFuture<'static, ARL>,
+pub struct FuturesRateLimiter {
+    rate_limiter: BoxFuture<'static, RateLimiterFacade>,
 }
 
-impl<ARL> FuturesRateLimiter<ARL>
-where
-    ARL: SleepingRateLimiter + 'static,
-{
+impl FuturesRateLimiter {
     /// Constructs an instance of [RateLimiter] that uses already configured rate-limiting access governor
     /// ([SleepingRateLimiter]).
-    pub fn new(rate_limiter: ARL) -> Self {
+    pub fn new(rate_limiter: RateLimiterFacade) -> Self {
         Self {
             rate_limiter: Box::pin(rate_limiter.rate_limit(0)),
         }
@@ -105,24 +99,19 @@ where
 }
 
 #[derive(Clone)]
-pub enum RateLimiterFacade<RL> {
+pub enum RateLimiterFacade {
     NoTraffic,
-    RateLimiter(RL),
+    RateLimiter(HierarchicalTokenBucket),
 }
 
-impl<RL> RateLimiterFacade<RL> {
-    pub fn new(rate: RatePerSecond) -> Self
-    where
-        RL: From<NonZeroRatePerSecond>,
-    {
+impl RateLimiterFacade {
+    pub fn new(rate: RatePerSecond) -> Self {
         match rate {
             RatePerSecond::Block => Self::NoTraffic,
-            RatePerSecond::Rate(rate) => Self::RateLimiter(rate.into()),
+            RatePerSecond::Rate(rate) => Self::RateLimiter(HierarchicalTokenBucket::new(rate)),
         }
     }
-}
 
-impl SleepingRateLimiter for RateLimiterFacade<HierarchicalTokenBucket> {
     async fn rate_limit(self, read_size: usize) -> Self {
         match self {
             RateLimiterFacade::NoTraffic => pending().await,

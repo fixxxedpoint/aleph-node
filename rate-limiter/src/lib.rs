@@ -6,14 +6,14 @@ use std::num::{NonZeroU64, TryFromIntError};
 pub use rate_limiter::RateLimiterImpl;
 use tokio::io::AsyncRead;
 
-pub use crate::rate_limiter::{DefaultSharedRateLimiter, FuturesRateLimiter, SleepingRateLimiter};
+pub use crate::rate_limiter::{DefaultSharedRateLimiter, FuturesRateLimiter, RateLimiterFacade};
 pub use crate::token_bucket::{HierarchicalTokenBucket, TokenBucket};
 
 const LOG_TARGET: &str = "rate-limiter";
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub struct NonZeroRatePerSecond {
-    bits_per_second: NonZeroU64,
+    pub bits_per_second: NonZeroU64,
 }
 
 pub const MIN: NonZeroRatePerSecond = NonZeroRatePerSecond {
@@ -82,13 +82,13 @@ impl From<NonZeroRatePerSecond> for RatePerSecond {
     }
 }
 
-pub struct RateLimitedAsyncRead<Read, RL> {
-    rate_limiter: RateLimiterImpl<RL>,
+pub struct RateLimitedAsyncRead<Read> {
+    rate_limiter: RateLimiterImpl,
     inner: Read,
 }
 
-impl<Read, RL> RateLimitedAsyncRead<Read, RL> {
-    pub fn new(read: Read, rate_limiter: RateLimiterImpl<RL>) -> Self {
+impl<Read> RateLimitedAsyncRead<Read> {
+    pub fn new(read: Read, rate_limiter: RateLimiterImpl) -> Self {
         Self {
             rate_limiter,
             inner: read,
@@ -100,10 +100,9 @@ impl<Read, RL> RateLimitedAsyncRead<Read, RL> {
     }
 }
 
-impl<Read, RL> AsyncRead for RateLimitedAsyncRead<Read, RL>
+impl<Read> AsyncRead for RateLimitedAsyncRead<Read>
 where
     Read: AsyncRead + Unpin,
-    RL: SleepingRateLimiter + Send + 'static,
 {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -116,13 +115,13 @@ where
     }
 }
 
-pub struct FuturesRateLimitedAsyncReadWrite<ReadWrite, ARL> {
-    rate_limiter: FuturesRateLimiter<ARL>,
+pub struct FuturesRateLimitedAsyncReadWrite<ReadWrite> {
+    rate_limiter: FuturesRateLimiter,
     inner: ReadWrite,
 }
 
-impl<ReadWrite, ARL> FuturesRateLimitedAsyncReadWrite<ReadWrite, ARL> {
-    pub fn new(wrapped: ReadWrite, rate_limiter: FuturesRateLimiter<ARL>) -> Self {
+impl<ReadWrite> FuturesRateLimitedAsyncReadWrite<ReadWrite> {
+    pub fn new(wrapped: ReadWrite, rate_limiter: FuturesRateLimiter) -> Self {
         Self {
             rate_limiter,
             inner: wrapped,
@@ -138,10 +137,9 @@ impl<ReadWrite, ARL> FuturesRateLimitedAsyncReadWrite<ReadWrite, ARL> {
     }
 }
 
-impl<Read, ARL> futures::AsyncRead for FuturesRateLimitedAsyncReadWrite<Read, ARL>
+impl<Read> futures::AsyncRead for FuturesRateLimitedAsyncReadWrite<Read>
 where
     Read: futures::AsyncRead + Unpin,
-    ARL: SleepingRateLimiter + 'static,
 {
     fn poll_read(
         self: std::pin::Pin<&mut Self>,
@@ -154,8 +152,9 @@ where
     }
 }
 
-impl<Write: futures::AsyncWrite + Unpin, ARL> futures::AsyncWrite
-    for FuturesRateLimitedAsyncReadWrite<Write, ARL>
+impl<Write> futures::AsyncWrite for FuturesRateLimitedAsyncReadWrite<Write>
+where
+    Write: futures::AsyncWrite + Unpin,
 {
     fn poll_write(
         self: std::pin::Pin<&mut Self>,

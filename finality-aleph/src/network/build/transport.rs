@@ -1,16 +1,13 @@
 use libp2p::{core::muxing::StreamMuxer, PeerId, Transport};
-use rate_limiter::{
-    FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, HierarchicalTokenBucket,
-    SleepingRateLimiter,
-};
+use rate_limiter::{FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, RateLimiterFacade};
 
-struct RateLimitedStreamMuxer<SM, ARL = HierarchicalTokenBucket> {
-    rate_limiter: ARL,
+struct RateLimitedStreamMuxer<SM> {
+    rate_limiter: RateLimiterFacade,
     stream_muxer: SM,
 }
 
-impl<SM, ARL> RateLimitedStreamMuxer<SM, ARL> {
-    pub fn new(stream_muxer: SM, rate_limiter: ARL) -> Self {
+impl<SM> RateLimitedStreamMuxer<SM> {
+    pub fn new(stream_muxer: SM, rate_limiter: RateLimiterFacade) -> Self {
         Self {
             rate_limiter,
             stream_muxer,
@@ -20,20 +17,18 @@ impl<SM, ARL> RateLimitedStreamMuxer<SM, ARL> {
     fn inner(self: std::pin::Pin<&mut Self>) -> std::pin::Pin<&mut SM>
     where
         SM: Unpin,
-        ARL: Unpin,
     {
         let this = self.get_mut();
         std::pin::Pin::new(&mut this.stream_muxer)
     }
 }
 
-impl<SM, ARL> StreamMuxer for RateLimitedStreamMuxer<SM, ARL>
+impl<SM> StreamMuxer for RateLimitedStreamMuxer<SM>
 where
     SM: StreamMuxer + Unpin,
     SM::Substream: Unpin,
-    ARL: SleepingRateLimiter + Clone + Unpin + 'static,
 {
-    type Substream = FuturesRateLimitedAsyncReadWrite<SM::Substream, ARL>;
+    type Substream = FuturesRateLimitedAsyncReadWrite<SM::Substream>;
 
     type Error = SM::Error;
 
@@ -83,7 +78,7 @@ where
 }
 
 pub fn build_transport(
-    rate_limiter: impl SleepingRateLimiter + Clone + Unpin + Send + 'static,
+    rate_limiter: RateLimiterFacade,
     config: sc_network::transport::NetworkConfig,
 ) -> impl Transport<
     Output = (

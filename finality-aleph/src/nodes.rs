@@ -108,8 +108,6 @@ where
     .await
     .expect("we should have working networking");
 
-    // let alephbft_rate_limiter =
-    //     PerConnectionRateLimiter::new(rate_limiter_config.alephbft_network_bit_rate.into());
     let alephbft_rate_limiter =
         DefaultSharedRateLimiter::new(rate_limiter_config.alephbft_network_bit_rate.into());
     let dialer = RateLimitingDialer::new(dialer, alephbft_rate_limiter.clone());
