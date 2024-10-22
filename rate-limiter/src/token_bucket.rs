@@ -138,12 +138,12 @@ where
         self.requested = self.requested.saturating_sub(new_units);
     }
 
-    /// Get current rate in bits per second for an instance of [`TokenBucket`].
+    /// Get current rate in bits per second.
     pub fn rate(&self) -> NonZeroRatePerSecond {
         self.rate_per_second.into()
     }
 
-    /// Set a rate in bits per second for and instance of [`TokenBucket`].
+    /// Set a rate in bits per second.
     pub fn set_rate(&mut self, rate_per_second: NonZeroRatePerSecond) {
         self.update_tokens();
         let available = self.available();
@@ -160,7 +160,7 @@ where
     }
 
     /// Calculates [Duration](time::Duration) by which we should delay next call to some governed resource in order to satisfy
-    /// configured rate limit.
+    /// specified rate limit.
     pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
         trace!(
             target: LOG_TARGET,
@@ -194,16 +194,28 @@ pub trait SharedBandwidth {
     fn await_bandwidth_change(&mut self) -> impl Future<Output = NonZeroRatePerSecond> + Send;
 }
 
-#[derive(Clone)]
+/// Implementation of the [`SharedBandwidth`] trait that uses [`tokio::sync::watch`] for notifications about changes
+/// about currently allocated bandwidth.
 pub struct SharedBandwidthManager {
     max_rate: NonZeroRatePerSecond,
     watch_sender: tokio::sync::watch::Sender<u64>,
     watch_receiver: tokio::sync::watch::Receiver<u64>,
-    already_requested: Option<NonZeroRatePerSecond>,
+    already_requested: bool,
+}
+
+impl Clone for SharedBandwidthManager {
+    fn clone(&self) -> Self {
+        Self {
+            max_rate: self.max_rate.clone(),
+            watch_sender: self.watch_sender.clone(),
+            watch_receiver: self.watch_receiver.clone(),
+            already_requested: false,
+        }
+    }
 }
 
 impl SharedBandwidthManager {
-    fn request_bandwidth_without_children_increament(
+    fn calculate_bandwidth_without_children_increament(
         &mut self,
         active_children: Option<u64>,
     ) -> NonZeroRatePerSecond {
@@ -224,7 +236,7 @@ impl SharedBandwidthManager {
         let (watch_sender, watch_receiver) = tokio::sync::watch::channel(0);
         Self {
             max_rate,
-            already_requested: None,
+            already_requested: false,
             watch_sender,
             watch_receiver,
         }
@@ -233,31 +245,29 @@ impl SharedBandwidthManager {
 
 impl SharedBandwidth for SharedBandwidthManager {
     async fn request_bandwidth(&mut self, _requested: u64) -> NonZeroRatePerSecond {
-        if let Some(requested_rate) = self.already_requested {
-            return requested_rate;
-        }
-        let mut active_children = 1;
-        self.watch_sender.send_modify(|peer_count| {
-            *peer_count += 1;
-            active_children = *peer_count;
+        let active_children = (!self.already_requested).then(|| {
+            let mut active_children = 1;
+            self.watch_sender.send_modify(|peer_count| {
+                *peer_count += 1;
+                active_children = *peer_count;
+            });
+            self.already_requested = true;
+            active_children
         });
-        let rate = self.request_bandwidth_without_children_increament(Some(active_children));
-        *self
-            .already_requested
-            .insert(rate.try_into().unwrap_or(MIN))
+        let rate = self.calculate_bandwidth_without_children_increament(active_children);
+        rate.try_into().unwrap_or(MIN)
     }
 
     fn notify_idle(&mut self) {
-        if self.already_requested.is_none() {
-            return;
+        if self.already_requested {
+            self.watch_sender.send_modify(|peer_count| *peer_count -= 1);
+            self.already_requested = false;
         }
-        self.already_requested = None;
-        self.watch_sender.send_modify(|peer_count| *peer_count -= 1);
     }
 
     async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
         let _ = self.watch_receiver.changed().await;
-        self.request_bandwidth_without_children_increament(None)
+        self.calculate_bandwidth_without_children_increament(None)
     }
 }
 
@@ -339,7 +349,6 @@ pub struct HierarchicalTokenBucket<
 impl<BD, ARL> From<NonZeroRatePerSecond> for HierarchicalTokenBucket<BD, ARL>
 where
     BD: SharedBandwidth + From<NonZeroRatePerSecond>,
-    // ARL: From<NonZeroRatePerSecond>,
     ARL: From<NonZeroRatePerSecond>,
 {
     fn from(rate: NonZeroRatePerSecond) -> Self {
