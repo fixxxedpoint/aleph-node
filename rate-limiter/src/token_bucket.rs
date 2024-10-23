@@ -353,12 +353,14 @@ mod tests {
         iter::repeat,
         ops::DerefMut,
         sync::Arc,
+        task::Poll,
         thread,
         time::{Duration, Instant, SystemTime, UNIX_EPOCH},
     };
 
     use futures::{
-        future::{BoxFuture, Future},
+        future::{poll_fn, BoxFuture, Future},
+        pin_mut,
         stream::FuturesOrdered,
         StreamExt,
     };
@@ -369,6 +371,69 @@ mod tests {
     use crate::token_bucket::{
         AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond,
     };
+
+    #[tokio::test]
+    async fn basic_checks_of_shared_bandwidth_manager() {
+        let rate = 10.try_into().expect("10 > 0 qed");
+        let some_random_request = 7;
+        let mut bandwidth_share = SharedBandwidthManager::new(rate);
+        let mut cloned_bandwidth_share = bandwidth_share.clone();
+        let mut another_cloned_bandwidth_share = cloned_bandwidth_share.clone();
+
+        // only one consumer, so it should get whole bandwidth
+        assert_eq!(
+            bandwidth_share.request_bandwidth(some_random_request).await,
+            rate
+        );
+
+        // since other instances did not request any bandwidth, they should not receive a notification about its change
+        let poll_result = poll_fn(|cx| {
+            let future = cloned_bandwidth_share.await_bandwidth_change();
+            pin_mut!(future);
+            Poll::Ready(Future::poll(future, cx))
+        })
+        .await;
+        assert_eq!(poll_result, Poll::Pending);
+
+        let poll_result = poll_fn(|cx| {
+            let future = another_cloned_bandwidth_share.await_bandwidth_change();
+            pin_mut!(future);
+            Poll::Ready(Future::poll(future, cx))
+        })
+        .await;
+        assert_eq!(poll_result, Poll::Pending);
+
+        // two consumers should equally divide the bandwidth
+        let rate = 5.try_into().expect("5 > 0 qed");
+        assert_eq!(
+            cloned_bandwidth_share
+                .request_bandwidth(some_random_request)
+                .await,
+            rate
+        );
+        assert_eq!(bandwidth_share.await_bandwidth_change().await, rate);
+
+        // similarly when there are three consumers
+        let bandwidth: u64 = another_cloned_bandwidth_share
+            .request_bandwidth(some_random_request)
+            .await
+            .into();
+        let another_bandwidth: u64 = bandwidth_share.await_bandwidth_change().await.into();
+        let yet_another_bandwidth: u64 =
+            cloned_bandwidth_share.await_bandwidth_change().await.into();
+
+        assert!((3..4).contains(&bandwidth));
+        assert!((3..4).contains(&another_bandwidth));
+        assert!((3..4).contains(&yet_another_bandwidth));
+
+        assert!((9..10).contains(&(bandwidth + another_bandwidth + yet_another_bandwidth)));
+
+        // all consumers should be notified after one of them become idle
+        let rate = 5.try_into().expect("5 > 0 qed");
+        another_cloned_bandwidth_share.notify_idle();
+        assert_eq!(cloned_bandwidth_share.await_bandwidth_change().await, rate);
+        assert_eq!(bandwidth_share.await_bandwidth_change().await, rate);
+    }
 
     trait RateLimiter: Sized {
         async fn rate_limit(self, requested: u64) -> (Self, Option<Deadline>);
