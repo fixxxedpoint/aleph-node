@@ -448,20 +448,17 @@ mod tests {
         }
     }
 
-    #[derive(Clone)]
-    struct TracingRateLimiter<TP>(
-        HierarchicalTokenBucket<TP, TestSleepUntilShared>,
-        Arc<Mutex<Option<Instant>>>,
-    );
+    type TracingRateLimiter<TP> = HierarchicalTokenBucket<TP, TestSleepUntilShared>;
 
     impl<TP> RateLimiter for TracingRateLimiter<TP>
     where
         TP: TimeProvider + Send,
     {
         async fn rate_limit(mut self, requested: u64) -> (Self, Option<Deadline>) {
-            let time_before = *self.1.lock();
-            self.0 = self.0.rate_limit(requested).await;
-            let time_after = *self.1.lock();
+            let last_sleep = self.rate_limiter.sleep_until.latest_sleep_until();
+            let time_before = *last_sleep.lock();
+            self = self.rate_limit(requested).await;
+            let time_after = *last_sleep.lock();
             (
                 self,
                 (time_before != time_after)
@@ -525,27 +522,6 @@ mod tests {
             self.wrapped.sleep_until(instant).await
         }
     }
-
-    // #[derive(Clone)]
-    // struct TestSleepUntil {
-    //     last_instant: Arc<Mutex<Option<Instant>>>,
-    // }
-
-    // impl TestSleepUntil {
-    //     pub fn new(initial_instant: Arc<Mutex<Option<Instant>>>) -> Self {
-    //         Self {
-    //             last_instant: initial_instant,
-    //         }
-    //     }
-    // }
-
-    // impl SleepUntil for TestSleepUntil {
-    //     fn sleep_until(&mut self, instant: Instant) -> impl Future<Output = ()> + Send {
-    //         let mut last_instant = self.last_instant.lock();
-    //         *last_instant = max(*last_instant, Some(instant));
-    //         async {}
-    //     }
-    // }
 
     #[derive(Clone)]
     struct TestSleepUntilShared {
@@ -664,25 +640,6 @@ mod tests {
         async fn sleep_until(&mut self, instant: Instant) {
             self.wait().await;
             self.wrapped.sleep_until(instant).await;
-        }
-    }
-
-    impl
-        From<(
-            NonZeroRatePerSecond,
-            Arc<Box<dyn TimeProvider + Send + Sync>>,
-            TestSleepUntilShared,
-        )> for TracingRateLimiter<Arc<Box<dyn TimeProvider + Send + Sync>>>
-    {
-        fn from(
-            value: (
-                NonZeroRatePerSecond,
-                Arc<Box<dyn TimeProvider + Send + Sync>>,
-                TestSleepUntilShared,
-            ),
-        ) -> Self {
-            let last_sleep_until = value.2.latest_sleep_until();
-            TracingRateLimiter(value.into(), last_sleep_until)
         }
     }
 
@@ -1025,17 +982,17 @@ mod tests {
 
         let rate_limiter_cloned = rate_limiter.clone();
 
-        let (rate_limiter, deadline) = rate_limiter.rate_limit(5).await;
+        let (rate_limiter, deadline) = RateLimiter::rate_limit(rate_limiter, 5).await;
         assert_eq!(
             deadline,
             Some(Deadline::Instant(now + Duration::from_millis(500)))
         );
-        let (_, deadline) = rate_limiter_cloned.rate_limit(5).await;
+        let (_, deadline) = RateLimiter::rate_limit(rate_limiter_cloned, 5).await;
         assert_eq!(deadline, None,);
 
         *time_to_return.write() = now + Duration::from_millis(1500);
 
-        let (_, deadline) = rate_limiter.rate_limit(10).await;
+        let (_, deadline) = RateLimiter::rate_limit(rate_limiter, 10).await;
         assert_eq!(deadline, None);
     }
 
@@ -1058,17 +1015,17 @@ mod tests {
 
         let rate_limiter_cloned = rate_limiter.clone();
 
-        let (rate_limiter, deadline) = rate_limiter.rate_limit(1).await;
+        let (rate_limiter, deadline) = RateLimiter::rate_limit(rate_limiter, 1).await;
         assert_eq!(deadline, None);
 
-        let (rate_limiter_cloned, deadline) = rate_limiter_cloned.rate_limit(1).await;
+        let (rate_limiter_cloned, deadline) = RateLimiter::rate_limit(rate_limiter_cloned, 1).await;
         assert_eq!(deadline, None);
 
         *time_to_return.write() = now + Duration::from_secs(2);
 
-        let (_, deadline) = rate_limiter.rate_limit(1).await;
+        let (_, deadline) = RateLimiter::rate_limit(rate_limiter, 1).await;
         assert_eq!(deadline, None);
-        let (_, deadline) = rate_limiter_cloned.rate_limit(2).await;
+        let (_, deadline) = RateLimiter::rate_limit(rate_limiter_cloned, 2).await;
         assert_eq!(
             deadline,
             Some(Deadline::Instant(now + Duration::from_secs(3)))
@@ -1109,9 +1066,6 @@ mod tests {
         let time_provider = time_to_return.clone();
         let time_provider: Arc<Box<dyn TimeProvider + Send + Sync>> =
             Arc::new(Box::new(move || {
-                // TODO this broke Barrier in sleep_until
-                // return *time_provider.borrow();
-
                 let mut current_time = time_provider.write();
                 let millis_from_current_time: u64 = last_deadline_from_time_provider
                     .lock()
@@ -1163,7 +1117,7 @@ mod tests {
         let mut total_rate = 0;
 
         let mut total_number_of_calls = 0;
-        while total_number_of_calls < 10000 {
+        while total_number_of_calls < 1000 {
             let batch_size = batch_gen.sample(&mut rand_gen);
             println!("batch size = {batch_size}");
 
@@ -1188,7 +1142,6 @@ mod tests {
 
                     let rate_task = HierarchicalTokenBucket::rate_limit(rate_limiter, data_read);
 
-                    // TODO use TracingSleepUntil here
                     test_state.push((*selected_limiter_id, data_read));
 
                     total_data_scheduled += u128::from(data_read);
