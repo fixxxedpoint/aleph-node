@@ -1,7 +1,5 @@
 use libp2p::{core::muxing::StreamMuxer, PeerId, Transport};
-use rate_limiter::{
-    SharingRateLimiter, FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter,
-};
+use rate_limiter::{FuturesRateLimitedAsyncReadWrite, FuturesRateLimiter, SharingRateLimiter};
 
 struct RateLimitedStreamMuxer<SM> {
     rate_limiter: SharingRateLimiter,

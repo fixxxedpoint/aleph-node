@@ -1,5 +1,4 @@
 use std::{
-    borrow::{Borrow, BorrowMut},
     collections::HashSet,
     fmt::{Debug, Display, Error as FmtError, Formatter},
 };
@@ -26,18 +25,6 @@ pub struct ProtocolNetwork {
     service: Box<dyn sc_network::config::NotificationService>,
     connected_peers: HashSet<PeerId>,
     last_status_report: time::Instant,
-}
-
-impl Borrow<Box<dyn sc_network::config::NotificationService>> for ProtocolNetwork {
-    fn borrow(&self) -> &Box<dyn sc_network::config::NotificationService> {
-        &self.service
-    }
-}
-
-impl BorrowMut<Box<dyn sc_network::config::NotificationService>> for ProtocolNetwork {
-    fn borrow_mut(&mut self) -> &mut Box<dyn sc_network::config::NotificationService> {
-        &mut self.service
-    }
 }
 
 impl ProtocolNetwork {
