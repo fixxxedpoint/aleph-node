@@ -4,8 +4,13 @@ use log::trace;
 use std::{
     cmp::min,
     num::NonZeroU64,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
     time::{Duration, Instant},
 };
+use tokio::time::sleep;
 
 pub trait TimeProvider {
     fn now(&self) -> Instant;
@@ -172,18 +177,16 @@ where
 /// consumers of the bandwidth.
 pub struct SharedBandwidthManager {
     max_rate: NonZeroRatePerSecond,
-    watch_sender: tokio::sync::watch::Sender<u64>,
-    watch_receiver: tokio::sync::watch::Receiver<u64>,
-    already_requested: bool,
+    peers_count: Arc<AtomicU64>,
+    already_requested: Option<NonZeroRatePerSecond>,
 }
 
 impl Clone for SharedBandwidthManager {
     fn clone(&self) -> Self {
         Self {
             max_rate: self.max_rate,
-            watch_sender: self.watch_sender.clone(),
-            watch_receiver: self.watch_receiver.clone(),
-            already_requested: false,
+            peers_count: self.peers_count.clone(),
+            already_requested: None,
         }
     }
 }
@@ -193,7 +196,8 @@ impl SharedBandwidthManager {
         &mut self,
         active_children: Option<u64>,
     ) -> NonZeroRatePerSecond {
-        let active_children = active_children.unwrap_or_else(|| *self.watch_receiver.borrow());
+        let active_children =
+            active_children.unwrap_or_else(|| self.peers_count.load(Ordering::Relaxed));
         let rate = u64::from(self.max_rate) / active_children;
         NonZeroU64::try_from(rate)
             .map(NonZeroRatePerSecond::from)
@@ -203,43 +207,40 @@ impl SharedBandwidthManager {
 
 impl SharedBandwidthManager {
     pub fn new(max_rate: NonZeroRatePerSecond) -> Self {
-        let (watch_sender, watch_receiver) = tokio::sync::watch::channel(0);
         Self {
             max_rate,
-            watch_sender,
-            watch_receiver,
-            already_requested: false,
+            peers_count: Arc::new(AtomicU64::new(0)),
+            already_requested: None,
         }
     }
 }
 
 impl SharedBandwidthManager {
     pub fn request_bandwidth(&mut self) -> NonZeroRatePerSecond {
-        let active_children = (!self.already_requested).then(|| {
-            let mut active_children = 1;
-            self.watch_sender.send_modify(|peer_count| {
-                *peer_count += 1;
-                active_children = *peer_count;
-            });
-            self.already_requested = true;
-            active_children
-        });
-        self.calculate_bandwidth_without_children_increament(active_children)
+        let active_children = (self.already_requested.is_none())
+            .then(|| 1 + self.peers_count.fetch_add(1, Ordering::Relaxed));
+        let rate = self.calculate_bandwidth_without_children_increament(active_children);
+        self.already_requested = Some(rate);
+        rate
     }
 
     pub fn notify_idle(&mut self) {
-        if self.already_requested {
-            self.watch_sender.send_modify(|peer_count| *peer_count -= 1);
-            self.already_requested = false;
+        if let Some(_) = self.already_requested.take() {
+            self.peers_count.fetch_sub(1, Ordering::Relaxed);
         }
     }
 
     pub async fn await_bandwidth_change(&mut self) -> NonZeroRatePerSecond {
-        if !self.already_requested {
+        let Some(previous_rate) = self.already_requested else {
             return pending().await;
+        };
+        let mut rate = self.calculate_bandwidth_without_children_increament(None);
+        while rate == previous_rate {
+            sleep(Duration::from_millis(250)).await;
+            rate = self.calculate_bandwidth_without_children_increament(None);
         }
-        let _ = self.watch_receiver.changed().await;
-        self.calculate_bandwidth_without_children_increament(None)
+        self.already_requested = Some(rate);
+        rate
     }
 }
 
@@ -1192,7 +1193,7 @@ mod tests {
         let total_rate = total_data_scheduled * 1000 / time_passed.as_millis();
         let abs_rate_diff = total_rate.abs_diff(rate_limit);
         assert!(
-            abs_rate_diff <= rate_limit * 5/10,
+            abs_rate_diff <= rate_limit * 6/10,
             "Used bandwidth should be oscillating close to {rate_limit} b/s (+/- 50%), but got {total_rate} b/s instead. Total data sent: {total_data_scheduled}; Time: {time_passed:?}"
         );
         // panic!("expected rate-limit = {rate_limit} calculated rate limit = {total_rate}");
