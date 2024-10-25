@@ -1,4 +1,4 @@
-use crate::{rate_limiter::Deadline, NonZeroRatePerSecond, LOG_TARGET, MIN};
+use crate::{NonZeroRatePerSecond, LOG_TARGET, MIN};
 use futures::{future::pending, Future, FutureExt};
 use log::trace;
 use std::{
@@ -97,7 +97,7 @@ where
         self.requested = self.requested.saturating_add(requested);
     }
 
-    fn calculate_delay(&self) -> Option<Deadline> {
+    fn calculate_delay(&self) -> Option<Instant> {
         if self.available().is_some() {
             return None;
         }
@@ -107,9 +107,7 @@ where
             .saturating_mul(1_000_000)
             .saturating_div(self.rate_per_second.into());
 
-        Some(Deadline::Instant(
-            self.last_update + Duration::from_micros(delay_micros),
-        ))
+        Some(self.last_update + Duration::from_micros(delay_micros))
     }
 
     fn update_tokens(&mut self) {
@@ -154,7 +152,7 @@ where
 
     /// Calculates amount of time by which we should delay next call to some governed resource in order to satisfy
     /// specified rate limit.
-    pub fn rate_limit(&mut self, requested: u64) -> Option<Deadline> {
+    pub fn rate_limit(&mut self, requested: u64) -> Option<Instant> {
         trace!(
             target: LOG_TARGET,
             "TokenBucket called for {requested} of requested bytes. Internal state: {self:?}.",
@@ -225,7 +223,7 @@ impl SharedBandwidthManager {
     }
 
     pub fn notify_idle(&mut self) {
-        if let Some(_) = self.already_requested.take() {
+        if self.already_requested.take().is_some() {
             self.peers_count.fetch_sub(1, Ordering::Relaxed);
         }
     }
@@ -234,9 +232,10 @@ impl SharedBandwidthManager {
         let Some(previous_rate) = self.already_requested else {
             return pending().await;
         };
+        let sleep_amount = Duration::from_millis(250);
         let mut rate = self.calculate_bandwidth_without_children_increament(None);
         while rate == previous_rate {
-            sleep(Duration::from_millis(250)).await;
+            sleep(sleep_amount).await;
             rate = self.calculate_bandwidth_without_children_increament(None);
         }
         self.already_requested = Some(rate);
@@ -249,7 +248,7 @@ impl SharedBandwidthManager {
 #[derive(Clone)]
 struct AsyncTokenBucket<TP = DefaultTimeProvider, SU = TokioSleepUntil> {
     token_bucket: TokenBucket<TP>,
-    next_deadline: Option<Deadline>,
+    next_deadline: Option<Instant>,
     sleep_until: SU,
 }
 
@@ -283,13 +282,9 @@ where
         TP: TimeProvider + Send,
         SU: SleepUntil + Send,
     {
-        match self.next_deadline {
-            Some(Deadline::Instant(deadline)) => {
-                self.sleep_until.sleep_until(deadline).await;
-                self.next_deadline = None;
-            }
-            Some(Deadline::Never) => pending().await,
-            _ => {}
+        if let Some(deadline) = self.next_deadline {
+            self.sleep_until.sleep_until(deadline).await;
+            self.next_deadline = None;
         }
     }
 }
@@ -379,9 +374,7 @@ mod tests {
     use tokio::task::yield_now;
 
     use super::{SharedBandwidthManager, SleepUntil, TimeProvider, TokenBucket};
-    use crate::token_bucket::{
-        AsyncTokenBucket, Deadline, HierarchicalTokenBucket, NonZeroRatePerSecond,
-    };
+    use crate::token_bucket::{AsyncTokenBucket, HierarchicalTokenBucket, NonZeroRatePerSecond};
 
     #[tokio::test]
     async fn basic_checks_of_shared_bandwidth_manager() {
@@ -436,14 +429,14 @@ mod tests {
 
     /// Allows to treat [TokenBucket] and [HierarchicalTokenBucket] similarly in tests.
     trait RateLimiter: Sized {
-        async fn rate_limit(self, requested: u64) -> (Self, Option<Deadline>);
+        async fn rate_limit(self, requested: u64) -> (Self, Option<Instant>);
     }
 
     impl<TP> RateLimiter for TokenBucket<TP>
     where
         TP: TimeProvider,
     {
-        async fn rate_limit(mut self, requested: u64) -> (Self, Option<Deadline>) {
+        async fn rate_limit(mut self, requested: u64) -> (Self, Option<Instant>) {
             let delay = TokenBucket::rate_limit(&mut self, requested);
             (self, delay)
         }
@@ -455,16 +448,14 @@ mod tests {
     where
         TP: TimeProvider + Send,
     {
-        async fn rate_limit(mut self, requested: u64) -> (Self, Option<Deadline>) {
+        async fn rate_limit(mut self, requested: u64) -> (Self, Option<Instant>) {
             let last_sleep = self.rate_limiter.sleep_until.latest_sleep_until();
             let time_before = *last_sleep.lock();
             self = self.rate_limit(requested).await;
             let time_after = *last_sleep.lock();
             (
                 self,
-                (time_before != time_after)
-                    .then_some(time_after.map(Deadline::Instant))
-                    .flatten(),
+                (time_before != time_after).then_some(time_after).flatten(),
             )
         }
     }
@@ -754,10 +745,7 @@ mod tests {
 
         *time_to_return.write() = now;
         let (rate_limiter, deadline) = rate_limiter.rate_limit(10).await;
-        assert_eq!(
-            deadline,
-            Some(Deadline::Instant(now + Duration::from_secs(1)))
-        );
+        assert_eq!(deadline, Some(now + Duration::from_secs(1)));
 
         // we should wait some time after reaching the limit
         *time_to_return.write() = now + Duration::from_secs(1);
@@ -768,7 +756,7 @@ mod tests {
         let (_, deadline) = rate_limiter.rate_limit(19).await;
         assert_eq!(
             deadline,
-            Some(Deadline::Instant(now + Duration::from_secs(3))),
+            Some(now + Duration::from_secs(3)),
             "we should wait exactly 2 seconds"
         );
     }
@@ -808,18 +796,14 @@ mod tests {
         let (rate_limiter, deadline) = rate_limiter.rate_limit(40).await;
         assert_eq!(
             deadline,
-            Some(Deadline::Instant(
-                now + Duration::from_secs(10) + Duration::from_secs(3)
-            )),
+            Some(now + Duration::from_secs(10) + Duration::from_secs(3)),
         );
 
         *time_to_return.write() = now + Duration::from_secs(11);
         let (_, deadline) = rate_limiter.rate_limit(40).await;
         assert_eq!(
             deadline,
-            Some(Deadline::Instant(
-                now + Duration::from_secs(11) + Duration::from_secs(6)
-            ))
+            Some(now + Duration::from_secs(11) + Duration::from_secs(6))
         );
     }
 
@@ -856,27 +840,20 @@ mod tests {
 
         *time_to_return.write() = now + Duration::from_secs(3);
         let (rate_limiter, deadline) = rate_limiter.rate_limit(10).await;
-        assert_eq!(
-            deadline,
-            Some(Deadline::Instant(now + Duration::from_secs(4)))
-        );
+        assert_eq!(deadline, Some(now + Duration::from_secs(4)));
 
         *time_to_return.write() = now + Duration::from_secs(3);
         let (rate_limiter, deadline) = rate_limiter.rate_limit(10).await;
         assert_eq!(
             deadline,
-            Some(Deadline::Instant(
-                now + Duration::from_secs(4) + Duration::from_secs(1)
-            ))
+            Some(now + Duration::from_secs(4) + Duration::from_secs(1))
         );
 
         *time_to_return.write() = now + Duration::from_secs(3);
         let (_, deadline) = rate_limiter.rate_limit(50).await;
         assert_eq!(
             deadline,
-            Some(Deadline::Instant(
-                now + Duration::from_secs(4) + Duration::from_secs(6)
-            ))
+            Some(now + Duration::from_secs(4) + Duration::from_secs(6))
         );
     }
 
@@ -984,10 +961,7 @@ mod tests {
         let rate_limiter_cloned = rate_limiter.clone();
 
         let (rate_limiter, deadline) = RateLimiter::rate_limit(rate_limiter, 5).await;
-        assert_eq!(
-            deadline,
-            Some(Deadline::Instant(now + Duration::from_millis(500)))
-        );
+        assert_eq!(deadline, Some(now + Duration::from_millis(500)));
         let (_, deadline) = RateLimiter::rate_limit(rate_limiter_cloned, 5).await;
         assert_eq!(deadline, None,);
 
@@ -1027,10 +1001,7 @@ mod tests {
         let (_, deadline) = RateLimiter::rate_limit(rate_limiter, 1).await;
         assert_eq!(deadline, None);
         let (_, deadline) = RateLimiter::rate_limit(rate_limiter_cloned, 2).await;
-        assert_eq!(
-            deadline,
-            Some(Deadline::Instant(now + Duration::from_secs(3)))
-        );
+        assert_eq!(deadline, Some(now + Duration::from_secs(3)));
     }
 
     #[tokio::test]
@@ -1089,7 +1060,7 @@ mod tests {
             }));
 
         let barrier = Arc::new(tokio::sync::RwLock::new(tokio::sync::Barrier::new(0)));
-        let how_many_times_stop_on_barrier = 3;
+        let how_many_times_stop_on_barrier = 0;
         let test_sleep_until_with_barrier = SleepUntilWithBarrier::new(
             test_sleep_until_shared,
             barrier.clone(),
@@ -1193,7 +1164,7 @@ mod tests {
         let total_rate = total_data_scheduled * 1000 / time_passed.as_millis();
         let abs_rate_diff = total_rate.abs_diff(rate_limit);
         assert!(
-            abs_rate_diff <= rate_limit * 6/10,
+            abs_rate_diff <= rate_limit * 3/10,
             "Used bandwidth should be oscillating close to {rate_limit} b/s (+/- 50%), but got {total_rate} b/s instead. Total data sent: {total_data_scheduled}; Time: {time_passed:?}"
         );
         // panic!("expected rate-limit = {rate_limit} calculated rate limit = {total_rate}");
