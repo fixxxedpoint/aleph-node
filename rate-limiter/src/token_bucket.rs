@@ -338,8 +338,11 @@ impl<TP, SU> SharedTokenBucket<TP, SU> {
             need_to_notify_parent: false,
         }
     }
-
-    pub fn share(&self) -> Self where TP: Clone, SU: Clone {
+    pub fn share(&self) -> Self
+    where
+        TP: Clone,
+        SU: Clone,
+    {
         Self {
             shared_bandwidth: self.shared_bandwidth.share(),
             rate_limiter: self.rate_limiter.clone(),
