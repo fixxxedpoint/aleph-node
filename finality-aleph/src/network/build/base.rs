@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use libp2p::{core::StreamMuxer, PeerId, Transport};
+use crate::network::build::transport::RateLimitedStreamMuxer;
+use libp2p::Transport;
+use rate_limiter::SharedRateLimiter;
 use sc_client_api::Backend;
 use sc_network::{
     config::{
-        FullNetworkConfiguration, NetworkConfiguration, NonDefaultSetConfig,
-        Params as NetworkParams, ProtocolId, Role,
+        FullNetworkConfiguration, NonDefaultSetConfig, Params as NetworkParams, ProtocolId, Role,
     },
     error::Error as NetworkError,
     peer_store::PeerStore,
@@ -23,7 +24,7 @@ use crate::{
     network::build::{
         own_protocols::Networks, transactions::build_transactions_prototype, SPAWN_CATEGORY,
     },
-    BlockHash, BlockNumber, ClientForAleph,
+    BlockHash, BlockNumber, ClientForAleph, SubstrateNetworkConfig,
 };
 
 fn spawn_state_request_handler<B: Block, BE: Backend<B>, C: ClientForAleph<B, BE>>(
@@ -71,9 +72,8 @@ type BaseNetworkOutput<B> = (
 );
 
 /// Create a base network with all the protocols already included. Also spawn (almost) all the necessary services.
-pub fn network<B, BE, C, T, SM>(
-    network_config: &NetworkConfiguration,
-    transport_builder: impl FnOnce(NetworkConfig) -> T,
+pub fn network<B, BE, C>(
+    network_config: &SubstrateNetworkConfig,
     protocol_id: ProtocolId,
     client: Arc<C>,
     spawn_handle: &SpawnTaskHandle,
@@ -85,15 +85,8 @@ where
     B::Header: Header<Number = BlockNumber>,
     BE: Backend<B>,
     C: ClientForAleph<B, BE>,
-    T: Transport<Output = (PeerId, SM)> + Send + Unpin + 'static,
-    T::Dial: Send,
-    T::ListenerUpgrade: Send,
-    T::Error: Send + Sync,
-    SM: StreamMuxer + Unpin + Send + 'static,
-    SM::Substream: Unpin + Send,
-    SM::Error: Send + Sync,
 {
-    let mut full_network_config = FullNetworkConfiguration::new(network_config);
+    let mut full_network_config = FullNetworkConfiguration::new(&network_config.network_config);
     let genesis_hash = client
         .hash(0)
         .ok()
@@ -145,9 +138,56 @@ where
         block_announce_config: base_protocol_config,
     };
 
-    let network_service =
-        NetworkWorker::new_with_custom_transport(network_params, transport_builder)?;
+    let network_service = build_network_worker_with_rate_limiter(
+        network_params,
+        network_config.substrate_network_bit_rate,
+    )?;
     let network = network_service.service().clone();
     spawn_handle.spawn_blocking("network-worker", SPAWN_CATEGORY, network_service.run());
     Ok((network, networks, transactions_prototype))
+}
+
+fn build_network_worker_with_rate_limiter<B>(
+    network_params: NetworkParams<B>,
+    bit_rate_per_second: u64,
+) -> Result<NetworkWorker<B, BlockHash>, NetworkError>
+where
+    B: Block,
+{
+    // this is necessary to make the [SharedRateLimiter] implement [Clone], which is required by
+    // [libp2p::core::transport::map::Map] used below
+    struct ClonableSharedRateLimiter(SharedRateLimiter);
+    impl ClonableSharedRateLimiter {
+        pub fn new(rate_limiter: SharedRateLimiter) -> Self {
+            Self(rate_limiter)
+        }
+
+        pub fn share(&self) -> SharedRateLimiter {
+            self.0.share()
+        }
+    }
+    impl Clone for ClonableSharedRateLimiter {
+        fn clone(&self) -> Self {
+            Self(self.share())
+        }
+    }
+
+    let rate_limiter = SharedRateLimiter::new(bit_rate_per_second.into());
+    let transport_builder = move |config: NetworkConfig| {
+        let rate_limiter = ClonableSharedRateLimiter::new(rate_limiter);
+        sc_network::transport::build_transport(
+            config.keypair,
+            config.memory_only,
+            config.muxer_window_size,
+            config.muxer_maximum_buffer_size,
+        )
+        .map(move |(peer_id, stream_muxer), _| {
+            (
+                peer_id,
+                RateLimitedStreamMuxer::new(stream_muxer, rate_limiter.share()),
+            )
+        })
+    };
+
+    NetworkWorker::new_with_custom_transport(network_params, transport_builder)
 }
